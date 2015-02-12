@@ -12,6 +12,7 @@ import (
 	"path"
 	"time"
 	"msgp/ws"
+	"msgp/hub"
 )
 
 type cmdlineArgs struct {
@@ -64,8 +65,7 @@ var upgrader = websocket.Upgrader{
 	Subprotocols:     []string{"msgp-1"},
 }
 
-var conn *ws.Dispatcher
-var send chan string
+var h = hub.New()
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -85,24 +85,28 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	send = make(chan string)
-
 	wss.SetReadLimit(4096)
 
-	conn = &ws.Dispatcher{
+	conn := &ws.Dispatcher{
 		Socket: wss,
 	}
+	hconn := h.Connect()
+	hconn.Subscribe("value")
 
 	go func() {
 		for {
-			val := <-send
+			val, open := <- hconn.R
+			if !open {
+				return
+			}
 			ts := time.Now().Unix()
-			line := fmt.Sprintf("[%v, %v]", ts, val)
+			line := fmt.Sprintf("[%v, %v]", ts, val.Value)
 			conn.Write(line)
 		}
 	}()
 
 	conn.Run()
+	hconn.Close()
 }
 
 func postHandler(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +121,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	send <- val[0]
+	h.Publish("value", val[0])
 }
 
 func main() {

@@ -37,6 +37,7 @@ func (d *Dispatcher) Run() error {
 		if d.OnClose != nil {
 			d.OnClose(d)
 		}
+		d.Socket.Close()
 	}()
 
 	go func() {
