@@ -1,0 +1,28 @@
+{{define "register"}}
+{{template "head" "register"}}
+<div class="container">
+	<div class="row">
+		{{if .Error}}
+		<div class="alert alert-danger">{{.Error}}</div>
+		{{end}}
+		<form action="/user/register" method="POST">
+			<p>
+				<label for="name" {{alertIfMissing "name" .Missing}}>Login ID:</label>
+				<input type="text" name="name" length="20" />
+			</p>
+			<input type="submit" value="Submit" />
+		</form>
+	</div>
+</div>
+{{template "tail"}}
+{{end}}
+
+{{define "register_done"}}
+{{template "head" "register"}}
+<div class="container">
+	<div class="row">
+		<p>Registration complete. Your auth token is <b>{{.}}</b>.</p>
+	</div>
+</div>
+{{template "tail"}}
+{{end}}

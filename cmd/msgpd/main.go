@@ -7,25 +7,28 @@ import (
 	"github.com/gorilla/websocket"
 	"html/template"
 	"log"
+	"msgp"
+	"msgp/hub"
+	"msgp/ws"
 	"net/http"
 	"os"
 	"path"
 	"time"
-	"msgp/ws"
-	"msgp/hub"
 )
 
 type cmdlineArgs struct {
-	listen, assets, templates *string
+	listen, assets, templates, udbPath *string
 }
 
 var args = cmdlineArgs{
 	listen:    flag.String("listen", ":8080", "listen address"),
 	assets:    flag.String("assets", "./assets", "assets path"),
 	templates: flag.String("templates", "./templates", "template path"),
+	udbPath:   flag.String("userdb", "", "path to user database"),
 }
 
 var templates *template.Template
+var userDb *msgp.UserDb
 
 func init() {
 	flag.Parse()
@@ -40,24 +43,84 @@ func init() {
 		os.Exit(1)
 	}
 
-	var err error
-	templates, err = template.ParseGlob(path.Join(*args.templates, "*.html"))
+	if *args.udbPath == "" {
+		log.Fatal("-userdb missing")
+		os.Exit(1)
+	}
+
+	templates = template.New("")
+
+	templates.Funcs(template.FuncMap{
+		"activeIfEq": func(this, page string) template.HTMLAttr {
+			if this == page {
+				return `class="active"`
+			} else {
+				return ""
+			}
+		},
+		"alertIfMissing": func(this string, missing []string) template.HTMLAttr {
+			if missing == nil {
+				return ""
+			}
+
+			for _, v := range missing {
+				if this == v {
+					return `style="color: red"`
+				}
+			}
+
+			return ""
+		},
+	})
+
+	_, err := templates.ParseGlob(path.Join(*args.templates, "*.html"))
 	if err != nil {
 		log.Fatal("error parsing templates: ", err)
 		os.Exit(1)
 	}
+
+	userDb, err = msgp.OpenUserDb(*args.udbPath)
+	if err != nil {
+		log.Fatal("error opening user db: ", err)
+		os.Exit(1)
+	}
 }
 
-func staticTemplate(name string) func(http.ResponseWriter, *http.Request) {
+func defaultHeaders(fn func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fn(w, r)
+	}
+}
+
+func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
+	return defaultHeaders(func(w http.ResponseWriter, r *http.Request) {
 		var scheme = "ws://"
 		if r.TLS != nil {
 			scheme = "wss://"
 		}
-		var url = scheme + r.Host + "/ws"
-		templates.ExecuteTemplate(w, name, url)
-	}
+		type ctx struct {
+			Ws               string
+			Missing, Sensors []string
+		}
+		user := userDb.Find(r.PostFormValue("user"))
+		if user == nil {
+			templates.ExecuteTemplate(w, name, ctx{Missing: []string{"user"}})
+			return
+		}
+		sensors := make([]string, 0, len(user.Sensors))
+		for s := range user.Sensors {
+			sensors = append(sensors, s)
+		}
+		var url = scheme + r.Host + "/ws/" + user.Name
+		templates.ExecuteTemplate(w, name, ctx{Ws: url, Sensors: sensors})
+	})
+}
+
+func staticTemplate(name string) func(http.ResponseWriter, *http.Request) {
+	return defaultHeaders(func(w http.ResponseWriter, r *http.Request) {
+		templates.ExecuteTemplate(w, name, nil)
+	})
 }
 
 var upgrader = websocket.Upgrader{
@@ -70,6 +133,12 @@ var h = hub.New()
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	user := userDb.Find(mux.Vars(r)["user"])
+	if user == nil {
+		http.Error(w, "not found", 404)
 		return
 	}
 
@@ -91,11 +160,11 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		Socket: wss,
 	}
 	hconn := h.Connect()
-	hconn.Subscribe("value")
+	hconn.Subscribe(user.Name)
 
 	go func() {
 		for {
-			val, open := <- hconn.R
+			val, open := <-hconn.R
 			if !open {
 				return
 			}
@@ -121,14 +190,61 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.Publish("value", val[0])
+	user := mux.Vars(r)["user"]
+	sensor := mux.Vars(r)["sensor"]
+
+	userDb.Update(user, func(u *msgp.User) error {
+		u.Sensors[sensor] = true
+		return nil
+	})
+
+	h.Publish(user, fmt.Sprintf("%q, %v", sensor, val[0]))
+}
+
+func userRegister(w http.ResponseWriter, r *http.Request) {
+	name := r.FormValue("name")
+
+	type ctx struct {
+		Missing []string
+		Error   string
+	}
+
+	switch {
+	case name == "":
+		templates.ExecuteTemplate(w, "register", ctx{Missing: []string{"name"}})
+
+	default:
+		user, err := userDb.Add(name)
+		if err != nil {
+			templates.ExecuteTemplate(w, "register", ctx{Error: err.Error()})
+			return
+		}
+		templates.ExecuteTemplate(w, "register_done", user.AuthToken)
+	}
+}
+
+func adminHandler(w http.ResponseWriter, r *http.Request) {
+	userDb.ForEach(func(u *msgp.User) error {
+		w.Write([]byte(fmt.Sprintf("<div>User %v Token <b>%v</b></div>", u.Name, u.AuthToken)))
+		for s := range u.Sensors {
+			w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;Sensor %v</div>", s)))
+		}
+		return nil
+	})
 }
 
 func main() {
 	router := mux.NewRouter()
-	router.HandleFunc("/", staticTemplate("index"))
-	router.HandleFunc("/ws", wsHandler)
-	router.HandleFunc("/api/value", postHandler).Methods("POST")
+
+	router.HandleFunc("/", wsTemplate("index")).Methods("POST")
+	router.HandleFunc("/", staticTemplate("index")).Methods("GET")
+	router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
+	router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
+
+	router.HandleFunc("/admin", defaultHeaders(adminHandler))
+
+	router.HandleFunc("/ws/{user}", wsHandler)
+	router.HandleFunc("/api/value/{user}/{sensor}", postHandler).Methods("POST")
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
 
 	http.Handle("/", router)

@@ -3,16 +3,16 @@ package hub
 type Hub struct {
 	subscribers map[string]map[*Conn]bool
 
-	subscribe chan subscription
+	subscribe   chan subscription
 	unsubscribe chan subscription
-	detach chan *Conn
+	detach      chan *Conn
 
 	publish chan Value
 }
 
 type subscription struct {
 	topic string
-	conn *Conn
+	conn  *Conn
 }
 
 type Value struct {
@@ -23,7 +23,7 @@ type Conn struct {
 	R <-chan Value
 
 	parent *Hub
-	readQ chan Value
+	readQ  chan Value
 }
 
 func (h *Hub) doUnsubscribe(topic string, conn *Conn) {
@@ -36,10 +36,10 @@ func (h *Hub) doUnsubscribe(topic string, conn *Conn) {
 func New() *Hub {
 	hub := &Hub{
 		subscribers: make(map[string]map[*Conn]bool),
-		subscribe: make(chan subscription),
+		subscribe:   make(chan subscription),
 		unsubscribe: make(chan subscription),
-		detach: make(chan *Conn),
-		publish: make(chan Value),
+		detach:      make(chan *Conn),
+		publish:     make(chan Value),
 	}
 
 	go func() {
@@ -77,7 +77,7 @@ func (h *Hub) Publish(topic string, msg string) {
 func (h *Hub) Connect() *Conn {
 	r := &Conn{
 		parent: h,
-		readQ: make(chan Value),
+		readQ:  make(chan Value, 16),
 	}
 
 	r.R = r.readQ
