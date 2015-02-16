@@ -28,7 +28,7 @@ var args = cmdlineArgs{
 }
 
 var templates *template.Template
-var userDb *msgp.UserDb
+var db *msgp.Db
 
 func init() {
 	flag.Parse()
@@ -79,7 +79,7 @@ func init() {
 		os.Exit(1)
 	}
 
-	userDb, err = msgp.OpenUserDb(*args.udbPath)
+	db, err = msgp.OpenDb(*args.udbPath)
 	if err != nil {
 		log.Fatal("error opening user db: ", err)
 		os.Exit(1)
@@ -100,20 +100,17 @@ func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 			scheme = "wss://"
 		}
 		type ctx struct {
-			Ws               string
-			Missing, Sensors []string
+			Ws      string
+			Missing []string
+			Sensors map[string]bool
 		}
-		user := userDb.Find(r.PostFormValue("user"))
+		user := db.Find(r.PostFormValue("user"))
 		if user == nil {
 			templates.ExecuteTemplate(w, name, ctx{Missing: []string{"user"}})
 			return
 		}
-		sensors := make([]string, 0, len(user.Sensors))
-		for s := range user.Sensors {
-			sensors = append(sensors, s)
-		}
 		var url = scheme + r.Host + "/ws/" + user.Name
-		templates.ExecuteTemplate(w, name, ctx{Ws: url, Sensors: sensors})
+		templates.ExecuteTemplate(w, name, ctx{Ws: url, Sensors: user.Sensors})
 	})
 }
 
@@ -136,7 +133,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := userDb.Find(mux.Vars(r)["user"])
+	user := db.Find(mux.Vars(r)["user"])
 	if user == nil {
 		http.Error(w, "not found", 404)
 		return
@@ -193,7 +190,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	user := mux.Vars(r)["user"]
 	sensor := mux.Vars(r)["sensor"]
 
-	userDb.Update(user, func(u *msgp.User) error {
+	db.Update(user, func(u *msgp.User) error {
 		u.Sensors[sensor] = true
 		return nil
 	})
@@ -214,7 +211,7 @@ func userRegister(w http.ResponseWriter, r *http.Request) {
 		templates.ExecuteTemplate(w, "register", ctx{Missing: []string{"name"}})
 
 	default:
-		user, err := userDb.Add(name)
+		user, err := db.Add(name)
 		if err != nil {
 			templates.ExecuteTemplate(w, "register", ctx{Error: err.Error()})
 			return
@@ -224,7 +221,7 @@ func userRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func adminHandler(w http.ResponseWriter, r *http.Request) {
-	userDb.ForEach(func(u *msgp.User) error {
+	db.ForEach(func(u *msgp.User) error {
 		w.Write([]byte(fmt.Sprintf("<div>User %v Token <b>%v</b></div>", u.Name, u.AuthToken)))
 		for s := range u.Sensors {
 			w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;Sensor %v</div>", s)))

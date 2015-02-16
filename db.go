@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-type UserDb struct {
+type Db struct {
 	store *bolt.DB
 }
 
@@ -18,7 +18,7 @@ type User struct {
 
 	Sensors map[string]bool
 
-	db *UserDb
+	db *Db
 }
 
 var (
@@ -31,7 +31,7 @@ var (
 	sensorsKey   = []byte("sensors")
 )
 
-func OpenUserDb(path string) (*UserDb, error) {
+func OpenDb(path string) (*Db, error) {
 	store, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		return nil, err
@@ -47,16 +47,16 @@ func OpenUserDb(path string) (*UserDb, error) {
 		return nil, err
 	}
 
-	return &UserDb{
+	return &Db{
 		store: store,
 	}, nil
 }
 
-func (db *UserDb) Close() {
+func (db *Db) Close() {
 	db.store.Close()
 }
 
-func (db *UserDb) Add(name string) (*User, error) {
+func (db *Db) Add(name string) (*User, error) {
 	var token [16]byte
 	if _, err := rand.Read(token[:]); err != nil {
 		return nil, err
@@ -121,7 +121,7 @@ func loadSensors(b *bolt.Bucket) map[string]bool {
 	return result
 }
 
-func loadUser(db *UserDb, b *bolt.Bucket) *User {
+func loadUser(db *Db, b *bolt.Bucket) *User {
 	return &User{
 		Name:      string(b.Get(nameKey)),
 		AuthToken: string(b.Get(authtokenKey)),
@@ -130,7 +130,7 @@ func loadUser(db *UserDb, b *bolt.Bucket) *User {
 	}
 }
 
-func (db *UserDb) ForEach(fn func(*User) error) error {
+func (db *Db) ForEach(fn func(*User) error) error {
 	return db.store.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(userBucket)
 		return b.ForEach(func(key, value []byte) error {
@@ -139,7 +139,7 @@ func (db *UserDb) ForEach(fn func(*User) error) error {
 	})
 }
 
-func (db *UserDb) Find(name string) *User {
+func (db *Db) Find(name string) *User {
 	var result *User
 
 	db.store.View(func(tx *bolt.Tx) error {
@@ -153,7 +153,7 @@ func (db *UserDb) Find(name string) *User {
 	return result
 }
 
-func (db *UserDb) Update(name string, fn func(*User) error) error {
+func (db *Db) Update(name string, fn func(*User) error) error {
 	return db.store.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(userBucket).Bucket([]byte(name))
 		if b == nil {
