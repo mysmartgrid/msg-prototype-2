@@ -12,18 +12,27 @@ type Db struct {
 	store *bolt.DB
 }
 
+type DbTx struct {
+	tx *bolt.Tx
+}
+
 type User struct {
 	Name      string
 	AuthToken string
 
-	Sensors map[string]bool
+	Sensors []Sensor
 
 	db *Db
 }
 
+type Sensor struct {
+	Name      string
+	AuthToken string
+}
+
 var (
-	InvalidName = errors.New("name invalid")
-	NameExists  = errors.New("name exists")
+	InvalidName  = errors.New("name invalid")
+	NameExists   = errors.New("name exists")
 
 	userBucket   = []byte("user")
 	nameKey      = []byte("name")
@@ -56,20 +65,40 @@ func (db *Db) Close() {
 	db.store.Close()
 }
 
-func (db *Db) Add(name string) (*User, error) {
+func newToken() string {
 	var token [16]byte
 	if _, err := rand.Read(token[:]); err != nil {
-		return nil, err
+		panic(errors.New("RNG bad"))
 	}
+	return fmt.Sprintf("%x", token)
+}
 
+func (db *Db) Add(name string) (*User, error) {
 	var result *User
 	err := db.store.Update(func(tx *bolt.Tx) error {
+		nameBytes := []byte(name)
+
+		if len(nameBytes) == 0 || len(nameBytes) >= bolt.MaxKeySize {
+			return InvalidName
+		}
+
 		result = &User{
 			Name:      name,
-			AuthToken: fmt.Sprintf("%x", token),
+			AuthToken: newToken(),
 			db:        db,
 		}
-		return saveUser(tx, result, false)
+
+		ub := tx.Bucket(userBucket)
+		b, err := ub.CreateBucket(nameBytes)
+
+		if err != nil {
+			return NameExists
+		}
+
+		b.Put(nameKey, nameBytes)
+		b.Put(authtokenKey, []byte(result.AuthToken))
+		b.CreateBucket(sensorsKey)
+		return nil
 	})
 	if err != nil {
 		result = nil
@@ -77,45 +106,10 @@ func (db *Db) Add(name string) (*User, error) {
 	return result, err
 }
 
-func saveUser(tx *bolt.Tx, u *User, update bool) error {
-	var nameBytes = []byte(u.Name)
-
-	if len(nameBytes) == 0 || len(nameBytes) >= bolt.MaxKeySize {
-		return InvalidName
-	}
-
-	ub := tx.Bucket(userBucket)
-	if update {
-		err := ub.DeleteBucket(nameBytes)
-		switch err {
-		case nil:
-		case bolt.ErrBucketNotFound:
-
-		default:
-			return err
-		}
-	}
-
-	b, err := ub.CreateBucket(nameBytes)
-	if err != nil {
-		return NameExists
-	}
-
-	b.Put(nameKey, []byte(u.Name))
-	b.Put(authtokenKey, []byte(u.AuthToken))
-
-	sb, _ := b.CreateBucket(sensorsKey)
-	for sensor := range u.Sensors {
-		sb.Put([]byte(sensor), []byte{})
-	}
-
-	return nil
-}
-
-func loadSensors(b *bolt.Bucket) map[string]bool {
-	result := make(map[string]bool)
+func loadSensors(b *bolt.Bucket) []Sensor {
+	result := make([]Sensor, 0)
 	b.ForEach(func(key, value []byte) error {
-		result[string(key)] = true
+		result = append(result, Sensor{string(key), string(value)})
 		return nil
 	})
 	return result
@@ -153,16 +147,43 @@ func (db *Db) Find(name string) *User {
 	return result
 }
 
-func (db *Db) Update(name string, fn func(*User) error) error {
+func (db *Db) Update(fn func(DbTx) error) error {
 	return db.store.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket(userBucket).Bucket([]byte(name))
+		return fn(DbTx{tx})
+	})
+}
+
+func (db *Db) CheckAuthTokenFor(userName, sensorName, token string) bool {
+	err := db.store.View(func(tx *bolt.Tx) error {
+		ub := tx.Bucket(userBucket)
+		user := ub.Bucket([]byte(userName))
+		if user == nil {
+			return InvalidName
+		}
+		storedToken := string(user.Bucket(sensorsKey).Get([]byte(sensorName)))
+		if token != storedToken {
+			return InvalidName
+		}
+		return nil
+	})
+	return err == nil
+}
+
+func (db *Db) AddSensor(user, name string) (Sensor, error) {
+	var result Sensor
+	err := db.store.Update(func(tx *bolt.Tx) error {
+		ub := tx.Bucket(userBucket)
+		b := ub.Bucket([]byte(user))
 		if b == nil {
 			return InvalidName
 		}
-		u := loadUser(db, b)
-		if err := fn(u); err != nil {
-			return err
+		sensors := b.Bucket(sensorsKey)
+		if sensors.Get([]byte(name)) != nil {
+			return NameExists
 		}
-		return saveUser(tx, u, true)
+		result = Sensor{name, newToken()}
+		sensors.Put([]byte(name), []byte(result.AuthToken))
+		return nil
 	})
+	return result, err
 }

@@ -3,8 +3,8 @@
 <div class="container">
 	<div class="row">
 		{{if .Ws}}
-			{{range $, $_ := .Sensors}}
-				<div id="sdisp-{{$}}" class="epoch category10" style="height: 200px;"></div>
+			{{range .Sensors}}
+				<div id="sdisp-{{.Name}}" class="epoch category10" style="height: 200px;"></div>
 			{{end}}
 			<script>
 				var wsEndpoint = "{{.Ws | js}}";
@@ -33,8 +33,8 @@
 					});
 				};
 
-				{{range $, $_ := .Sensors}}
-					charts[{{$}}] = setupChart({{$}});
+				{{range .Sensors}}
+					charts[{{.Name}}] = setupChart({{.Name}});
 				{{end}}
 
 				if (window["WebSocket"]) {

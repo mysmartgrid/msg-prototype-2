@@ -102,7 +102,7 @@ func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 		type ctx struct {
 			Ws      string
 			Missing []string
-			Sensors map[string]bool
+			Sensors []msgp.Sensor
 		}
 		user := db.Find(r.PostFormValue("user"))
 		if user == nil {
@@ -189,13 +189,22 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 
 	user := mux.Vars(r)["user"]
 	sensor := mux.Vars(r)["sensor"]
-
-	db.Update(user, func(u *msgp.User) error {
-		u.Sensors[sensor] = true
-		return nil
-	})
+	tokens := r.Header["X-Auth-Token"]
+	if len(tokens) != 1 || !db.CheckAuthTokenFor(user, sensor, tokens[0]) {
+		http.Error(w, "forbidden", 403)
+		return
+	}
 
 	h.Publish(user, fmt.Sprintf("%q, %v", sensor, val[0]))
+}
+
+func putHandler(w http.ResponseWriter, r *http.Request) {
+	sensor, err := db.AddSensor(mux.Vars(r)["user"], mux.Vars(r)["sensor"])
+	if err != nil {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	w.Write([]byte(sensor.AuthToken))
 }
 
 func userRegister(w http.ResponseWriter, r *http.Request) {
@@ -223,7 +232,7 @@ func userRegister(w http.ResponseWriter, r *http.Request) {
 func adminHandler(w http.ResponseWriter, r *http.Request) {
 	db.ForEach(func(u *msgp.User) error {
 		w.Write([]byte(fmt.Sprintf("<div>User %v Token <b>%v</b></div>", u.Name, u.AuthToken)))
-		for s := range u.Sensors {
+		for _, s := range u.Sensors {
 			w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;Sensor %v</div>", s)))
 		}
 		return nil
@@ -242,6 +251,7 @@ func main() {
 
 	router.HandleFunc("/ws/{user}", wsHandler)
 	router.HandleFunc("/api/value/{user}/{sensor}", postHandler).Methods("POST")
+	router.HandleFunc("/api/value/{user}/{sensor}", putHandler).Methods("PUT")
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
 
 	http.Handle("/", router)
