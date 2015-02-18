@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
@@ -17,14 +18,20 @@ import (
 )
 
 type cmdlineArgs struct {
-	listen, assets, templates, udbPath *string
+	listen                             *string
+	assets, templates                  *string
+	udbPath                            *string
+	influxAddr, influxUser, influxPass *string
 }
 
 var args = cmdlineArgs{
-	listen:    flag.String("listen", ":8080", "listen address"),
-	assets:    flag.String("assets", "./assets", "assets path"),
-	templates: flag.String("templates", "./templates", "template path"),
-	udbPath:   flag.String("userdb", "", "path to user database"),
+	listen:     flag.String("listen", ":8080", "listen address"),
+	assets:     flag.String("assets", "./assets", "assets path"),
+	templates:  flag.String("templates", "./templates", "template path"),
+	udbPath:    flag.String("userdb", "", "path to user database"),
+	influxAddr: flag.String("influx-addr", "", "address of influxdb"),
+	influxUser: flag.String("influx-user", "", "username for influxdb"),
+	influxPass: flag.String("influx-pass", "", "password for influxdb"),
 }
 
 var templates *template.Template
@@ -43,10 +50,17 @@ func init() {
 		os.Exit(1)
 	}
 
-	if *args.udbPath == "" {
-		log.Fatal("-userdb missing")
-		os.Exit(1)
+	bailIfMissing := func(value *string, flag string) {
+		if *value == "" {
+			log.Fatal(flag + " missing")
+			os.Exit(1)
+		}
 	}
+
+	bailIfMissing(args.udbPath, "-userdb")
+	bailIfMissing(args.influxAddr, "-influx-addr")
+	bailIfMissing(args.influxUser, "-influx-user")
+	bailIfMissing(args.influxPass, "-influx-pass")
 
 	templates = template.New("")
 
@@ -79,7 +93,7 @@ func init() {
 		os.Exit(1)
 	}
 
-	db, err = msgp.OpenDb(*args.udbPath)
+	db, err = msgp.OpenDb(*args.udbPath, *args.influxAddr, *args.influxUser, *args.influxPass)
 	if err != nil {
 		log.Fatal("error opening user db: ", err)
 		os.Exit(1)
@@ -176,17 +190,6 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func postHandler(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	val, present := r.PostForm["value"]
-	if !present {
-		http.Error(w, "value missing", 400)
-		return
-	}
-
 	user := mux.Vars(r)["user"]
 	sensor := mux.Vars(r)["sensor"]
 	tokens := r.Header["X-Auth-Token"]
@@ -195,7 +198,19 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.Publish(user, fmt.Sprintf("%q, %v", sensor, val[0]))
+	var value struct {
+		Time  int64   `json:"time"`
+		Value float64 `json:"value"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&value); err != nil {
+		http.Error(w, "bad request", 400)
+		return
+	}
+
+	h.Publish(user, fmt.Sprintf("%q, %v", sensor, value.Value))
+	db.AddReading(user, sensor, value.Time, value.Value)
 }
 
 func putHandler(w http.ResponseWriter, r *http.Request) {

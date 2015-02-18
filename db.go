@@ -1,15 +1,30 @@
 package msgp
 
 import (
+	"bytes"
 	"crypto/rand"
 	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
+	"html/template"
+	"net/http"
+	"net/url"
 	"time"
 )
 
+const (
+	bufferSize = 10000
+)
+
 type Db struct {
+	influxAddr, influxUser, influxPass string
+
 	store *bolt.DB
+
+	bufferedValues     map[bufferKey][]Value
+	bufferedValueCount uint32
+
+	bufferInput chan bufferValue
 }
 
 type DbTx struct {
@@ -30,9 +45,23 @@ type Sensor struct {
 	AuthToken string
 }
 
+type Value struct {
+	Time  int64
+	Value float64
+}
+
+type bufferKey struct {
+	User, Sensor string
+}
+
+type bufferValue struct {
+	key   bufferKey
+	value Value
+}
+
 var (
-	InvalidName  = errors.New("name invalid")
-	NameExists   = errors.New("name exists")
+	InvalidName = errors.New("name invalid")
+	NameExists  = errors.New("name exists")
 
 	userBucket   = []byte("user")
 	nameKey      = []byte("name")
@@ -40,7 +69,91 @@ var (
 	sensorsKey   = []byte("sensors")
 )
 
-func OpenDb(path string) (*Db, error) {
+func dbSensorName(user, sensor string) string {
+	return fmt.Sprintf("u%v%v-s%v%v", len(user), user, len(sensor), sensor)
+}
+
+type bufWriter struct {
+	buf *bytes.Buffer
+}
+
+func (buf bufWriter) Write(b []byte) (int, error) {
+	return buf.buf.Write(b)
+}
+
+func (db *Db) flushBuffer() {
+	if db.bufferedValueCount == 0 {
+		return
+	}
+
+	var buf bytes.Buffer
+	writer := bufWriter{&buf}
+
+	buf.WriteRune('[')
+	for key, values := range db.bufferedValues {
+		if buf.Len() > 1 {
+			buf.WriteRune(',')
+		}
+		fmt.Fprintf(writer, `{"name":"%v",`, template.JSEscapeString(dbSensorName(key.User, key.Sensor)))
+		buf.WriteString(`"columns":["time","value"],`)
+		buf.WriteString(`"points":[`)
+		for i, value := range values {
+			if i > 0 {
+				buf.WriteRune(',')
+			}
+			fmt.Fprintf(writer, `[%v,%v]`, value.Time, value.Value)
+		}
+		buf.WriteString("]}")
+	}
+	buf.WriteRune(']')
+
+	bufReader := bytes.NewReader(buf.Bytes())
+
+	client := http.Client{Timeout: 1 * time.Second}
+	resp, err := client.Post(db.influxAddr+"/db/msgp/series?time_precision=s&u="+url.QueryEscape(db.influxUser)+
+		"&p="+url.QueryEscape(db.influxPass), "text/plain; charset=utf-8", bufReader)
+	if err != nil {
+		panic(err.Error())
+	}
+	if resp.StatusCode != 200 {
+		panic(resp.Status)
+	}
+
+	db.bufferedValues = make(map[bufferKey][]Value)
+	db.bufferedValueCount = 0
+}
+
+func (db *Db) manageDbBuffer() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer func() {
+		ticker.Stop()
+		db.flushBuffer()
+	}()
+
+	for {
+		select {
+		case bval, ok := <-db.bufferInput:
+			if !ok {
+				return
+			}
+			slice := db.bufferedValues[bval.key]
+			if slice == nil {
+				slice = make([]Value, 0)
+			}
+			db.bufferedValues[bval.key] = append(slice, bval.value)
+			db.bufferedValueCount++
+
+			if db.bufferedValueCount >= bufferSize {
+				db.flushBuffer()
+			}
+
+		case <-ticker.C:
+			db.flushBuffer()
+		}
+	}
+}
+
+func OpenDb(path, influxAddr, influxUser, influxPass string) (*Db, error) {
 	store, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		return nil, err
@@ -56,12 +169,21 @@ func OpenDb(path string) (*Db, error) {
 		return nil, err
 	}
 
-	return &Db{
-		store: store,
-	}, nil
+	result := &Db{
+		influxUser:     influxUser,
+		influxAddr:     influxAddr,
+		influxPass:     influxPass,
+		store:          store,
+		bufferedValues: make(map[bufferKey][]Value),
+		bufferInput:    make(chan bufferValue),
+	}
+
+	go result.manageDbBuffer()
+	return result, nil
 }
 
 func (db *Db) Close() {
+	close(db.bufferInput)
 	db.store.Close()
 }
 
@@ -186,4 +308,11 @@ func (db *Db) AddSensor(user, name string) (Sensor, error) {
 		return nil
 	})
 	return result, err
+}
+
+func (db *Db) AddReading(user, sensor string, time int64, value float64) {
+	db.bufferInput <- bufferValue{
+		key:   bufferKey{user, sensor},
+		value: Value{time, value},
+	}
 }
