@@ -10,7 +10,7 @@ const (
 	pingTimeout = 60 * time.Second
 )
 
-type ReadHandler func(d *Dispatcher, msgType int, message string) error
+type ReadHandler func(d *Dispatcher, msgType int, message []byte) error
 type CloseHandler func(d *Dispatcher)
 
 type Dispatcher struct {
@@ -73,7 +73,7 @@ func (d *Dispatcher) Run() error {
 			return err
 
 		case d.OnRead != nil:
-			d.OnRead(d, msgType, string(msg))
+			d.OnRead(d, msgType, msg)
 		}
 	}
 }

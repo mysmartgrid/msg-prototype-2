@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
@@ -18,10 +19,10 @@ import (
 )
 
 type cmdlineArgs struct {
-	listen                             *string
-	assets, templates                  *string
-	udbPath                            *string
-	influxAddr, influxUser, influxPass *string
+	listen                                       *string
+	assets, templates                            *string
+	udbPath                                      *string
+	influxAddr, influxDb, influxUser, influxPass *string
 }
 
 var args = cmdlineArgs{
@@ -30,6 +31,7 @@ var args = cmdlineArgs{
 	templates:  flag.String("templates", "./templates", "template path"),
 	udbPath:    flag.String("userdb", "", "path to user database"),
 	influxAddr: flag.String("influx-addr", "", "address of influxdb"),
+	influxDb:   flag.String("influx-db", "", "influxdb database name"),
 	influxUser: flag.String("influx-user", "", "username for influxdb"),
 	influxPass: flag.String("influx-pass", "", "password for influxdb"),
 }
@@ -59,6 +61,7 @@ func init() {
 
 	bailIfMissing(args.udbPath, "-userdb")
 	bailIfMissing(args.influxAddr, "-influx-addr")
+	bailIfMissing(args.influxDb, "-influx-db")
 	bailIfMissing(args.influxUser, "-influx-user")
 	bailIfMissing(args.influxPass, "-influx-pass")
 
@@ -93,7 +96,7 @@ func init() {
 		os.Exit(1)
 	}
 
-	db, err = msgp.OpenDb(*args.udbPath, *args.influxAddr, *args.influxUser, *args.influxPass)
+	db, err = msgp.OpenDb(*args.udbPath, *args.influxAddr, *args.influxDb, *args.influxUser, *args.influxPass)
 	if err != nil {
 		log.Fatal("error opening user db: ", err)
 		os.Exit(1)
@@ -169,8 +172,31 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	conn := &ws.Dispatcher{
 		Socket: wss,
+		OnRead: func(d *ws.Dispatcher, msgType int, message []byte) error {
+			var value struct {
+				Sensor string  `json:"sensor"`
+				Token  string  `json:"token"`
+				Time   int64   `json:"time"`
+				Value  float64 `json:"value"`
+			}
+
+			if err := json.Unmarshal(message, &value); err != nil {
+				d.Write(fmt.Sprintf(`{"error":"%v"}`, template.JSEscapeString(err.Error())))
+				return err
+			}
+
+			if !db.CheckAuthTokenFor(user.Name, value.Sensor, value.Token) {
+				d.Write(fmt.Sprintf(`{"error":"%v"}`, "not authorized"))
+				return errors.New("not authorized")
+			}
+
+			h.Publish(user.Name, fmt.Sprintf("%v, %q, %v", value.Time, value.Sensor, value.Value))
+			db.AddReading(user.Name, value.Sensor, value.Time, value.Value)
+			return nil
+		},
 	}
 	hconn := h.Connect()
+	defer hconn.Close()
 	hconn.Subscribe(user.Name)
 
 	go func() {
@@ -179,14 +205,12 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			ts := time.Now().Unix()
-			line := fmt.Sprintf("[%v, %v]", ts, val.Value)
+			line := fmt.Sprintf("[%v]", val.Value)
 			conn.Write(line)
 		}
 	}()
 
 	conn.Run()
-	hconn.Close()
 }
 
 func postHandler(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +233,7 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.Publish(user, fmt.Sprintf("%q, %v", sensor, value.Value))
+	h.Publish(user, fmt.Sprintf("%v, %q, %v", value.Time, sensor, value.Value))
 	db.AddReading(user, sensor, value.Time, value.Value)
 }
 

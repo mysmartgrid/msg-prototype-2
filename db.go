@@ -17,7 +17,7 @@ const (
 )
 
 type Db struct {
-	influxAddr, influxUser, influxPass string
+	influxAddr, influxDb, influxUser, influxPass string
 
 	store *bolt.DB
 
@@ -110,7 +110,7 @@ func (db *Db) flushBuffer() {
 	bufReader := bytes.NewReader(buf.Bytes())
 
 	client := http.Client{Timeout: 1 * time.Second}
-	resp, err := client.Post(db.influxAddr+"/db/msgp/series?time_precision=s&u="+url.QueryEscape(db.influxUser)+
+	resp, err := client.Post(db.influxAddr+"/db/"+db.influxDb+"/series?time_precision=ms&u="+url.QueryEscape(db.influxUser)+
 		"&p="+url.QueryEscape(db.influxPass), "text/plain; charset=utf-8", bufReader)
 	if err != nil {
 		panic(err.Error())
@@ -153,7 +153,7 @@ func (db *Db) manageDbBuffer() {
 	}
 }
 
-func OpenDb(path, influxAddr, influxUser, influxPass string) (*Db, error) {
+func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (*Db, error) {
 	store, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		return nil, err
@@ -173,6 +173,7 @@ func OpenDb(path, influxAddr, influxUser, influxPass string) (*Db, error) {
 		influxUser:     influxUser,
 		influxAddr:     influxAddr,
 		influxPass:     influxPass,
+		influxDb:       influxDb,
 		store:          store,
 		bufferedValues: make(map[bufferKey][]Value),
 		bufferInput:    make(chan bufferValue),
