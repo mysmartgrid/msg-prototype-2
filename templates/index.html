@@ -42,8 +42,8 @@
 
 					ws.onmessage = function(e) {
 						var data = JSON.parse(e.data);
-						charts[data[1]].push([
-							{ time: data[0], y: data[2] === null ? NaN : data[2] }
+						charts[data.sensor].push([
+							{ time: data.time_ms / 1000, y: data.value || NaN }
 						]);
 					};
 				}

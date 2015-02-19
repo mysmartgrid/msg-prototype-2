@@ -46,7 +46,7 @@ type Sensor struct {
 }
 
 type Value struct {
-	Time  int64
+	Time  time.Time
 	Value float64
 }
 
@@ -101,7 +101,7 @@ func (db *Db) flushBuffer() {
 			if i > 0 {
 				buf.WriteRune(',')
 			}
-			fmt.Fprintf(writer, `[%v,%v]`, value.Time, value.Value)
+			fmt.Fprintf(writer, `[%v,%v]`, value.Time.Unix()*1000+int64(value.Time.Nanosecond()/1e6), value.Value)
 		}
 		buf.WriteString("]}")
 	}
@@ -311,7 +311,7 @@ func (db *Db) AddSensor(user, name string) (Sensor, error) {
 	return result, err
 }
 
-func (db *Db) AddReading(user, sensor string, time int64, value float64) {
+func (db *Db) AddReading(user, sensor string, time time.Time, value float64) {
 	db.bufferInput <- bufferValue{
 		key:   bufferKey{user, sensor},
 		value: Value{time, value},

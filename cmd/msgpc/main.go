@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -51,7 +50,7 @@ func createSensor(user, sensor int) string {
 func createSensors() {
 	allSensors := make(map[string]map[string]string)
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 10; i++ {
 		createUser(i)
 		is := fmt.Sprintf("%v", i)
 		allSensors[is] = make(map[string]string)
@@ -73,25 +72,18 @@ func createSensors() {
 }
 
 func runUser(user string, sensors map[string]string) {
-	conn, err := net.Dial("tcp6", "[::1]:8080")
-	if err != nil {
-		panic(err)
+	headers := http.Header{
+		"Sec-WebSocket-Protocol": []string{"msgp-1"},
 	}
-
-	url, err := url.Parse("ws://localhost:8080/ws/" + user)
+	ws, resp, err := websocket.DefaultDialer.Dial("ws://[::1]:8080/ws/"+user, headers)
 	if err != nil {
-		panic(err)
-	}
-
-	ws, _, err := websocket.NewClient(conn, url, nil, 4096, 4096)
-	if err != nil {
-		panic(err)
+		log.Panic(resp, err)
 	}
 
 	go func() {
 		for {
 			for sensor, token := range sensors {
-				msg := fmt.Sprintf(`{"sensor": %q, "time": %v, "value": %v, "token": %q}`,
+				msg := fmt.Sprintf(`{"cmd": "update", "args": {"sensor": %q, "values": [[%v, %v]], "token": %q}}`,
 					sensor, time.Now().UnixNano()/1e6, rand.Float64(), token)
 				ws.WriteMessage(websocket.TextMessage, []byte(msg))
 				waitTime := 90 + rand.Float64()*20

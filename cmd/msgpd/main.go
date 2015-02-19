@@ -1,21 +1,16 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
 	"html/template"
 	"log"
 	"msgp"
 	"msgp/hub"
-	"msgp/ws"
 	"net/http"
 	"os"
 	"path"
-	"time"
 )
 
 type cmdlineArgs struct {
@@ -137,104 +132,15 @@ func staticTemplate(name string) func(http.ResponseWriter, *http.Request) {
 	})
 }
 
-var upgrader = websocket.Upgrader{
-	HandshakeTimeout: 10 * time.Second,
-	Subprotocols:     []string{"msgp-1"},
-}
-
 var h = hub.New()
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		http.Error(w, "Method not allowed", 405)
-		return
+	x := msgp.WSAPI{
+		Db:   db,
+		Hub:  h,
+		User: mux.Vars(r)["user"],
 	}
-
-	user := db.Find(mux.Vars(r)["user"])
-	if user == nil {
-		http.Error(w, "not found", 404)
-		return
-	}
-
-	wss, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		switch err.(type) {
-		case websocket.HandshakeError:
-			http.Error(w, "Handshake failed", 400)
-
-		default:
-			log.Println(err)
-		}
-		return
-	}
-
-	wss.SetReadLimit(4096)
-
-	conn := &ws.Dispatcher{
-		Socket: wss,
-		OnRead: func(d *ws.Dispatcher, msgType int, message []byte) error {
-			var value struct {
-				Sensor string  `json:"sensor"`
-				Token  string  `json:"token"`
-				Time   int64   `json:"time"`
-				Value  float64 `json:"value"`
-			}
-
-			if err := json.Unmarshal(message, &value); err != nil {
-				d.Write(fmt.Sprintf(`{"error":"%v"}`, template.JSEscapeString(err.Error())))
-				return err
-			}
-
-			if !db.CheckAuthTokenFor(user.Name, value.Sensor, value.Token) {
-				d.Write(fmt.Sprintf(`{"error":"%v"}`, "not authorized"))
-				return errors.New("not authorized")
-			}
-
-			h.Publish(user.Name, fmt.Sprintf("%v, %q, %v", value.Time, value.Sensor, value.Value))
-			db.AddReading(user.Name, value.Sensor, value.Time, value.Value)
-			return nil
-		},
-	}
-	hconn := h.Connect()
-	defer hconn.Close()
-	hconn.Subscribe(user.Name)
-
-	go func() {
-		for {
-			val, open := <-hconn.R
-			if !open {
-				return
-			}
-			line := fmt.Sprintf("[%v]", val.Value)
-			conn.Write(line)
-		}
-	}()
-
-	conn.Run()
-}
-
-func postHandler(w http.ResponseWriter, r *http.Request) {
-	user := mux.Vars(r)["user"]
-	sensor := mux.Vars(r)["sensor"]
-	tokens := r.Header["X-Auth-Token"]
-	if len(tokens) != 1 || !db.CheckAuthTokenFor(user, sensor, tokens[0]) {
-		http.Error(w, "forbidden", 403)
-		return
-	}
-
-	var value struct {
-		Time  int64   `json:"time"`
-		Value float64 `json:"value"`
-	}
-
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&value); err != nil {
-		http.Error(w, "bad request", 400)
-		return
-	}
-
-	h.Publish(user, fmt.Sprintf("%v, %q, %v", value.Time, sensor, value.Value))
-	db.AddReading(user, sensor, value.Time, value.Value)
+	x.Run(w, r)
 }
 
 func putHandler(w http.ResponseWriter, r *http.Request) {
@@ -289,7 +195,6 @@ func main() {
 	router.HandleFunc("/admin", defaultHeaders(adminHandler))
 
 	router.HandleFunc("/ws/{user}", wsHandler)
-	router.HandleFunc("/api/value/{user}/{sensor}", postHandler).Methods("POST")
 	router.HandleFunc("/api/value/{user}/{sensor}", putHandler).Methods("PUT")
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
 

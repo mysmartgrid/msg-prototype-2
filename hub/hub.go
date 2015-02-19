@@ -1,5 +1,7 @@
 package hub
 
+import "time"
+
 type Hub struct {
 	subscribers map[string]map[*Conn]bool
 
@@ -16,14 +18,17 @@ type subscription struct {
 }
 
 type Value struct {
-	Topic, Value string
+	Topic  string
+	Sensor string
+	Time   time.Time
+	Value  float64
 }
 
 type Conn struct {
-	R <-chan Value
+	Value <-chan Value
 
 	parent *Hub
-	readQ  chan Value
+	valueQ chan Value
 }
 
 func (h *Hub) doUnsubscribe(topic string, conn *Conn) {
@@ -61,7 +66,7 @@ func New() *Hub {
 
 			case value := <-hub.publish:
 				for conn := range hub.subscribers[value.Topic] {
-					conn.readQ <- value
+					conn.valueQ <- value
 				}
 			}
 		}
@@ -70,17 +75,17 @@ func New() *Hub {
 	return hub
 }
 
-func (h *Hub) Publish(topic string, msg string) {
-	h.publish <- Value{topic, msg}
+func (h *Hub) PublishValue(topic, sensor string, time time.Time, val float64) {
+	h.publish <- Value{topic, sensor, time, val}
 }
 
 func (h *Hub) Connect() *Conn {
 	r := &Conn{
 		parent: h,
-		readQ:  make(chan Value, 16),
+		valueQ: make(chan Value, 16),
 	}
 
-	r.R = r.readQ
+	r.Value = r.valueQ
 	return r
 }
 
@@ -94,5 +99,5 @@ func (hc *Conn) Unsubscribe(topic string) {
 
 func (hc *Conn) Close() {
 	hc.parent.detach <- hc
-	close(hc.readQ)
+	close(hc.valueQ)
 }

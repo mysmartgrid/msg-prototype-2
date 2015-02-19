@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"encoding/json"
 	"github.com/gorilla/websocket"
 	"io"
 	"time"
@@ -11,20 +12,18 @@ const (
 )
 
 type ReadHandler func(d *Dispatcher, msgType int, message []byte) error
-type CloseHandler func(d *Dispatcher)
 
 type Dispatcher struct {
 	Socket *websocket.Conn
 
-	OnRead  ReadHandler
-	OnClose CloseHandler
+	OnRead ReadHandler
 
-	sendQ    chan string
+	sendQ    chan []byte
 	sendErrQ chan error
 }
 
 func (d *Dispatcher) Run() error {
-	d.sendQ = make(chan string)
+	d.sendQ = make(chan []byte)
 	d.sendErrQ = make(chan error)
 
 	d.Socket.SetReadDeadline(time.Now().Add(pingTimeout))
@@ -33,12 +32,7 @@ func (d *Dispatcher) Run() error {
 		return nil
 	})
 
-	defer func() {
-		if d.OnClose != nil {
-			d.OnClose(d)
-		}
-		d.Socket.Close()
-	}()
+	defer d.Socket.Close()
 
 	go func() {
 		ping := time.NewTicker(pingTimeout / 3)
@@ -48,12 +42,11 @@ func (d *Dispatcher) Run() error {
 			select {
 			case msg, open := <-d.sendQ:
 				if !open {
-					d.Socket.WriteMessage(websocket.CloseMessage, []byte{})
-					d.Socket.Close()
+					d.Socket.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 					return
 				}
 
-				d.sendErrQ <- d.Socket.WriteMessage(websocket.TextMessage, []byte(msg))
+				d.sendErrQ <- d.Socket.WriteMessage(websocket.TextMessage, msg)
 
 			case <-ping.C:
 				if err := d.Socket.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
@@ -66,6 +59,9 @@ func (d *Dispatcher) Run() error {
 	for {
 		msgType, msg, err := d.Socket.ReadMessage()
 		switch {
+		case msgType == websocket.CloseMessage:
+			return nil
+
 		case err == io.EOF:
 			return nil
 
@@ -73,13 +69,26 @@ func (d *Dispatcher) Run() error {
 			return err
 
 		case d.OnRead != nil:
-			d.OnRead(d, msgType, msg)
+			if err := d.OnRead(d, msgType, msg); err != nil {
+				d.Socket.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseProtocolError, ""))
+				return err
+			}
 		}
 	}
 }
 
 func (d *Dispatcher) Write(msg string) error {
-	d.sendQ <- msg
+	d.sendQ <- []byte(msg)
+	return <-d.sendErrQ
+}
+
+func (d *Dispatcher) WriteJSON(value interface{}) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+
+	d.sendQ <- data
 	return <-d.sendErrQ
 }
 
