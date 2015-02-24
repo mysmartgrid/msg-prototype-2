@@ -3,8 +3,12 @@
 <div class="container">
 	<div class="row">
 		{{if .Ws}}
-			{{range .Sensors}}
-				<div id="sdisp-{{.Name}}" class="epoch category10" style="height: 200px;"></div>
+			{{range $devname, $dev := (.User.Devices)}}
+			{{range $sensorname, $_ := (.Sensors)}}
+			{{with $name := printf "%v-%v" $devname $sensorname}}
+			<div id="sdisp-{{$name}}" class="epoch category10" style="height: 200px;"></div>
+			{{end}}
+			{{end}}
 			{{end}}
 			<script>
 				var wsEndpoint = "{{.Ws | js}}";
@@ -33,18 +37,33 @@
 					});
 				};
 
-				{{range .Sensors}}
-					charts[{{.Name}}] = setupChart({{.Name}});
+				{{range $devname, $dev := (.User.Devices)}}
+				{{range $sensorname, $_ := (.Sensors)}}
+				{{with $name := printf "%v-%v" $devname $sensorname}}
+				charts[{{$name}}] = setupChart({{$name}});
+				{{end}}
+				{{end}}
 				{{end}}
 
 				if (window["WebSocket"]) {
-					var ws = new WebSocket(wsEndpoint, ["msgp-1"]);
+					var ws = new WebSocket(wsEndpoint, ["msg/1/user"]);
 
 					ws.onmessage = function(e) {
 						var data = JSON.parse(e.data);
-						charts[data.sensor].push([
-							{ time: data.time_ms / 1000, y: data.value || NaN }
-						]);
+						if (data.cmd !== "update") {
+							return;
+						}
+
+						data = data.args
+						Object.getOwnPropertyNames(data).forEach(function (dev) {
+							Object.getOwnPropertyNames(data[dev]).forEach(function (sens) {
+								data[dev][sens].forEach(function (point) {
+									charts[dev + "-" + sens].push([
+										{ time: point[0] / 1000, y: point[1] || NaN }
+									]);
+								});
+							});
+						});
 					};
 				}
 			</script>

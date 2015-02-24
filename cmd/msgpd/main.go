@@ -32,7 +32,7 @@ var args = cmdlineArgs{
 }
 
 var templates *template.Template
-var db *msgp.Db
+var db msgp.Db
 
 func init() {
 	flag.Parse()
@@ -114,15 +114,17 @@ func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 		type ctx struct {
 			Ws      string
 			Missing []string
-			Sensors []msgp.Sensor
+			User    msgp.User
 		}
-		user := db.Find(r.PostFormValue("user"))
-		if user == nil {
-			templates.ExecuteTemplate(w, name, ctx{Missing: []string{"user"}})
-			return
-		}
-		var url = scheme + r.Host + "/ws/" + user.Name
-		templates.ExecuteTemplate(w, name, ctx{Ws: url, Sensors: user.Sensors})
+		db.View(func(tx msgp.DbTx) error {
+			user := tx.User(r.PostFormValue("user"))
+			if user == nil {
+				templates.ExecuteTemplate(w, name, ctx{Missing: []string{"user"}})
+				return nil
+			}
+			var url = scheme + r.Host + "/ws/user/" + r.PostFormValue("user")
+			return templates.ExecuteTemplate(w, name, ctx{Ws: url, User: user})
+		})
 	})
 }
 
@@ -134,22 +136,28 @@ func staticTemplate(name string) func(http.ResponseWriter, *http.Request) {
 
 var h = hub.New()
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
+func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
 	x := msgp.WSAPI{
-		Db:   db,
-		Hub:  h,
-		User: mux.Vars(r)["user"],
+		Db:      db,
+		Hub:     h,
+		User:    mux.Vars(r)["user"],
+		Writer:  w,
+		Request: r,
 	}
-	x.Run(w, r)
+	defer x.Close()
+	x.RunUser()
 }
 
-func putHandler(w http.ResponseWriter, r *http.Request) {
-	sensor, err := db.AddSensor(mux.Vars(r)["user"], mux.Vars(r)["sensor"])
-	if err != nil {
-		http.Error(w, "bad request", 400)
-		return
+func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
+	x := msgp.WSAPI{
+		Db:      db,
+		Hub:     h,
+		User:    mux.Vars(r)["user"],
+		Writer:  w,
+		Request: r,
 	}
-	w.Write([]byte(sensor.AuthToken))
+	defer x.Close()
+	x.RunDevice(mux.Vars(r)["device"])
 }
 
 func userRegister(w http.ResponseWriter, r *http.Request) {
@@ -165,20 +173,28 @@ func userRegister(w http.ResponseWriter, r *http.Request) {
 		templates.ExecuteTemplate(w, "register", ctx{Missing: []string{"name"}})
 
 	default:
-		user, err := db.Add(name)
-		if err != nil {
-			templates.ExecuteTemplate(w, "register", ctx{Error: err.Error()})
-			return
-		}
-		templates.ExecuteTemplate(w, "register_done", user.AuthToken)
+		db.Update(func(tx msgp.DbTx) error {
+			_, err := tx.AddUser(name)
+			if err != nil {
+				templates.ExecuteTemplate(w, "register", ctx{Error: err.Error()})
+				return err
+			}
+			templates.ExecuteTemplate(w, "register_done", nil)
+			return nil
+		})
 	}
 }
 
 func adminHandler(w http.ResponseWriter, r *http.Request) {
-	db.ForEach(func(u *msgp.User) error {
-		w.Write([]byte(fmt.Sprintf("<div>User %v Token <b>%v</b></div>", u.Name, u.AuthToken)))
-		for _, s := range u.Sensors {
-			w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;Sensor %v</div>", s)))
+	db.View(func(tx msgp.DbTx) error {
+		for name, user := range tx.Users() {
+			w.Write([]byte(fmt.Sprintf("<div>User %v</div>", name)))
+			for name, device := range user.Devices() {
+				w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;Device %v, key %v</div>", name, device.Key())))
+				for name, _ := range device.Sensors() {
+					w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;&nbsp;&nbsp;Sensor %v</div>", name)))
+				}
+			}
 		}
 		return nil
 	})
@@ -194,8 +210,8 @@ func main() {
 
 	router.HandleFunc("/admin", defaultHeaders(adminHandler))
 
-	router.HandleFunc("/ws/{user}", wsHandler)
-	router.HandleFunc("/api/value/{user}/{sensor}", putHandler).Methods("PUT")
+	router.HandleFunc("/ws/user/{user}", wsHandlerUser)
+	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
 
 	http.Handle("/", router)

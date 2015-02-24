@@ -19,6 +19,7 @@ type subscription struct {
 
 type Value struct {
 	Topic  string
+	Device string
 	Sensor string
 	Time   time.Time
 	Value  float64
@@ -75,8 +76,8 @@ func New() *Hub {
 	return hub
 }
 
-func (h *Hub) PublishValue(topic, sensor string, time time.Time, val float64) {
-	h.publish <- Value{topic, sensor, time, val}
+func (h *Hub) PublishValue(topic, device, sensor string, time time.Time, val float64) {
+	h.publish <- Value{topic, device, sensor, time, val}
 }
 
 func (h *Hub) Connect() *Conn {

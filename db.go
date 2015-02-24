@@ -2,13 +2,10 @@ package msgp
 
 import (
 	"bytes"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
-	"html/template"
 	"net/http"
-	"net/url"
 	"time"
 )
 
@@ -16,33 +13,36 @@ const (
 	bufferSize = 10000
 )
 
-type Db struct {
-	influxAddr, influxDb, influxUser, influxPass string
-
-	store *bolt.DB
-
-	bufferedValues     map[bufferKey][]Value
-	bufferedValueCount uint32
-
-	bufferInput chan bufferValue
+type DbTx interface {
+	AddUser(name string) (User, error)
+	User(name string) User
+	Users() map[string]User
 }
 
-type DbTx struct {
-	tx *bolt.Tx
+type Db interface {
+	Close()
+
+	Update(func(DbTx) error) error
+	View(func(DbTx) error) error
+
+	AddReading(user, device, sensor string, time time.Time, value float64) error
 }
 
-type User struct {
-	Name      string
-	AuthToken string
-
-	Sensors []Sensor
-
-	db *Db
+type User interface {
+	AddDevice(name string, key []byte) (Device, error)
+	Device(name string) Device
+	Devices() map[string]Device
 }
 
-type Sensor struct {
-	Name      string
-	AuthToken string
+type Device interface {
+	AddSensor(name string) (Sensor, error)
+	Sensor(name string) Sensor
+	Sensors() map[string]Sensor
+
+	Key() []byte
+}
+
+type Sensor interface {
 }
 
 type Value struct {
@@ -50,68 +50,60 @@ type Value struct {
 	Value float64
 }
 
-type bufferKey struct {
-	User, Sensor string
-}
-
-type bufferValue struct {
-	key   bufferKey
-	value Value
-}
-
 var (
 	InvalidName = errors.New("name invalid")
 	NameExists  = errors.New("name exists")
 
-	userBucket   = []byte("user")
-	nameKey      = []byte("name")
-	authtokenKey = []byte("authtoken")
-	sensorsKey   = []byte("sensors")
+	dbUsersKey             = []byte("users")
+	dbUserDevicesKey       = []byte("devices")
+	dbUserDeviceKeyKey     = []byte("key")
+	dbUserDeviceSensorsKey = []byte("sensors")
 )
 
-func dbSensorName(user, sensor string) string {
-	return fmt.Sprintf("u%v%v-s%v%v", len(user), user, len(sensor), sensor)
+type db struct {
+	store *bolt.DB
+
+	influxAddr, influxDb, influxUser, influxPass string
+
+	bufferedValues     map[string][]Value
+	bufferedValueCount uint32
+
+	bufferInput chan bufferValue
 }
 
-type bufWriter struct {
-	buf *bytes.Buffer
+type bufferValue struct {
+	sensor string
+	value  Value
 }
 
-func (buf bufWriter) Write(b []byte) (int, error) {
-	return buf.buf.Write(b)
-}
-
-func (db *Db) flushBuffer() {
+func (db *db) flushBuffer() {
 	if db.bufferedValueCount == 0 {
 		return
 	}
 
 	var buf bytes.Buffer
-	writer := bufWriter{&buf}
 
 	buf.WriteRune('[')
 	for key, values := range db.bufferedValues {
 		if buf.Len() > 1 {
 			buf.WriteRune(',')
 		}
-		fmt.Fprintf(writer, `{"name":"%v",`, template.JSEscapeString(dbSensorName(key.User, key.Sensor)))
+		fmt.Fprintf(&buf, `{"name":"%v",`, key)
 		buf.WriteString(`"columns":["time","value"],`)
 		buf.WriteString(`"points":[`)
 		for i, value := range values {
 			if i > 0 {
 				buf.WriteRune(',')
 			}
-			fmt.Fprintf(writer, `[%v,%v]`, value.Time.Unix()*1000+int64(value.Time.Nanosecond()/1e6), value.Value)
+			fmt.Fprintf(&buf, `[%v,%v]`, value.Time.Unix()*1000+int64(value.Time.Nanosecond()/1e6), value.Value)
 		}
 		buf.WriteString("]}")
 	}
 	buf.WriteRune(']')
 
-	bufReader := bytes.NewReader(buf.Bytes())
-
 	client := http.Client{Timeout: 1 * time.Second}
-	resp, err := client.Post(db.influxAddr+"/db/"+db.influxDb+"/series?time_precision=ms&u="+url.QueryEscape(db.influxUser)+
-		"&p="+url.QueryEscape(db.influxPass), "text/plain; charset=utf-8", bufReader)
+	dbUrl := fmt.Sprintf("%v/db/%v/series?time_precision=ms&u=%v&p=%v", db.influxAddr, db.influxDb, db.influxUser, db.influxPass)
+	resp, err := client.Post(dbUrl, "text/plain; charset=utf-8", &buf)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -119,201 +111,241 @@ func (db *Db) flushBuffer() {
 		panic(resp.Status)
 	}
 
-	db.bufferedValues = make(map[bufferKey][]Value)
+	db.bufferedValues = make(map[string][]Value)
 	db.bufferedValueCount = 0
 }
 
-func (db *Db) manageDbBuffer() {
+func (d *db) manageBuffer() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer func() {
 		ticker.Stop()
-		db.flushBuffer()
+		d.flushBuffer()
 	}()
 
 	for {
 		select {
-		case bval, ok := <-db.bufferInput:
+		case bval, ok := <-d.bufferInput:
 			if !ok {
 				return
 			}
-			slice := db.bufferedValues[bval.key]
+			slice := d.bufferedValues[bval.sensor]
 			if slice == nil {
 				slice = make([]Value, 0)
 			}
-			db.bufferedValues[bval.key] = append(slice, bval.value)
-			db.bufferedValueCount++
+			d.bufferedValues[bval.sensor] = append(slice, bval.value)
+			d.bufferedValueCount++
 
-			if db.bufferedValueCount >= bufferSize {
-				db.flushBuffer()
+			if d.bufferedValueCount >= bufferSize {
+				d.flushBuffer()
 			}
 
 		case <-ticker.C:
-			db.flushBuffer()
+			d.flushBuffer()
 		}
 	}
 }
 
-func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (*Db, error) {
-	store, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
+func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (Db, error) {
+	store, err := bolt.Open(path, 0600, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	err = store.Update(func(tx *bolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists(userBucket); err != nil {
-			return err
-		}
+	store.Update(func(tx *bolt.Tx) error {
+		tx.CreateBucketIfNotExists(dbUsersKey)
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
 
-	result := &Db{
+	result := &db{
+		store:          store,
 		influxUser:     influxUser,
 		influxAddr:     influxAddr,
 		influxPass:     influxPass,
 		influxDb:       influxDb,
-		store:          store,
-		bufferedValues: make(map[bufferKey][]Value),
+		bufferedValues: make(map[string][]Value),
 		bufferInput:    make(chan bufferValue),
 	}
-
-	go result.manageDbBuffer()
+	go result.manageBuffer()
 	return result, nil
 }
 
-func (db *Db) Close() {
-	close(db.bufferInput)
-	db.store.Close()
+func (d *db) Close() {
+	close(d.bufferInput)
+	d.store.Close()
 }
 
-func newToken() string {
-	var token [16]byte
-	if _, err := rand.Read(token[:]); err != nil {
-		panic(errors.New("RNG bad"))
-	}
-	return fmt.Sprintf("%x", token)
+func dbSensorName(user, device, sensor string) string {
+	return user + "-" + device + "-" + sensor
 }
 
-func (db *Db) Add(name string) (*User, error) {
-	var result *User
-	err := db.store.Update(func(tx *bolt.Tx) error {
-		nameBytes := []byte(name)
-
-		if len(nameBytes) == 0 || len(nameBytes) >= bolt.MaxKeySize {
-			return InvalidName
-		}
-
-		result = &User{
-			Name:      name,
-			AuthToken: newToken(),
-			db:        db,
-		}
-
-		ub := tx.Bucket(userBucket)
-		b, err := ub.CreateBucket(nameBytes)
-
-		if err != nil {
-			return NameExists
-		}
-
-		b.Put(nameKey, nameBytes)
-		b.Put(authtokenKey, []byte(result.AuthToken))
-		b.CreateBucket(sensorsKey)
-		return nil
-	})
-	if err != nil {
-		result = nil
-	}
-	return result, err
-}
-
-func loadSensors(b *bolt.Bucket) []Sensor {
-	result := make([]Sensor, 0)
-	b.ForEach(func(key, value []byte) error {
-		result = append(result, Sensor{string(key), string(value)})
-		return nil
-	})
-	return result
-}
-
-func loadUser(db *Db, b *bolt.Bucket) *User {
-	return &User{
-		Name:      string(b.Get(nameKey)),
-		AuthToken: string(b.Get(authtokenKey)),
-		Sensors:   loadSensors(b.Bucket(sensorsKey)),
-		db:        db,
-	}
-}
-
-func (db *Db) ForEach(fn func(*User) error) error {
-	return db.store.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(userBucket)
-		return b.ForEach(func(key, value []byte) error {
-			return fn(loadUser(db, b.Bucket(key)))
-		})
+func (d *db) View(fn func(DbTx) error) error {
+	return d.store.View(func(tx *bolt.Tx) error {
+		return fn(dbTx{tx})
 	})
 }
 
-func (db *Db) Find(name string) *User {
-	var result *User
-
-	db.store.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(userBucket).Bucket([]byte(name))
-		if b == nil {
-			return InvalidName
-		}
-		result = loadUser(db, b)
-		return nil
-	})
-	return result
-}
-
-func (db *Db) Update(fn func(DbTx) error) error {
-	return db.store.Update(func(tx *bolt.Tx) error {
-		return fn(DbTx{tx})
+func (d *db) Update(fn func(DbTx) error) error {
+	return d.store.Update(func(tx *bolt.Tx) error {
+		return fn(dbTx{tx})
 	})
 }
 
-func (db *Db) CheckAuthTokenFor(userName, sensorName, token string) bool {
-	err := db.store.View(func(tx *bolt.Tx) error {
-		ub := tx.Bucket(userBucket)
-		user := ub.Bucket([]byte(userName))
+func (d *db) AddReading(user, device, sensor string, time time.Time, value float64) error {
+	err := d.View(func(tx DbTx) error {
+		user := tx.User(user)
 		if user == nil {
 			return InvalidName
 		}
-		storedToken := string(user.Bucket(sensorsKey).Get([]byte(sensorName)))
-		if token != storedToken {
+		device := user.Device(device)
+		if device == nil {
+			return InvalidName
+		}
+		sensor := device.Sensor(sensor)
+		if sensor == nil {
 			return InvalidName
 		}
 		return nil
 	})
-	return err == nil
-}
-
-func (db *Db) AddSensor(user, name string) (Sensor, error) {
-	var result Sensor
-	err := db.store.Update(func(tx *bolt.Tx) error {
-		ub := tx.Bucket(userBucket)
-		b := ub.Bucket([]byte(user))
-		if b == nil {
-			return InvalidName
-		}
-		sensors := b.Bucket(sensorsKey)
-		if sensors.Get([]byte(name)) != nil {
-			return NameExists
-		}
-		result = Sensor{name, newToken()}
-		sensors.Put([]byte(name), []byte(result.AuthToken))
-		return nil
-	})
-	return result, err
-}
-
-func (db *Db) AddReading(user, sensor string, time time.Time, value float64) {
-	db.bufferInput <- bufferValue{
-		key:   bufferKey{user, sensor},
-		value: Value{time, value},
+	if err != nil {
+		return err
 	}
+	d.bufferInput <- bufferValue{dbSensorName(user, device, sensor), Value{time, value}}
+	return nil
+}
+
+type dbTx struct {
+	*bolt.Tx
+}
+
+func (tx dbTx) AddUser(name string) (User, error) {
+	nameBytes := []byte(name)
+	if len(nameBytes) == 0 || len(nameBytes) >= bolt.MaxKeySize {
+		return nil, InvalidName
+	}
+
+	b := tx.Bucket(dbUsersKey)
+	ub, err := b.CreateBucket(nameBytes)
+	if err != nil {
+		return nil, NameExists
+	}
+
+	result := dbUser{ub}
+	result.init()
+	return result, nil
+}
+
+func (tx dbTx) User(name string) User {
+	b := tx.Bucket(dbUsersKey)
+	ub := b.Bucket([]byte(name))
+	if ub != nil {
+		return dbUser{ub}
+	}
+	return nil
+}
+
+func (tx dbTx) Users() map[string]User {
+	result := make(map[string]User)
+	b := tx.Bucket(dbUsersKey)
+	b.ForEach(func(k, v []byte) error {
+		result[string(k)] = dbUser{b.Bucket(k)}
+		return nil
+	})
+	return result
+}
+
+type dbUser struct {
+	b *bolt.Bucket
+}
+
+func (u dbUser) init() {
+	u.b.CreateBucketIfNotExists(dbUserDevicesKey)
+}
+
+func (u dbUser) AddDevice(name string, key []byte) (Device, error) {
+	nameBytes := []byte(name)
+	if len(nameBytes) == 0 || len(nameBytes) >= bolt.MaxKeySize {
+		return nil, InvalidName
+	}
+
+	b := u.b.Bucket(dbUserDevicesKey)
+	db, err := b.CreateBucket(nameBytes)
+	if err != nil {
+		return nil, NameExists
+	}
+
+	result := dbDevice{db}
+	result.init(key)
+	return result, nil
+}
+
+func (d dbUser) Device(name string) Device {
+	b := d.b.Bucket(dbUserDevicesKey).Bucket([]byte(name))
+	if b != nil {
+		return dbDevice{b}
+	}
+	return nil
+}
+
+func (d dbUser) Devices() map[string]Device {
+	result := make(map[string]Device)
+	b := d.b.Bucket(dbUserDevicesKey)
+	b.ForEach(func(k, v []byte) error {
+		result[string(k)] = dbDevice{b.Bucket(k)}
+		return nil
+	})
+	return result
+}
+
+type dbDevice struct {
+	b *bolt.Bucket
+}
+
+func (d dbDevice) init(key []byte) {
+	d.b.CreateBucketIfNotExists(dbUserDeviceSensorsKey)
+	d.b.Put(dbUserDeviceKeyKey, key)
+}
+
+func (d dbDevice) AddSensor(name string) (Sensor, error) {
+	nameBytes := []byte(name)
+	if len(nameBytes) == 0 || len(nameBytes) >= bolt.MaxKeySize {
+		return nil, InvalidName
+	}
+
+	b := d.b.Bucket(dbUserDeviceSensorsKey)
+	sb, err := b.CreateBucket(nameBytes)
+	if err != nil {
+		return nil, NameExists
+	}
+
+	result := dbSensor{sb}
+	result.init()
+	return result, nil
+}
+func (d dbDevice) Sensor(name string) Sensor {
+	b := d.b.Bucket(dbUserDeviceSensorsKey).Bucket([]byte(name))
+	if b != nil {
+		return dbSensor{b}
+	}
+	return nil
+}
+
+func (d dbDevice) Sensors() map[string]Sensor {
+	result := make(map[string]Sensor)
+	b := d.b.Bucket(dbUserDeviceSensorsKey)
+	b.ForEach(func(k, v []byte) error {
+		result[string(k)] = dbSensor{b.Bucket(k)}
+		return nil
+	})
+	return result
+}
+
+func (d dbDevice) Key() []byte {
+	return d.b.Get(dbUserDeviceKeyKey)
+}
+
+type dbSensor struct {
+	b *bolt.Bucket
+}
+
+func (s dbSensor) init() {
 }
