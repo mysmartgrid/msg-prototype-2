@@ -62,17 +62,17 @@ var msgp = function() {
 			updateGraph([[new Date(), null]]);
 
 			if (options.assumeValuesMissingAfterMs !== undefined)
-				valueMissingTimeoutId = setTimeout(valueMissingTimeoutFn, options.assumeValuesMissingAfterMs);
+				valueMissingTimeoutId = window.setTimeout(valueMissingTimeoutFn, options.assumeValuesMissingAfterMs);
 		};
 
 		this.update = function(data) {
 			if (valueMissingTimeoutId !== undefined)
-				clearTimeout(valueMissingTimeoutId);
+				window.clearTimeout(valueMissingTimeoutId);
 
 			updateGraph(data);
 
 			if (options.assumeValuesMissingAfterMs !== undefined)
-				valueMissingTimeoutId = setTimeout(valueMissingTimeoutFn, options.assumeValuesMissingAfterMs);
+				valueMissingTimeoutId = window.setTimeout(valueMissingTimeoutFn, options.assumeValuesMissingAfterMs);
 		};
 	};
 
@@ -145,6 +145,7 @@ var msgp = function() {
 		var _onOpen = eventHandler("onOpen");
 		var _onClose = eventHandler("onClose");
 		var _onUpdate = eventHandler("onUpdate");
+		var _onError = eventHandler("onError");
 
 		ws.onopen = function(e) {
 			if (ws.protocol == "msg/1/user") {
@@ -156,6 +157,7 @@ var msgp = function() {
 		};
 
 		ws.onclose = _onClose;
+		ws.onerror = _onError;
 
 		ws.onmessage = function(msg) {
 			var data = JSON.parse(msg.data);

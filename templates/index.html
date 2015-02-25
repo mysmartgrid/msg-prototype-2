@@ -13,11 +13,23 @@
 					assumeValuesMissingAfterMs: 3000,
 				});
 
-				var client = new msgp.WebsocketClient({{.Ws}});
+				var runGraphClient = function() {
+					var client = new msgp.WebsocketClient({{.Ws}});
 
-				client.onUpdate = function(upd) {
-					graphs.update(upd);
+					client.onUpdate = function(upd) {
+						graphs.update(upd);
+					};
+
+					var reconnect = function() {
+						client.close();
+						window.setTimeout(runGraphClient, 1000);
+					};
+
+					client.onClose = runGraphClient;
+					client.onError = runGraphClient;
 				};
+
+				runGraphClient();
 			</script>
 		{{else}}
 			<form action="/" method="POST">
