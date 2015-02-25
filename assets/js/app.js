@@ -32,7 +32,7 @@ var msgp = function() {
 			}
 		};
 
-		this.update = function(data) {
+		var updateGraph = function(data) {
 			var sort = false;
 			for (var i = 0; i < data.length; i++) {
 				var x = new Date(data[i][0]);
@@ -47,9 +47,32 @@ var msgp = function() {
 				});
 			}
 			removeOldValues();
+			if (options.maxAgeMs !== undefined) {
+				var now = new Date();
+				if (now - graphData[0][0] < options.maxAgeMs)
+					graphData.unshift([new Date(now - options.maxAgeMs), null]);
+			}
 			g.updateOptions({
 				file: graphData
 			});
+		};
+
+		var valueMissingTimeoutId;
+		var valueMissingTimeoutFn = function() {
+			updateGraph([[new Date(), null]]);
+
+			if (options.assumeValuesMissingAfterMs !== undefined)
+				valueMissingTimeoutId = setTimeout(valueMissingTimeoutFn, options.assumeValuesMissingAfterMs);
+		};
+
+		this.update = function(data) {
+			if (valueMissingTimeoutId !== undefined)
+				clearTimeout(valueMissingTimeoutId);
+
+			updateGraph(data);
+
+			if (options.assumeValuesMissingAfterMs !== undefined)
+				valueMissingTimeoutId = setTimeout(valueMissingTimeoutFn, options.assumeValuesMissingAfterMs);
 		};
 	};
 
