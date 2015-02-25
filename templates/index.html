@@ -3,69 +3,20 @@
 <div class="container">
 	<div class="row">
 		{{if .Ws}}
-			{{range $devname, $dev := (.User.Devices)}}
-			{{range $sensorname, $_ := (.Sensors)}}
-			{{with $name := printf "%v-%v" $devname $sensorname}}
-			<div id="sdisp-{{$name}}" class="epoch category10" style="height: 200px;"></div>
-			{{end}}
-			{{end}}
-			{{end}}
+			<div id="graph-container"></div>
+			<div id="sensor-graph-template" style="visibility: none; width: 100%"></div>
+
 			<script>
-				var wsEndpoint = "{{.Ws | js}}";
+				var graphs = new msgp.GraphCollection("#graph-container", {
+					sensorGraphTemplate: "#sensor-graph-template",
+					maxAgeMs: 120 * 1000
+				});
 
-				var startTime = (+new Date()) / 1000;
-				var charts = {};
+				var client = new msgp.WebsocketClient({{.Ws}});
 
-				var setupChart = function(name) {
-					return $('#sdisp-' + name).epoch({
-						type: 'time.line',
-						label: 'Plot',
-						data: [
-						{ label: "val", values: [{ time: startTime, y: 0 }] },
-						],
-						axes: ['left', 'right', 'bottom'],
-						tickFormats: {
-							left: function(d) {
-								return d + " W";
-							}
-						},
-						ticks: {
-							time: 20,
-						},
-						historySize: 120,
-						windowSize: 120
-					});
+				client.onUpdate = function(upd) {
+					graphs.update(upd);
 				};
-
-				{{range $devname, $dev := (.User.Devices)}}
-				{{range $sensorname, $_ := (.Sensors)}}
-				{{with $name := printf "%v-%v" $devname $sensorname}}
-				charts[{{$name}}] = setupChart({{$name}});
-				{{end}}
-				{{end}}
-				{{end}}
-
-				if (window["WebSocket"]) {
-					var ws = new WebSocket(wsEndpoint, ["msg/1/user"]);
-
-					ws.onmessage = function(e) {
-						var data = JSON.parse(e.data);
-						if (data.cmd !== "update") {
-							return;
-						}
-
-						data = data.args
-						Object.getOwnPropertyNames(data).forEach(function (dev) {
-							Object.getOwnPropertyNames(data[dev]).forEach(function (sens) {
-								data[dev][sens].forEach(function (point) {
-									charts[dev + "-" + sens].push([
-										{ time: point[0] / 1000, y: point[1] || NaN }
-									]);
-								});
-							});
-						});
-					};
-				}
 			</script>
 		{{else}}
 			<form action="/" method="POST">

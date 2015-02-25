@@ -3,13 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"io"
 	"io/ioutil"
 	"log"
-	"math/rand"
+	"msgp"
 	"net/http"
 	"net/url"
+	"math/rand"
 	"time"
 )
 
@@ -72,50 +72,53 @@ func createSensors() {
 }
 
 func runUser(user string, sensors map[string]string) {
-	headers := http.Header{
-		"Sec-WebSocket-Protocol": []string{"msgp-1"},
-	}
-	ws, resp, err := websocket.DefaultDialer.Dial("ws://[::1]:8080/ws/"+user, headers)
+	client, err := msgp.NewWSClientDevice("ws://[::1]:8080", "a", "a", []byte("a"))
 	if err != nil {
-		log.Panic(resp, err)
+		log.Panic(err)
 	}
 
-	go func() {
-		for {
-			for sensor, token := range sensors {
-				msg := fmt.Sprintf(`{"cmd": "update", "args": {"sensor": %q, "values": [[%v, %v]], "token": %q}}`,
-					sensor, time.Now().UnixNano()/1e6, rand.Float64(), token)
-				ws.WriteMessage(websocket.TextMessage, []byte(msg))
-				waitTime := 90 + rand.Float64()*20
-				time.Sleep(time.Duration(waitTime) * time.Millisecond)
-			}
-		}
-	}()
+	//	err = client.AddSensor("a")
+	//	if err != nil {
+	//		log.Panic(err)
+	//	}
+	//
+	//	err = client.AddSensor("b")
+	//	if err != nil {
+	//		log.Panic(err)
+	//	}
 
 	for {
-		_, _, err := ws.ReadMessage()
+		err = client.Update(map[string][]msgp.Measurement{
+			"a": []msgp.Measurement{{time.Now().Add(time.Second), rand.Float64()}},
+			"b": []msgp.Measurement{{time.Now().Add(time.Second), rand.Float64()}},
+		})
 		if err != nil {
-			panic(err)
+			log.Panic(err)
 		}
-		// TODO measure things
+		time.Sleep(1 * time.Second)
 	}
+	client.Close()
 }
 
 func main() {
-	stream, err := ioutil.ReadFile("allsensors.json")
-	if err != nil {
-		panic(err)
-	}
+	runUser("a", nil)
 
-	var allSensors map[string]map[string]string
-	err = json.Unmarshal(stream, &allSensors)
-	if err != nil {
-		panic(err)
-	}
+	//	createSensors()
 
-	for user, sensors := range allSensors {
-		go runUser(user, sensors)
-	}
-
-	time.Sleep(120 * time.Second)
+	//	stream, err := ioutil.ReadFile("allsensors.json")
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//
+	//	var allSensors map[string]map[string]string
+	//	err = json.Unmarshal(stream, &allSensors)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//
+	//	for user, sensors := range allSensors {
+	//		go runUser(user, sensors)
+	//	}
+	//
+	//	time.Sleep(120 * time.Second)
 }

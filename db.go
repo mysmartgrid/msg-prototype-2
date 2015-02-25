@@ -321,6 +321,7 @@ func (d dbDevice) AddSensor(name string) (Sensor, error) {
 	result.init()
 	return result, nil
 }
+
 func (d dbDevice) Sensor(name string) Sensor {
 	b := d.b.Bucket(dbUserDeviceSensorsKey).Bucket([]byte(name))
 	if b != nil {
