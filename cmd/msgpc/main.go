@@ -1,97 +1,69 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"msgp"
 	"net/http"
-	"net/url"
 	"math/rand"
+	"encoding/json"
+	"io/ioutil"
 	"time"
+	"os"
+	"fmt"
 )
 
-func createUser(id int) {
-	resp, err := http.PostForm("http://localhost:8080/user/register", url.Values{
-		"name": []string{fmt.Sprintf("%v", id)},
-	})
+func createUser(name string) {
+	resp, err := http.PostForm("http://localhost:8080/admin/" + name, nil)
 	if err != nil {
 		log.Println(resp)
 		panic(err)
 	}
 }
 
-func createSensor(user, sensor int) string {
-	url, err := url.Parse(fmt.Sprintf("http://localhost:8080/api/value/%v/%v", user, sensor))
-	if err != nil {
-		panic(err)
-	}
-	req := &http.Request{
-		Method: "PUT",
-		URL:    url,
-	}
-	resp, err := http.DefaultClient.Do(req)
+func createDevice(user, name string) {
+	resp, err := http.PostForm("http://localhost:8080/admin/" + user + "/" + name, nil)
 	if err != nil {
 		log.Println(resp)
 		panic(err)
 	}
-	var line [64]byte
-	n, err := resp.Body.Read(line[:])
-	if err != nil && err != io.EOF {
-		log.Println(err)
-		panic(err)
-	}
-	resp.Body.Close()
-	return string(line[:n])
 }
 
-func createSensors() {
-	allSensors := make(map[string]map[string]string)
-
-	for i := 0; i < 10; i++ {
-		createUser(i)
-		is := fmt.Sprintf("%v", i)
-		allSensors[is] = make(map[string]string)
-		for j := 0; j < 10; j++ {
-			st := createSensor(i, j)
-			allSensors[is][fmt.Sprintf("%v", j)] = st
-			log.Println(i, j, st)
+func createUsers(users, devicesPerUser, sensorsPerDev int) map[string]map[string][]string {
+	result := make(map[string]map[string][]string)
+	for i := 0; i < users; i++ {
+		un := fmt.Sprintf("u%v", i)
+		result[un] = make(map[string][]string)
+		createUser(un)
+		for j := 0; j < devicesPerUser; j++ {
+			dn := fmt.Sprintf("d%v", j)
+			result[un][dn] = make([]string, 0, 10)
+			createDevice(un, dn)
+			client, err := msgp.NewWSClientDevice("ws://[::1]:8080", un, dn, []byte(dn))
+			if err != nil {
+				log.Panic(err)
+			}
+			for k := 0; k < sensorsPerDev; k++ {
+				sn := fmt.Sprintf("s%v", k)
+				err = client.AddSensor(sn)
+				result[un][dn] = append(result[un][dn], sn)
+			}
 		}
 	}
-
-	stream, err := json.MarshalIndent(allSensors, "", "	")
-	if err != nil {
-		panic(err)
-	}
-	err = ioutil.WriteFile("allsensors.json", stream, 0660)
-	if err != nil {
-		panic(err)
-	}
+	return result
 }
 
-func runUser(user string, sensors map[string]string) {
-	client, err := msgp.NewWSClientDevice("ws://[::1]:8080", "a", "a", []byte("a"))
+func runDevice(user, device string, sensors []string) {
+	client, err := msgp.NewWSClientDevice("ws://[::1]:8080", user, device, []byte(device))
 	if err != nil {
 		log.Panic(err)
 	}
 
-	//	err = client.AddSensor("a")
-	//	if err != nil {
-	//		log.Panic(err)
-	//	}
-	//
-	//	err = client.AddSensor("b")
-	//	if err != nil {
-	//		log.Panic(err)
-	//	}
-
 	for {
-		err = client.Update(map[string][]msgp.Measurement{
-			"a": []msgp.Measurement{{time.Now().Add(time.Second), rand.Float64()}},
-			"b": []msgp.Measurement{{time.Now().Add(time.Second), rand.Float64()}},
-		})
+		values := make(map[string][]msgp.Measurement, len(sensors))
+		for _, name := range sensors {
+			values[name] = []msgp.Measurement{{time.Now(), rand.Float64()}}
+		}
+		err = client.Update(values)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -101,24 +73,36 @@ func runUser(user string, sensors map[string]string) {
 }
 
 func main() {
-	runUser("a", nil)
+	if len(os.Args) < 2 {
+		log.Println("usage: msgpc (init uc,dc,sc | run)")
+		return
+	}
 
-	//	createSensors()
+	switch os.Args[1] {
+	case "init":
+		uc, dc, sc := 0, 0, 0
+		fmt.Sscanf(os.Args[2], "%v,%v,%v", &uc, &dc, &sc)
+		state := createUsers(uc, dc, sc)
+		data, _ := json.MarshalIndent(state, "", " ")
+		ioutil.WriteFile("msgpc-state.json", data, 0666)
 
-	//	stream, err := ioutil.ReadFile("allsensors.json")
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//
-	//	var allSensors map[string]map[string]string
-	//	err = json.Unmarshal(stream, &allSensors)
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//
-	//	for user, sensors := range allSensors {
-	//		go runUser(user, sensors)
-	//	}
-	//
-	//	time.Sleep(120 * time.Second)
+	case "run":
+		data, err := ioutil.ReadFile("msgpc-state.json")
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		var state map[string]map[string][]string
+		err = json.Unmarshal(data, &state)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		for user, ds := range state {
+			for device, sensors := range ds {
+				go runDevice(user, device, sensors)
+			}
+		}
+		<-make(chan int)
+	}
 }

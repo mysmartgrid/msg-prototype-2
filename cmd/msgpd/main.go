@@ -200,6 +200,27 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func adminAddUser(w http.ResponseWriter, r *http.Request) {
+	err := db.Update(func(tx msgp.DbTx) error {
+		_, err := tx.AddUser(mux.Vars(r)["user"])
+		return err
+	})
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+	}
+}
+
+func adminAddDevice(w http.ResponseWriter, r *http.Request) {
+	err := db.Update(func(tx msgp.DbTx) error {
+		u := tx.User(mux.Vars(r)["user"])
+		_, err := u.AddDevice(mux.Vars(r)["device"], []byte(mux.Vars(r)["device"]))
+		return err
+	})
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+	}
+}
+
 func main() {
 	router := mux.NewRouter()
 
@@ -209,6 +230,8 @@ func main() {
 	router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
 
 	router.HandleFunc("/admin", defaultHeaders(adminHandler))
+	router.HandleFunc("/admin/{user}", defaultHeaders(adminAddUser)).Methods("POST")
+	router.HandleFunc("/admin/{user}/{device}", defaultHeaders(adminAddDevice)).Methods("POST")
 
 	router.HandleFunc("/ws/user/{user}", wsHandlerUser)
 	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
