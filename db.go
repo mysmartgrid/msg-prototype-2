@@ -144,7 +144,7 @@ func (h *influxHandler) loadValues(since time.Time, keys []bufferKey) (map[buffe
 	for _, key := range keys {
 		series = append(series, fmt.Sprintf("%v-%v-%v", key.user, key.device, key.sensor))
 	}
-	query := fmt.Sprintf("select * from /%v/ where time > %v", strings.Join(series, "|"), influxTime(since))
+	query := fmt.Sprintf("select * from /%v/ where time > %vms", strings.Join(series, "|"), influxTime(since))
 
 	client := http.Client{Timeout: 1 * time.Second}
 	resp, err := client.Get(h.dbUrl(map[string]string{"q": query}))
