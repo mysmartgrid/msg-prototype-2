@@ -1,19 +1,19 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"log"
+	"math/rand"
 	"msgp"
 	"net/http"
-	"math/rand"
-	"encoding/json"
-	"io/ioutil"
-	"time"
 	"os"
-	"fmt"
+	"time"
 )
 
 func createUser(name string) {
-	resp, err := http.PostForm("http://localhost:8080/admin/" + name, nil)
+	resp, err := http.PostForm("http://localhost:8080/admin/"+name, nil)
 	if err != nil {
 		log.Println(resp)
 		panic(err)
@@ -21,7 +21,7 @@ func createUser(name string) {
 }
 
 func createDevice(user, name string) {
-	resp, err := http.PostForm("http://localhost:8080/admin/" + user + "/" + name, nil)
+	resp, err := http.PostForm("http://localhost:8080/admin/"+user+"/"+name, nil)
 	if err != nil {
 		log.Println(resp)
 		panic(err)

@@ -7,12 +7,11 @@ var msgp = function() {
 		if (maxAgeMs === undefined)
 			return [];
 
-		var result = [];
 		var now = +new Date();
-		for (var offset = maxAgeMs; offset > 0; offset -= 1000) {
-			result.push([new Date(now - offset), null])
-		}
-		return result;
+		return [
+			[new Date(now - maxAgeMs), null],
+			[new Date(now), null]
+		];
 	};
 
 	var SensorGraph = function(container, options) {

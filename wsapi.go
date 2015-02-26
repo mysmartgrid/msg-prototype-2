@@ -309,12 +309,13 @@ func (api *wsDeviceAPI) doUpdate(msg *v1MessageIn) *v1Error {
 		}
 
 		for sensor, values := range args.Values {
+			s := device.Sensor(sensor)
 			for _, value := range values {
-				err := api.Db.AddReading(api.User, api.Device, sensor, value.Time, value.Value)
+				err := api.Db.AddReading(user, device, s, value.Time, value.Value)
 				if err != nil {
 					return operationFailed(err.Error())
 				}
-				api.Hub.PublishValue(api.User, api.Device, sensor, value.Time, value.Value)
+				api.Hub.PublishValue(api.User, device.Id(), s.Id(), value.Time, value.Value)
 			}
 		}
 
@@ -365,6 +366,8 @@ func (api *wsUserAPI) Run() error {
 		}
 	}()
 
+	api.sendInitialUpdates(time.Now().Add(-120 * time.Second))
+
 	for {
 		var msg v1MessageIn
 
@@ -381,6 +384,42 @@ func (api *wsUserAPI) Run() error {
 	}
 
 	return nil
+}
+
+func (api *wsUserAPI) sendInitialUpdates(since time.Time) error {
+	return api.Db.View(func(tx DbTx) error {
+		user := tx.User(api.User)
+		if user == nil {
+			return notAuthorized
+		}
+		sensors := make(map[Device][]Sensor)
+		for _, dev := range user.Devices() {
+			smap := dev.Sensors()
+			slist := make([]Sensor, 0, len(smap))
+			for _, sensor := range smap {
+				slist = append(slist, sensor)
+			}
+			sensors[dev] = slist
+		}
+		readings, err := user.LoadReadings(since, sensors)
+		if err != nil {
+			return err
+		}
+		update := make(map[string]map[string][]Measurement)
+		for dev, svalues := range readings {
+			dupdate := make(map[string][]Measurement, len(svalues))
+			update[dev.Id()] = dupdate
+			for sensor, values := range svalues {
+				supdate := make([]Measurement, 0, len(values))
+				for _, val := range values {
+					supdate = append(supdate, Measurement{val.Time, val.Value})
+				}
+				dupdate[sensor.Id()] = supdate
+			}
+		}
+		api.dispatch.WriteJSON(v1MessageOut{Command: "update", Args: update})
+		return nil
+	})
 }
 
 func (p *Measurement) UnmarshalJSON(data []byte) error {
