@@ -3,20 +3,9 @@
 var msgp = function() {
 	var result = {};
 
-	var createEmptyDisplayArray = function(maxAgeMs) {
-		if (maxAgeMs === undefined)
-			return [];
-
-		var now = +new Date();
-		return [
-			[new Date(now - maxAgeMs), null],
-			[new Date(now), null]
-		];
-	};
-
 	var SensorGraph = function(container, options) {
 		var maxAgeMs = options.maxAgeMs;
-		var graphData = createEmptyDisplayArray(maxAgeMs);
+		var graphData = [[new Date(), null]];
 		var g = new Dygraph(container.get(0), graphData, {
 			labels: ["Time", "Value"]
 		});
@@ -33,13 +22,24 @@ var msgp = function() {
 
 		var updateGraph = function(data) {
 			var sort = false;
+			data.sort(function(a, b) {
+				return a[0] - b[0];
+			});
+			graphData.pop();
 			for (var i = 0; i < data.length; i++) {
 				var x = new Date(data[i][0]);
 				if (graphData.length > 0) {
 					sort |= graphData[graphData.length - 1][0] - x > 0;
 				}
+				if (options.assumeValuesMissingAfterMs !== undefined && (i != 0 || graphData.length != 0)) {
+					var lastTime = i == 0 ? graphData[graphData.length - 1][0] : data[i - 1][0];
+					if (data[i][0] - lastTime >= options.assumeValuesMissingAfterMs) {
+						graphData.push([new Date(x - 1), null]);
+					}
+				}
 				graphData.push([x, data[i][1]]);
 			}
+			graphData.push([new Date(), null]);
 			if (sort) {
 				graphData.sort(function(a, b) {
 					return a[0] - b[0];
