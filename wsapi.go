@@ -56,8 +56,22 @@ type v1DeviceCmdAddSensorArgs struct {
 	Name string `json:"name"`
 }
 
+type v1UserCmdGetValuesArgs struct {
+	SinceUnixMs float64 `json:"since"`
+	WithMetadata bool `json:"with_metadata"`
+}
+
 type v1UserEventUpdateArgs struct {
 	Values map[string]map[string][]Measurement `json:"values"`
+}
+
+type v1UserEventMetadataArgs struct {
+	Devices map[string]v1DeviceMetadata `json:"devices"`
+}
+
+type v1DeviceMetadata struct {
+	Name string `json:"name"`
+	Sensors map[string]string `json:"sensors"`
 }
 
 type v1Error struct {
@@ -352,21 +366,15 @@ func (api *wsUserAPI) Run() error {
 			if !open {
 				return
 			}
-			api.dispatch.WriteJSON(
-				v1MessageOut{
-					Command: "update",
-					Args: map[string]map[string][]Measurement{
-						val.Device: {
-							val.Sensor: {
-								{val.Time, val.Value},
-							},
-						},
+			api.sendUpdate(map[string]map[string][]Measurement{
+				val.Device: {
+					val.Sensor: {
+						{val.Time, val.Value},
 					},
-				})
+				},
+			})
 		}
 	}()
-
-	api.sendInitialUpdates(time.Now().Add(-120 * time.Second))
 
 	for {
 		var msg v1MessageIn
@@ -377,20 +385,41 @@ func (api *wsUserAPI) Run() error {
 			return err
 		}
 
+		var apiErr *v1Error
+
 		switch msg.Command {
+		case "get_values":
+			apiErr = api.doGetValues(&msg)
+
 		default:
 			api.dispatch.WriteJSON(v1MessageOut{Error: badCommand(msg.Command)})
+		}
+
+		if apiErr != nil {
+			api.dispatch.WriteJSON(v1MessageOut{Error: apiErr})
 		}
 	}
 
 	return nil
 }
 
-func (api *wsUserAPI) sendInitialUpdates(since time.Time) error {
-	return api.Db.View(func(tx DbTx) error {
+func (api *wsUserAPI) sendUpdate(values map[string]map[string][]Measurement) error {
+	return api.dispatch.WriteJSON(v1MessageOut{Command: "update", Args: values})
+}
+
+func (api *wsUserAPI) doGetValues(cmd *v1MessageIn) (result *v1Error) {
+	var args v1UserCmdGetValuesArgs
+	var err error
+
+	if err = json.Unmarshal(cmd.Args, &args); err != nil {
+		goto fail
+	}
+
+	err = api.Db.View(func(tx DbTx) error {
 		user := tx.User(api.User)
 		if user == nil {
-			return notAuthorized
+			result = apiNotAuthorized
+			return nil
 		}
 		sensors := make(map[Device][]Sensor)
 		for _, dev := range user.Devices() {
@@ -401,7 +430,22 @@ func (api *wsUserAPI) sendInitialUpdates(since time.Time) error {
 			}
 			sensors[dev] = slist
 		}
-		readings, err := user.LoadReadings(since, sensors)
+		if args.WithMetadata {
+			meta := make(map[string]v1DeviceMetadata)
+			for dname, dev := range user.Devices() {
+				meta[dev.Id()] = v1DeviceMetadata{
+					Name: dname,
+					Sensors: make(map[string]string),
+				}
+				for sname, sensor := range dev.Sensors() {
+					meta[dev.Id()].Sensors[sensor.Id()] = sname
+				}
+			}
+			if err := api.dispatch.WriteJSON(v1MessageOut{Command: "metadata", Args: v1UserEventMetadataArgs{meta}}); err != nil {
+				return err
+			}
+		}
+		readings, err := user.LoadReadings(goTime(args.SinceUnixMs), sensors)
 		if err != nil {
 			return err
 		}
@@ -417,9 +461,14 @@ func (api *wsUserAPI) sendInitialUpdates(since time.Time) error {
 				dupdate[sensor.Id()] = supdate
 			}
 		}
-		api.dispatch.WriteJSON(v1MessageOut{Command: "update", Args: update})
-		return nil
+		return api.sendUpdate(update)
 	})
+
+fail:
+	if err != nil {
+		result = operationFailed(err.Error())
+	}
+	return result
 }
 
 func (p *Measurement) UnmarshalJSON(data []byte) error {

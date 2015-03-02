@@ -3,6 +3,23 @@
 var msgp = function() {
 	var result = {};
 
+	var metadata = {};
+
+	var mergeMetadata = function(md) {
+		Object.getOwnPropertyNames(md.devices).forEach(function (devId) {
+			if (metadata[devId] === undefined) {
+				metadata[devId] = {
+					name: "",
+					sensors: {}
+				};
+			}
+			metadata[devId].name = md.devices[devId].name;
+			Object.getOwnPropertyNames(md.devices[devId].sensors).forEach(function (sensorId) {
+				metadata[devId].sensors[sensorId] = md.devices[devId].sensors[sensorId];
+			});
+		});
+	};
+
 	var SensorGraph = function(container, options) {
 		var maxAgeMs = options.maxAgeMs;
 		var graphData = [[new Date(), null]];
@@ -75,7 +92,7 @@ var msgp = function() {
 		};
 	};
 
-	var DeviceGraphs = function(container, options) {
+	var DeviceGraphs = function(meta, container, options) {
 		var sensors = {};
 		var sensorGraphTemplate = options.sensorGraphTemplate ? $(options.sensorGraphTemplate) : $("<div></div>");
 
@@ -89,8 +106,9 @@ var msgp = function() {
 						.clone()
 						.removeAttr("visibility")
 						.prop("id", "");
+					sensorDiv.children(".sensor-title").text(meta[sensor]);
 					container.append(sensorDiv);
-					sensors[sensor] = new SensorGraph(sensorDiv, options);
+					sensors[sensor] = new SensorGraph(sensorDiv.children(".sensor-plot").first(), options);
 				}
 				sensors[sensor].update(data[sensor]);
 			}
@@ -102,6 +120,7 @@ var msgp = function() {
 
 		var container = $(containerId);
 		var devices = {};
+		var template = options.deviceGraphsTemplate ? $(options.deviceGraphsTemplate) : $("<div></div>");
 
 		this.update = function(data) {
 			for (var dev in data) {
@@ -109,9 +128,13 @@ var msgp = function() {
 					continue;
 
 				if (!(dev in devices)) {
-					var devDiv = $("<div></div>");
+					var devDiv = template
+						.clone()
+						.removeAttr("visibility")
+						.prop("id", "");
+					devDiv.children(".device-title").text(metadata[dev].name);
 					container.append(devDiv);
-					devices[dev] = new DeviceGraphs(devDiv, options);
+					devices[dev] = new DeviceGraphs(metadata[dev].sensors, devDiv.children(".device-plots").first(), options);
 				}
 				devices[dev].update(data[dev]);
 			}
@@ -165,7 +188,22 @@ var msgp = function() {
 			case "update":
 				_onUpdate(data.args);
 				break;
+
+			case "metadata":
+				mergeMetadata(data.args);
+				break;
 			}
+		};
+
+		this.getValues = function(since) {
+			var cmd = {
+				"cmd": "get_values",
+				"args": {
+					"since": +since,
+					"with_metadata": true
+				}
+			};
+			ws.send(JSON.stringify(cmd));
 		};
 	};
 
