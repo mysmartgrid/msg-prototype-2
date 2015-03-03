@@ -1,47 +1,24 @@
 {{define "index"}}
 {{template "head" "home"}}
 <div class="container">
-	<div class="row">
+	<div class="row" data-ng-app="msgp">
 		{{if .Ws}}
-			<div id="graph-container" class="col-xs-12"></div>
-			<div id="device-graphs-template" class="col-xs-12" style="visibility: none">
-				<h2 class="device-title"></h3>
-				<div class="device-plots" style="width: 100%"></div>
-			</div>
-			<div id="sensor-graph-template" style="visibility: none; width: 100%">
-				<h3 class="sensor-title"></h3>
-				<div class="sensor-plot" style="width: 100%"></div>
+		<div data-ng-controller="GraphPage">
+				<div data-ng-repeat="device in devices" style="width: 100%">
+					<h2>{{"{{device.name}}"}}</h2>
+					<div style="width: 100%"
+						data-ng-repeat="sensor in device.sensors"
+						data-sensor-graph=""
+						data-title="sensor.name"
+						data-max-age-ms="120 * 1000"
+						data-assume-missing-after-ms="3 * 1000"
+						data-api="sensor.graph">
+					</div>
+				</div>
 			</div>
 
 			<script>
-				var graphs = new msgp.GraphCollection("#graph-container", {
-					deviceGraphsTemplate: "#device-graphs-template",
-					sensorGraphTemplate: "#sensor-graph-template",
-					maxAgeMs: 120 * 1000,
-					assumeValuesMissingAfterMs: 3000,
-				});
-
-				var runGraphClient = function() {
-					var client = new msgp.WebsocketClient({{.Ws}});
-
-					client.onUpdate = function(upd) {
-						graphs.update(upd);
-					};
-
-					var reconnect = function() {
-						client.close();
-						window.setTimeout(runGraphClient, 1000);
-					};
-
-					client.onClose = runGraphClient;
-					client.onError = runGraphClient;
-
-					client.onOpen = function() {
-						client.getValues(new Date() - 120000);
-					};
-				};
-
-				runGraphClient();
+				angular.module("msgp").value("wsurl", {{.Ws}});
 			</script>
 		{{else}}
 			<form action="/" method="POST">

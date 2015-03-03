@@ -1,211 +1,252 @@
 "use strict";
 
-var msgp = function() {
-	var result = {};
+angular.module("msgp", [])
+.factory("WSUserClient", ["$rootScope", function($rootScope) {
+	if (!window["WebSocket"])
+		throw "websocket support required";
 
-	var metadata = {};
-
-	var mergeMetadata = function(md) {
-		Object.getOwnPropertyNames(md.devices).forEach(function (devId) {
-			if (metadata[devId] === undefined) {
-				metadata[devId] = {
-					name: "",
-					sensors: {}
-				};
-			}
-			metadata[devId].name = md.devices[devId].name;
-			Object.getOwnPropertyNames(md.devices[devId].sensors).forEach(function (sensorId) {
-				metadata[devId].sensors[sensorId] = md.devices[devId].sensors[sensorId];
-			});
-		});
+	var socket = {};
+	var socketData = {
+		ws: null
 	};
 
-	var SensorGraph = function(container, options) {
-		var maxAgeMs = options.maxAgeMs;
-		var graphData = [[new Date(), null]];
-		var g = new Dygraph(container.get(0), graphData, {
-			labels: ["Time", "Value"]
-		});
-
-		var removeOldValues = function() {
-			if (options.maxAgeMs === undefined)
-				return;
-
-			var now = new Date();
-			while (graphData.length > 0 && (now - graphData[0][0]) > options.maxAgeMs) {
-				graphData.shift();
-			}
-		};
-
-		var updateGraph = function(data) {
-			var sort = false;
-			data.sort(function(a, b) {
-				return a[0] - b[0];
-			});
-			graphData.pop();
-			for (var i = 0; i < data.length; i++) {
-				var x = new Date(data[i][0]);
-				if (graphData.length > 0) {
-					sort |= graphData[graphData.length - 1][0] - x > 0;
-				}
-				if (options.assumeValuesMissingAfterMs !== undefined && (i != 0 || graphData.length != 0)) {
-					var lastTime = i == 0 ? graphData[graphData.length - 1][0] : data[i - 1][0];
-					if (data[i][0] - lastTime >= options.assumeValuesMissingAfterMs) {
-						graphData.push([new Date(x - 1), null]);
-					}
-				}
-				graphData.push([x, data[i][1]]);
-			}
-			graphData.push([new Date(), null]);
-			if (sort) {
-				graphData.sort(function(a, b) {
-					return a[0] - b[0];
-				});
-			}
-			removeOldValues();
-			if (options.maxAgeMs !== undefined) {
-				var now = new Date();
-				if (now - graphData[0][0] < options.maxAgeMs)
-					graphData.unshift([new Date(now - options.maxAgeMs), null]);
-			}
-			g.updateOptions({
-				file: graphData
-			});
-		};
-
-		var valueMissingTimeoutId;
-		var valueMissingTimeoutFn = function() {
-			updateGraph([[new Date(), null]]);
-
-			if (options.assumeValuesMissingAfterMs !== undefined)
-				valueMissingTimeoutId = window.setTimeout(valueMissingTimeoutFn, options.assumeValuesMissingAfterMs);
-		};
-
-		this.update = function(data) {
-			if (valueMissingTimeoutId !== undefined)
-				window.clearTimeout(valueMissingTimeoutId);
-
-			updateGraph(data);
-
-			if (options.assumeValuesMissingAfterMs !== undefined)
-				valueMissingTimeoutId = window.setTimeout(valueMissingTimeoutFn, options.assumeValuesMissingAfterMs);
-		};
-	};
-
-	var DeviceGraphs = function(meta, container, options) {
-		var sensors = {};
-		var sensorGraphTemplate = options.sensorGraphTemplate ? $(options.sensorGraphTemplate) : $("<div></div>");
-
-		this.update = function(data) {
-			for (var sensor in data) {
-				if (!data.hasOwnProperty(sensor))
-					continue;
-
-				if (!(sensor in sensors)) {
-					var sensorDiv = sensorGraphTemplate
-						.clone()
-						.removeAttr("visibility")
-						.prop("id", "");
-					sensorDiv.children(".sensor-title").text(meta[sensor]);
-					container.append(sensorDiv);
-					sensors[sensor] = new SensorGraph(sensorDiv.children(".sensor-plot").first(), options);
-				}
-				sensors[sensor].update(data[sensor]);
-			}
-		};
-	};
-
-	var GraphCollection = result.GraphCollection = function(containerId, options) {
-		options = options || {};
-
-		var container = $(containerId);
-		var devices = {};
-		var template = options.deviceGraphsTemplate ? $(options.deviceGraphsTemplate) : $("<div></div>");
-
-		this.update = function(data) {
-			for (var dev in data) {
-				if (!data.hasOwnProperty(dev))
-					continue;
-
-				if (!(dev in devices)) {
-					var devDiv = template
-						.clone()
-						.removeAttr("visibility")
-						.prop("id", "");
-					devDiv.children(".device-title").text(metadata[dev].name);
-					container.append(devDiv);
-					devices[dev] = new DeviceGraphs(metadata[dev].sensors, devDiv.children(".device-plots").first(), options);
-				}
-				devices[dev].update(data[dev]);
-			}
-		};
-	};
-
-	var WebsocketClient = result.WebsocketClient = function(url) {
-		if (!window["WebSocket"])
-			throw "websocket support required";
-
-		var ws = new WebSocket(url, ["msg/1/user"]);
-		var _this = this;
-
-		this.close = function() {
-			if (ws) {
-				ws.close();
-				ws = null;
-			}
-		};
-
-		var eventHandler = function(fnName) {
-			return function(e) {
-				if (!_this[fnName])
+	var eventHandler = function(fnName) {
+		return function(e) {
+			var fn = function() {
+				if (!socket[fnName])
 					return;
 
-				_this[fnName](e);
+				socket[fnName](e);
 			};
-		};
 
-		var _onOpen = eventHandler("onOpen");
-		var _onClose = eventHandler("onClose");
-		var _onUpdate = eventHandler("onUpdate");
-		var _onError = eventHandler("onError");
-
-		ws.onopen = function(e) {
-			if (ws.protocol == "msg/1/user") {
-				_onOpen({error: "protocol negotiation failed"});
+			if ($rootScope.$$phase == "apply") {
+				fn();
 			} else {
-				ws.close();
-				_onOpen(null);
+				$rootScope.$apply(fn);
 			}
-		};
-
-		ws.onclose = _onClose;
-		ws.onerror = _onError;
-
-		ws.onmessage = function(msg) {
-			var data = JSON.parse(msg.data);
-
-			switch (data.cmd) {
-			case "update":
-				_onUpdate(data.args);
-				break;
-
-			case "metadata":
-				mergeMetadata(data.args);
-				break;
-			}
-		};
-
-		this.getValues = function(since) {
-			var cmd = {
-				"cmd": "get_values",
-				"args": {
-					"since": +since,
-					"with_metadata": true
-				}
-			};
-			ws.send(JSON.stringify(cmd));
 		};
 	};
 
-	return result;
-}();
+	var _onOpen = eventHandler("onOpen");
+	var _onClose = eventHandler("onClose");
+	var _onUpdate = eventHandler("onUpdate");
+	var _onMetadata = eventHandler("onMetadata");
+	var _onError = eventHandler("onError");
+
+	var onmessage = function(msg) {
+		var data = JSON.parse(msg.data);
+
+		switch (data.cmd) {
+		case "update":
+			_onUpdate(data.args);
+			break;
+
+		case "metadata":
+			_onMetadata(data.args);
+			break;
+
+		default:
+			console.log("bad packet from server", data);
+			socket.close();
+			break;
+		}
+	};
+
+	socket.connect = function(url) {
+		var ws = socketData.ws = new WebSocket(url, ["msg/1/user"]);
+
+		ws.onopen = function(e) {
+			if (ws.protocol != "msg/1/user") {
+				_onOpen({error: "protocol negotiation failed"});
+				ws.close();
+				socketData.ws = null;
+				return;
+			}
+
+			ws.onclose = _onClose;
+			ws.onerror = _onError;
+			ws.onmessage = onmessage;
+			_onOpen(null);
+		};
+	};
+
+	socket.close = function() {
+		if (socketData.ws) {
+			socketData.ws.close();
+			socketData.ws = null;
+		}
+	};
+
+	socket.requestValues = function(since, withMetadata) {
+		var cmd = {
+			"cmd": "get_values",
+			"args": {
+				"since": +since,
+				"with_metadata": !!withMetadata
+			}
+		};
+		socketData.ws.send(JSON.stringify(cmd));
+	};
+
+	return socket;
+}])
+.controller("GraphPage", ["$scope", "$interval", "WSUserClient", "wsurl", function($scope, $interval, wsclient, wsurl) {
+	$scope.devices = {};
+
+	var getDevice = function(id) {
+		if (!(id in $scope.devices)) {
+			var dev = $scope.devices[id] = {
+				sensors: {}
+			};
+
+			dev.getSensor = function(id) {
+				if (!(id in dev.sensors)) {
+					var sens = dev.sensors[id] = {};
+
+					sens.update = function(data) {
+						if (sens.graph !== undefined) {
+							sens.graph.update(data);
+						}
+					};
+				}
+				return dev.sensors[id];
+			};
+		}
+		return $scope.devices[id];
+	};
+
+	wsclient.onMetadata = function(md) {
+		Object.getOwnPropertyNames(md.devices).forEach(function(did) {
+			var dev = md.devices[did];
+			var mdev = getDevice(did);
+
+			mdev.name = dev.name;
+
+			Object.getOwnPropertyNames(dev.sensors).forEach(function(sid) {
+				var sens = dev.sensors[sid];
+				var msens = mdev.getSensor(sid);
+
+				msens.name = sens;
+			});
+		});
+	};
+	wsclient.onUpdate = function(data) {
+		Object.getOwnPropertyNames(data).forEach(function(did) {
+			Object.getOwnPropertyNames(data[did]).forEach(function(sid) {
+				getDevice(did).getSensor(sid).update(data[did][sid]);
+			});
+		});
+	};
+	wsclient.onOpen = function(err) {
+		if (err)
+			return;
+
+		wsclient.requestValues(new Date() - 120 * 1000, true);
+	};
+
+	wsclient.connect(wsurl);
+}])
+.directive("sensorGraph", ["$interval", function($interval) {
+	return {
+		scope: {
+			title: "=",
+			maxAgeMs: "=",
+			assumeMissingAfterMs: "=",
+			api: "=?"
+		},
+		restrict: "A",
+		template:
+			'<h3>{{title}}</h3>' +
+			'<div style="width: 100%" class="sensor-graph"></div>',
+		link: function(scope, element, attrs) {
+			var maxAgeMs = undefined;
+			var assumeMissingAfterMs = undefined;
+			var graphData = [[new Date(), null]];
+			var valueMissingInterval = undefined;
+
+			var g = new Dygraph(element.children("div.sensor-graph").get(0), graphData, {
+				labels: ["Time", "Value"],
+				connectSeparatedPoints: true
+			});
+
+			var api = scope.api = {};
+
+			var clampToMaxAge = function() {
+				if (maxAgeMs === undefined)
+					return;
+
+				var now = new Date();
+				while (graphData.length > 0 && (now - graphData[0][0]) > maxAgeMs) {
+					graphData.shift();
+				}
+
+				graphData.unshift([new Date(new Date() - maxAgeMs), NaN]);
+			};
+
+			var mergeGraphData = function(data) {
+				var needsSorting = false;
+
+				for (var i = 0; i < data.length; i++) {
+					var at = new Date(Math.floor(data[i][0]));
+
+					if (graphData.length > 0) {
+						needsSorting |= graphData[graphData.length - 1][0] - at > 0;
+					}
+
+					if (!needsSorting &&
+							assumeMissingAfterMs !== undefined &&
+							graphData.length > 0 &&
+							at - graphData[graphData.length - 1][0] >= assumeMissingAfterMs) {
+						graphData.push([new Date(at - assumeMissingAfterMs / 2), NaN]);
+					}
+					graphData.push([at, data[i][1]]);
+				}
+
+				if (needsSorting) {
+					graphData.sort(function(a, b) { return a[0] - b[0]; });
+					var data = graphData;
+					graphData = [];
+					mergeGraphData(data);
+				}
+			};
+
+			var restartValueMissingTimeout;
+
+			api.update = function(data) {
+				graphData.pop();
+
+				mergeGraphData(data);
+				clampToMaxAge();
+
+				graphData.push([new Date(), NaN]);
+
+				g.updateOptions({
+					file: graphData
+				});
+				restartValueMissingTimeout();
+			};
+
+			var valuesMissing = function() {
+				api.update([[+new Date(), NaN]]);
+			};
+
+			scope.$watch(attrs.maxAgeMs, function (val) {
+				maxAgeMs = val === undefined ? undefined : +val;
+			});
+
+			scope.$watch(attrs.assumeMissingAfterMs, function(val) {
+				assumeMissingAfterMs = val === undefined ? undefined : +val;
+				restartValueMissingTimeout();
+			});
+
+			restartValueMissingTimeout = function() {
+				if (valueMissingInterval !== undefined) {
+					$interval.cancel(valueMissingInterval);
+				}
+				if (assumeMissingAfterMs !== undefined) {
+					valueMissingInterval = $interval(valuesMissing, assumeMissingAfterMs);
+				}
+			};
+		}
+	};
+}]);
