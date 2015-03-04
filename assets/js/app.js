@@ -120,7 +120,11 @@ angular.module("msgp", [])
 			var dev = md.devices[did];
 			var mdev = getDevice(did);
 
-			mdev.name = dev.name;
+			if ("name" in dev)
+				mdev.name = dev.name;
+
+			if (!("sensors" in dev))
+				return;
 
 			Object.getOwnPropertyNames(dev.sensors).forEach(function(sid) {
 				var sens = dev.sensors[sid];

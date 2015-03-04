@@ -18,8 +18,8 @@ const (
 )
 
 type DbTx interface {
-	AddUser(name string) (User, error)
-	User(name string) User
+	AddUser(id string) (User, error)
+	User(id string) User
 	Users() map[string]User
 }
 
@@ -33,8 +33,8 @@ type Db interface {
 }
 
 type User interface {
-	AddDevice(name string, key []byte) (Device, error)
-	Device(name string) Device
+	AddDevice(id string, key []byte) (Device, error)
+	Device(id string) Device
 	Devices() map[string]Device
 
 	Id() string
@@ -43,16 +43,22 @@ type User interface {
 }
 
 type Device interface {
-	AddSensor(name string) (Sensor, error)
-	Sensor(name string) Sensor
+	AddSensor(id string) (Sensor, error)
+	Sensor(id string) Sensor
 	Sensors() map[string]Sensor
 
 	Id() string
 	Key() []byte
+
+	Name() string
+	SetName(string)
 }
 
 type Sensor interface {
 	Id() string
+
+	Name() string
+	SetName(string)
 }
 
 type Value struct {
@@ -61,10 +67,10 @@ type Value struct {
 }
 
 var (
-	InvalidName = errors.New("name invalid")
-	NameExists  = errors.New("name exists")
+	InvalidId = errors.New("id invalid")
+	IdExists  = errors.New("id exists")
 
-	idKey                  = []byte("id")
+	nameKey                = []byte("name")
 	dbUsersKey             = []byte("users")
 	dbUserDevicesKey       = []byte("devices")
 	dbUserDeviceKeyKey     = []byte("key")
@@ -288,29 +294,28 @@ type dbTx struct {
 	*bolt.Tx
 }
 
-func (tx *dbTx) AddUser(name string) (User, error) {
-	nameBytes := []byte(name)
-	if len(nameBytes) == 0 || len(nameBytes) >= bolt.MaxKeySize {
-		return nil, InvalidName
+func (tx *dbTx) AddUser(id string) (User, error) {
+	idBytes := []byte(id)
+	if len(idBytes) == 0 || len(idBytes) >= bolt.MaxKeySize {
+		return nil, InvalidId
 	}
 
 	b := tx.Bucket(dbUsersKey)
-	ub, err := b.CreateBucket(nameBytes)
+	ub, err := b.CreateBucket(idBytes)
 	if err != nil {
-		return nil, NameExists
+		return nil, IdExists
 	}
-	seq, _ := b.NextSequence()
 
-	result := dbUser{tx, ub}
-	result.init(seq)
+	result := &dbUser{tx, ub, id}
+	result.init()
 	return result, nil
 }
 
-func (tx *dbTx) User(name string) User {
+func (tx *dbTx) User(id string) User {
 	b := tx.Bucket(dbUsersKey)
-	ub := b.Bucket([]byte(name))
+	ub := b.Bucket([]byte(id))
 	if ub != nil {
-		return dbUser{tx, ub}
+		return &dbUser{tx, ub, id}
 	}
 	return nil
 }
@@ -319,7 +324,7 @@ func (tx *dbTx) Users() map[string]User {
 	result := make(map[string]User)
 	b := tx.Bucket(dbUsersKey)
 	b.ForEach(func(k, v []byte) error {
-		result[string(k)] = dbUser{tx, b.Bucket(k)}
+		result[string(k)] = &dbUser{tx, b.Bucket(k), string(k)}
 		return nil
 	})
 	return result
@@ -360,119 +365,135 @@ func (tx *dbTx) loadReadings(since time.Time, user User, sensors map[Device][]Se
 type dbUser struct {
 	tx *dbTx
 	b  *bolt.Bucket
+	id string
 }
 
-func (u dbUser) init(seq uint64) {
+func (u *dbUser) init() {
 	u.b.CreateBucketIfNotExists(dbUserDevicesKey)
-	u.b.Put(idKey, []byte(fmt.Sprintf("uid%v", seq)))
 }
 
-func (u dbUser) AddDevice(name string, key []byte) (Device, error) {
-	nameBytes := []byte(name)
-	if len(nameBytes) == 0 || len(nameBytes) >= bolt.MaxKeySize {
-		return nil, InvalidName
+func (u *dbUser) AddDevice(id string, key []byte) (Device, error) {
+	idBytes := []byte(id)
+	if len(idBytes) == 0 || len(idBytes) >= bolt.MaxKeySize {
+		return nil, InvalidId
 	}
 
 	b := u.b.Bucket(dbUserDevicesKey)
-	db, err := b.CreateBucket(nameBytes)
+	db, err := b.CreateBucket(idBytes)
 	if err != nil {
-		return nil, NameExists
+		return nil, IdExists
 	}
-	seq, _ := b.NextSequence()
 
-	result := dbDevice{db}
-	result.init(key, seq)
+	result := &dbDevice{db, id}
+	result.init(key, id)
 	return result, nil
 }
 
-func (d dbUser) Device(name string) Device {
-	b := d.b.Bucket(dbUserDevicesKey).Bucket([]byte(name))
+func (d *dbUser) Device(id string) Device {
+	b := d.b.Bucket(dbUserDevicesKey).Bucket([]byte(id))
 	if b != nil {
-		return dbDevice{b}
+		return &dbDevice{b, id}
 	}
 	return nil
 }
 
-func (d dbUser) Devices() map[string]Device {
+func (d *dbUser) Devices() map[string]Device {
 	result := make(map[string]Device)
 	b := d.b.Bucket(dbUserDevicesKey)
 	b.ForEach(func(k, v []byte) error {
-		result[string(k)] = dbDevice{b.Bucket(k)}
+		result[string(k)] = &dbDevice{b.Bucket(k), string(k)}
 		return nil
 	})
 	return result
 }
 
-func (d dbUser) Id() string {
-	return string(d.b.Get(idKey))
+func (d *dbUser) Id() string {
+	return d.id
 }
 
-func (d dbUser) LoadReadings(since time.Time, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
+func (d *dbUser) LoadReadings(since time.Time, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
 	return d.tx.loadReadings(since, d, sensors)
 }
 
 type dbDevice struct {
-	b *bolt.Bucket
+	b  *bolt.Bucket
+	id string
 }
 
-func (d dbDevice) init(key []byte, seq uint64) {
+func (d *dbDevice) init(key []byte, name string) {
 	d.b.CreateBucketIfNotExists(dbUserDeviceSensorsKey)
 	d.b.Put(dbUserDeviceKeyKey, key)
-	d.b.Put(idKey, []byte(fmt.Sprintf("did%v", seq)))
+	d.b.Put(nameKey, []byte(name))
 }
 
-func (d dbDevice) AddSensor(name string) (Sensor, error) {
-	nameBytes := []byte(name)
-	if len(nameBytes) == 0 || len(nameBytes) >= bolt.MaxKeySize {
-		return nil, InvalidName
+func (d *dbDevice) AddSensor(id string) (Sensor, error) {
+	idBytes := []byte(id)
+	if len(idBytes) == 0 || len(idBytes) >= bolt.MaxKeySize {
+		return nil, InvalidId
 	}
 
 	b := d.b.Bucket(dbUserDeviceSensorsKey)
-	sb, err := b.CreateBucket(nameBytes)
+	sb, err := b.CreateBucket(idBytes)
 	if err != nil {
-		return nil, NameExists
+		return nil, IdExists
 	}
-	seq, _ := b.NextSequence()
 
-	result := dbSensor{sb}
-	result.init(seq)
+	result := &dbSensor{sb, id}
+	result.init(id)
 	return result, nil
 }
 
-func (d dbDevice) Sensor(name string) Sensor {
-	b := d.b.Bucket(dbUserDeviceSensorsKey).Bucket([]byte(name))
+func (d *dbDevice) Sensor(id string) Sensor {
+	b := d.b.Bucket(dbUserDeviceSensorsKey).Bucket([]byte(id))
 	if b != nil {
-		return dbSensor{b}
+		return &dbSensor{b, id}
 	}
 	return nil
 }
 
-func (d dbDevice) Sensors() map[string]Sensor {
+func (d *dbDevice) Sensors() map[string]Sensor {
 	result := make(map[string]Sensor)
 	b := d.b.Bucket(dbUserDeviceSensorsKey)
 	b.ForEach(func(k, v []byte) error {
-		result[string(k)] = dbSensor{b.Bucket(k)}
+		result[string(k)] = &dbSensor{b.Bucket(k), string(k)}
 		return nil
 	})
 	return result
 }
 
-func (d dbDevice) Key() []byte {
+func (d *dbDevice) Key() []byte {
 	return d.b.Get(dbUserDeviceKeyKey)
 }
 
-func (d dbDevice) Id() string {
-	return string(d.b.Get(idKey))
+func (d *dbDevice) Id() string {
+	return d.id
+}
+
+func (d *dbDevice) Name() string {
+	return string(d.b.Get(nameKey))
+}
+
+func (d *dbDevice) SetName(name string) {
+	d.b.Put(nameKey, []byte(name))
 }
 
 type dbSensor struct {
-	b *bolt.Bucket
+	b  *bolt.Bucket
+	id string
 }
 
-func (s dbSensor) init(seq uint64) {
-	s.b.Put(idKey, []byte(fmt.Sprintf("sid%v", seq)))
+func (s *dbSensor) init(name string) {
+	s.b.Put(nameKey, []byte(name))
 }
 
-func (s dbSensor) Id() string {
-	return string(s.b.Get(idKey))
+func (s *dbSensor) Id() string {
+	return s.id
+}
+
+func (s *dbSensor) Name() string {
+	return string(s.b.Get(nameKey))
+}
+
+func (s *dbSensor) SetName(name string) {
+	s.b.Put(nameKey, []byte(name))
 }

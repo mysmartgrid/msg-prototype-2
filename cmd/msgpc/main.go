@@ -67,6 +67,16 @@ func runDevice(user, device string, sensors []string) {
 		if err != nil {
 			log.Panic(err)
 		}
+		err = client.Rename(fmt.Sprintf("%v-%v", device, rand.Int31n(1000)))
+		if err != nil {
+			log.Panic(err)
+		}
+		for _, id := range sensors {
+			err = client.RenameSensor(id, fmt.Sprintf("%v-%v", id, rand.Int31n(1000)))
+			if err != nil {
+				log.Panic(err)
+			}
+		}
 		time.Sleep(1000 * time.Millisecond)
 	}
 	client.Close()

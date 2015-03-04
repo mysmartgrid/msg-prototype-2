@@ -16,8 +16,8 @@ type subscription struct {
 }
 
 type Value struct {
-	Topic  string
-	Data   interface{}
+	Topic string
+	Data  interface{}
 }
 
 type Conn struct {
@@ -71,7 +71,7 @@ func New() *Hub {
 	return hub
 }
 
-func (h *Hub) PublishValue(topic string, data interface{}) {
+func (h *Hub) Publish(topic string, data interface{}) {
 	h.publish <- Value{topic, data}
 }
 
