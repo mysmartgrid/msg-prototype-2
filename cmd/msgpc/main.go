@@ -67,7 +67,7 @@ func runDevice(user, device string, sensors []string) {
 		if err != nil {
 			log.Panic(err)
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(1000 * time.Millisecond)
 	}
 	client.Close()
 }
@@ -99,6 +99,9 @@ func main() {
 			return
 		}
 		for user, ds := range state {
+			if len(os.Args) > 2 && os.Args[2] != user {
+				continue
+			}
 			for device, sensors := range ds {
 				go runDevice(user, device, sensors)
 			}

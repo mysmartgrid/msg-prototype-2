@@ -1,7 +1,5 @@
 package hub
 
-import "time"
-
 type Hub struct {
 	subscribers map[string]map[*Conn]bool
 
@@ -19,10 +17,7 @@ type subscription struct {
 
 type Value struct {
 	Topic  string
-	Device string
-	Sensor string
-	Time   time.Time
-	Value  float64
+	Data   interface{}
 }
 
 type Conn struct {
@@ -76,8 +71,8 @@ func New() *Hub {
 	return hub
 }
 
-func (h *Hub) PublishValue(topic, device, sensor string, time time.Time, val float64) {
-	h.publish <- Value{topic, device, sensor, time, val}
+func (h *Hub) PublishValue(topic string, data interface{}) {
+	h.publish <- Value{topic, data}
 }
 
 func (h *Hub) Connect() *Conn {

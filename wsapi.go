@@ -70,8 +70,8 @@ type v1UserEventMetadataArgs struct {
 }
 
 type v1DeviceMetadata struct {
-	Name string `json:"name"`
-	Sensors map[string]string `json:"sensors"`
+	Name string `json:"name,omitempty"`
+	Sensors map[string]string `json:"sensors,omitempty"`
 }
 
 type v1Error struct {
@@ -81,6 +81,12 @@ type v1Error struct {
 }
 
 type Measurement struct {
+	Time  time.Time
+	Value float64
+}
+
+type measurementWithMetadata struct {
+	Device, Sensor string
 	Time  time.Time
 	Value float64
 }
@@ -329,7 +335,7 @@ func (api *wsDeviceAPI) doUpdate(msg *v1MessageIn) *v1Error {
 				if err != nil {
 					return operationFailed(err.Error())
 				}
-				api.Hub.PublishValue(api.User, device.Id(), s.Id(), value.Time, value.Value)
+				api.Hub.PublishValue(api.User, measurementWithMetadata{device.Id(), s.Id(), value.Time, value.Value})
 			}
 		}
 
@@ -366,13 +372,16 @@ func (api *wsUserAPI) Run() error {
 			if !open {
 				return
 			}
-			api.sendUpdate(map[string]map[string][]Measurement{
-				val.Device: {
-					val.Sensor: {
-						{val.Time, val.Value},
+			switch v := val.Data.(type) {
+			case measurementWithMetadata:
+				api.sendUpdate(map[string]map[string][]Measurement{
+					v.Device: {
+						v.Sensor: {
+							{v.Time, v.Value},
+						},
 					},
-				},
-			})
+				});
+			}
 		}
 	}()
 
