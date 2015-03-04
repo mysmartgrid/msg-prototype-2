@@ -46,6 +46,7 @@ type Device interface {
 	AddSensor(id string) (Sensor, error)
 	Sensor(id string) Sensor
 	Sensors() map[string]Sensor
+	RemoveSensor(id string) error
 
 	Id() string
 	Key() []byte
@@ -182,6 +183,23 @@ func (h *influxHandler) loadValues(since time.Time, keys []bufferKey) (map[buffe
 	return result, nil
 }
 
+func (h *influxHandler) removeSeriesFor(user, device, sensor string) error {
+	query := fmt.Sprintf("drop series \"%v-%v-%v\"", user, device, sensor)
+
+	client := http.Client{Timeout: 1 * time.Second}
+	resp, err := client.Get(h.dbUrl(map[string]string{"q": query}))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		data, _ := ioutil.ReadAll(resp.Body)
+		return errors.New(resp.Status + " " + string(data))
+	}
+
+	return nil
+}
+
 type db struct {
 	store *bolt.DB
 
@@ -191,6 +209,7 @@ type db struct {
 	bufferedValueCount uint32
 
 	bufferInput chan bufferValue
+	bufferKill  chan bufferKey
 }
 
 type bufferKey struct {
@@ -240,6 +259,9 @@ func (d *db) manageBuffer() {
 				d.flushBuffer()
 			}
 
+		case key := <-d.bufferKill:
+			delete(d.bufferedValues, key)
+
 		case <-ticker.C:
 			d.flushBuffer()
 		}
@@ -262,6 +284,7 @@ func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (Db, erro
 		influx:         influxHandler{influxAddr, influxDb, influxUser, influxPass},
 		bufferedValues: make(map[bufferKey][]Value),
 		bufferInput:    make(chan bufferValue),
+		bufferKill:     make(chan bufferKey),
 	}
 	go result.manageBuffer()
 	return result, nil
@@ -362,6 +385,11 @@ func (tx *dbTx) loadReadings(since time.Time, user User, sensors map[Device][]Se
 	return result, nil
 }
 
+func (tx *dbTx) removeSeriesFor(user, device, sensor string) error {
+	tx.db.bufferKill <- bufferKey{user, device, sensor}
+	return tx.db.influx.removeSeriesFor(user, device, sensor)
+}
+
 type dbUser struct {
 	tx *dbTx
 	b  *bolt.Bucket
@@ -384,7 +412,7 @@ func (u *dbUser) AddDevice(id string, key []byte) (Device, error) {
 		return nil, IdExists
 	}
 
-	result := &dbDevice{db, id}
+	result := &dbDevice{db, u, id}
 	result.init(key, id)
 	return result, nil
 }
@@ -392,7 +420,7 @@ func (u *dbUser) AddDevice(id string, key []byte) (Device, error) {
 func (d *dbUser) Device(id string) Device {
 	b := d.b.Bucket(dbUserDevicesKey).Bucket([]byte(id))
 	if b != nil {
-		return &dbDevice{b, id}
+		return &dbDevice{b, d, id}
 	}
 	return nil
 }
@@ -401,7 +429,7 @@ func (d *dbUser) Devices() map[string]Device {
 	result := make(map[string]Device)
 	b := d.b.Bucket(dbUserDevicesKey)
 	b.ForEach(func(k, v []byte) error {
-		result[string(k)] = &dbDevice{b.Bucket(k), string(k)}
+		result[string(k)] = &dbDevice{b.Bucket(k), d, string(k)}
 		return nil
 	})
 	return result
@@ -416,8 +444,9 @@ func (d *dbUser) LoadReadings(since time.Time, sensors map[Device][]Sensor) (map
 }
 
 type dbDevice struct {
-	b  *bolt.Bucket
-	id string
+	b    *bolt.Bucket
+	user *dbUser
+	id   string
 }
 
 func (d *dbDevice) init(key []byte, name string) {
@@ -459,6 +488,13 @@ func (d *dbDevice) Sensors() map[string]Sensor {
 		return nil
 	})
 	return result
+}
+
+func (d *dbDevice) RemoveSensor(id string) error {
+	if err := d.b.Bucket(dbUserDeviceSensorsKey).DeleteBucket([]byte(id)); err != nil {
+		return InvalidId
+	}
+	return d.user.tx.removeSeriesFor(d.user.Id(), d.Id(), id)
 }
 
 func (d *dbDevice) Key() []byte {

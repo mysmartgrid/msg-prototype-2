@@ -111,6 +111,13 @@ angular.module("msgp", [])
 				}
 				return dev.sensors[id];
 			};
+
+			dev.removeSensor = function(id) {
+				if (!(id in dev.sensors))
+					throw "no sensor " + id;
+
+				delete dev.sensors[id];
+			};
 		}
 		return $scope.devices[id];
 	};
@@ -123,10 +130,11 @@ angular.module("msgp", [])
 			if ("name" in dev)
 				mdev.name = dev.name;
 
-			if (!("sensors" in dev))
-				return;
+			Object.getOwnPropertyNames(dev.deletedSensors || {}).forEach(function(sid) {
+				mdev.removeSensor(sid);
+			});
 
-			Object.getOwnPropertyNames(dev.sensors).forEach(function(sid) {
+			Object.getOwnPropertyNames(dev.sensors || {}).forEach(function(sid) {
 				var sens = dev.sensors[sid];
 				var msens = mdev.getSensor(sid);
 

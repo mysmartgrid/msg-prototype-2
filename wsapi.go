@@ -9,9 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
+	"log"
 	"msgp/hub"
 	"msgp/ws"
-	"log"
 	"net/http"
 	"time"
 )
@@ -60,8 +60,8 @@ type v1DeviceCmdAddSensorArgs struct {
 type v1DeviceCmdUpdateMetadataArgs v1DeviceMetadata
 
 type v1UserCmdGetValuesArgs struct {
-	SinceUnixMs float64 `json:"since"`
-	WithMetadata bool `json:"with_metadata"`
+	SinceUnixMs  float64 `json:"since"`
+	WithMetadata bool    `json:"with_metadata"`
 }
 
 type v1UserEventUpdateArgs struct {
@@ -73,8 +73,9 @@ type v1UserEventMetadataArgs struct {
 }
 
 type v1DeviceMetadata struct {
-	Name string `json:"name,omitempty"`
-	Sensors map[string]string `json:"sensors,omitempty"`
+	Name           string             `json:"name,omitempty"`
+	Sensors        map[string]string  `json:"sensors,omitempty"`
+	DeletedSensors map[string]*string `json:"deletedSensors,omitempty"`
 }
 
 type v1Error struct {
@@ -90,8 +91,8 @@ type Measurement struct {
 
 type measurementWithMetadata struct {
 	Device, Sensor string
-	Time  time.Time
-	Value float64
+	Time           time.Time
+	Value          float64
 }
 
 const (
@@ -298,6 +299,8 @@ func (api *wsDeviceAPI) Run() error {
 			apiErr = api.doUpdate(&msg)
 		case "addSensor":
 			apiErr = api.doAddSensor(&msg)
+		case "removeSensor":
+			apiErr = api.doRemoveSensor(&msg)
 		case "updateMetadata":
 			apiErr = api.doUpdateMetadata(&msg)
 		default:
@@ -366,6 +369,30 @@ func (api *wsDeviceAPI) doAddSensor(msg *v1MessageIn) *v1Error {
 	})
 }
 
+func (api *wsDeviceAPI) doRemoveSensor(msg *v1MessageIn) *v1Error {
+	var args string
+
+	if err := json.Unmarshal(msg.Args, &args); err != nil {
+		return invalidInput(err.Error(), "")
+	}
+
+	return api.updateDevice(func(tx DbTx, user User, device Device) *v1Error {
+		if err := device.RemoveSensor(args); err != nil {
+			return operationFailed(err.Error())
+		}
+		api.Hub.Publish(api.User, v1UserEventMetadataArgs{
+			Devices: map[string]v1DeviceMetadata{
+				api.Device: v1DeviceMetadata{
+					DeletedSensors: map[string]*string{
+						args: nil,
+					},
+				},
+			},
+		})
+		return nil
+	})
+}
+
 func (api *wsDeviceAPI) doUpdateMetadata(msg *v1MessageIn) *v1Error {
 	var args v1DeviceCmdUpdateMetadataArgs
 
@@ -415,7 +442,7 @@ func (api *wsUserAPI) Run() error {
 							{v.Time, v.Value},
 						},
 					},
-				});
+				})
 
 			case v1UserEventMetadataArgs:
 				api.dispatch.WriteJSON(v1MessageOut{Command: "metadata", Args: v})
@@ -484,7 +511,7 @@ func (api *wsUserAPI) doGetValues(cmd *v1MessageIn) (result *v1Error) {
 			meta := make(map[string]v1DeviceMetadata)
 			for did, dev := range user.Devices() {
 				meta[did] = v1DeviceMetadata{
-					Name: dev.Name(),
+					Name:    dev.Name(),
 					Sensors: make(map[string]string),
 				}
 				for sid, sensor := range dev.Sensors() {
@@ -559,6 +586,7 @@ type WSClientDevice interface {
 
 	Rename(name string) error
 	RenameSensor(id, name string) error
+	RemoveSensor(id string) error
 }
 
 func (c *wsClient) prepare(url string, protocols []string) error {
@@ -680,7 +708,7 @@ func (c *wsClientDevice) Rename(name string) error {
 	cmd := v1MessageOut{
 		Command: "updateMetadata",
 		Args: v1DeviceCmdUpdateMetadataArgs{
-			Name: name,
+			Name:    name,
 			Sensors: nil,
 		},
 	}
@@ -696,6 +724,15 @@ func (c *wsClientDevice) RenameSensor(id, name string) error {
 				id: name,
 			},
 		},
+	}
+
+	return c.executeCommand(&cmd)
+}
+
+func (c *wsClientDevice) RemoveSensor(id string) error {
+	cmd := v1MessageOut{
+		Command: "removeSensor",
+		Args:    id,
 	}
 
 	return c.executeCommand(&cmd)

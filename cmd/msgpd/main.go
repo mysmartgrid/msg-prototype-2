@@ -190,9 +190,9 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		for name, user := range tx.Users() {
 			w.Write([]byte(fmt.Sprintf("<div>User %v, %v</div>", name, user.Id())))
 			for name, device := range user.Devices() {
-				w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;Device %v, key %v, %v</div>", name, device.Key(), device.Id())))
+				w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;Device %v, key %v, %v</div>", name, device.Key(), device.Name())))
 				for name, sensor := range device.Sensors() {
-					w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;&nbsp;&nbsp;Sensor %v, %v</div>", name, sensor.Id())))
+					w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;&nbsp;&nbsp;Sensor %v, %v</div>", name, sensor.Name())))
 				}
 			}
 		}

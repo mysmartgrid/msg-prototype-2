@@ -28,7 +28,30 @@ func createDevice(user, name string) {
 	}
 }
 
-func createUsers(users, devicesPerUser, sensorsPerDev int) map[string]map[string][]string {
+type clientState map[string]map[string][]string
+
+func (cs clientState) save() error {
+	data, err := json.MarshalIndent(cs, "", " ")
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile("msgpc-state.json", data, 0666)
+}
+
+func loadState() clientState {
+	data, err := ioutil.ReadFile("msgpc-state.json")
+	if err != nil {
+		log.Panic(err)
+	}
+	var state clientState
+	err = json.Unmarshal(data, &state)
+	if err != nil {
+		log.Panic(err)
+	}
+	return state
+}
+
+func createUsers(users, devicesPerUser, sensorsPerDev int) clientState {
 	result := make(map[string]map[string][]string)
 	for i := 0; i < users; i++ {
 		un := fmt.Sprintf("u%v", i)
@@ -52,13 +75,43 @@ func createUsers(users, devicesPerUser, sensorsPerDev int) map[string]map[string
 	return result
 }
 
-func runDevice(user, device string, sensors []string) {
+func runDevice(state clientState, user, device string) {
 	client, err := msgp.NewWSClientDevice("ws://[::1]:8080", user, device, []byte(device))
 	if err != nil {
 		log.Panic(err)
 	}
 
 	for {
+		sensors := state[user][device]
+
+		if rand.Float64() < 0.5 {
+			maxId := 0
+			for _, sid := range sensors {
+				id := 0
+				fmt.Sscanf(sid, "s%v", &id)
+				if id > maxId {
+					maxId = id
+				}
+			}
+			victim := rand.Int31n(int32(len(sensors)))
+			err = client.RemoveSensor(sensors[victim])
+			if err != nil {
+				log.Panic(err)
+			}
+			newSensors := make([]string, 0, len(sensors))
+			newSensors = append(newSensors, sensors[0:victim]...)
+			newSensors = append(newSensors, sensors[victim+1:]...)
+			newSid := fmt.Sprintf("s%v", maxId+1)
+			newSensors = append(newSensors, newSid)
+			err = client.AddSensor(newSid)
+			if err != nil {
+				log.Panic(err)
+			}
+			state[user][device] = newSensors
+			sensors = newSensors
+			state.save()
+		}
+
 		values := make(map[string][]msgp.Measurement, len(sensors))
 		for _, name := range sensors {
 			values[name] = []msgp.Measurement{{time.Now(), rand.Float64()}}
@@ -93,27 +146,16 @@ func main() {
 		uc, dc, sc := 0, 0, 0
 		fmt.Sscanf(os.Args[2], "%v,%v,%v", &uc, &dc, &sc)
 		state := createUsers(uc, dc, sc)
-		data, _ := json.MarshalIndent(state, "", " ")
-		ioutil.WriteFile("msgpc-state.json", data, 0666)
+		state.save()
 
 	case "run":
-		data, err := ioutil.ReadFile("msgpc-state.json")
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		var state map[string]map[string][]string
-		err = json.Unmarshal(data, &state)
-		if err != nil {
-			log.Println(err)
-			return
-		}
+		state := loadState()
 		for user, ds := range state {
 			if len(os.Args) > 2 && os.Args[2] != user {
 				continue
 			}
-			for device, sensors := range ds {
-				go runDevice(user, device, sensors)
+			for device, _ := range ds {
+				go runDevice(state, user, device)
 			}
 		}
 		<-make(chan int)
