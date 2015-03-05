@@ -3,6 +3,10 @@
 <div class="container">
 	<div class="row" data-ng-app="msgp">
 		<div data-ng-controller="GraphPage">
+			<div class="alert alert-danger" data-ng-show="wsConnectionFailed" class="ng-hide">
+				Connection to server broke, please try again later.
+			</div>
+
 			<div data-ng-repeat="device in devices" style="width: 100%">
 				<h2>{{"{{device.name}}"}}</h2>
 				<div style="width: 100%"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 )
 
 type cmdlineArgs struct {
@@ -21,6 +23,10 @@ type cmdlineArgs struct {
 	udbPath                                      *string
 	influxAddr, influxDb, influxUser, influxPass *string
 }
+
+const (
+	sessionCookieVersion = 1
+)
 
 var args = cmdlineArgs{
 	listen:     flag.String("listen", ":8080", "listen address"),
@@ -109,6 +115,17 @@ func init() {
 	}
 }
 
+func getSession(w http.ResponseWriter, r *http.Request) *sessions.Session {
+	session, _ := cookieStore.Get(r, "msgp-session")
+	version, good := session.Values["-session-version"].(int)
+	if !good || version != sessionCookieVersion {
+		session.Values = make(map[interface{}]interface{})
+		session.Values["-session-version"] = sessionCookieVersion
+		session.Save(r, w)
+	}
+	return session
+}
+
 func defaultHeaders(fn func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -118,10 +135,11 @@ func defaultHeaders(fn func(http.ResponseWriter, *http.Request)) func(http.Respo
 
 func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 	return defaultHeaders(func(w http.ResponseWriter, r *http.Request) {
-		session, _ := cookieStore.Get(r, "msgp-session")
+		session := getSession(w, r)
 		userId, found := session.Values["user"]
 		if !found {
 			http.Error(w, "bad request", 400)
+			return
 		}
 		var scheme = "ws://"
 		if r.TLS != nil {
@@ -134,7 +152,11 @@ func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 		}
 		db.View(func(tx msgp.DbTx) error {
 			user := tx.User(userId.(string))
-			var url = scheme + r.Host + "/ws/user/" + user.Id()
+			if user == nil {
+				http.Error(w, "not found", 404)
+				return nil
+			}
+			var url = scheme + r.Host + "/ws/user/" + user.Id() + "/" + session.Values["wsToken"].(string)
 			return templates.ExecuteTemplate(w, name, ctx{Ws: url, User: user})
 		})
 	})
@@ -149,6 +171,14 @@ func staticTemplate(name string) func(http.ResponseWriter, *http.Request) {
 var h = hub.New()
 
 func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+
+	token, good := session.Values["wsToken"].(string)
+	if !good || token != mux.Vars(r)["token"] {
+		http.Error(w, "bad request", 400)
+		return
+	}
+
 	x := msgp.WSAPI{
 		Db:      db,
 		Hub:     h,
@@ -175,13 +205,14 @@ func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
 func doLogin(w http.ResponseWriter, r *http.Request) {
 	session, _ := cookieStore.Get(r, "msgp-session")
 	session.Values["user"] = r.PostFormValue("user")
+	session.Values["wsToken"] = fmt.Sprintf("%x", sha256.Sum256([]byte(time.Now().String())))
 	session.Save(r, w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func doLogout(w http.ResponseWriter, r *http.Request) {
 	session, _ := cookieStore.Get(r, "msgp-session")
-	delete(session.Values, "user")
+	session.Options.MaxAge = -1
 	session.Save(r, w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -249,7 +280,7 @@ func adminAddDevice(w http.ResponseWriter, r *http.Request) {
 
 func loggedInSwitch(in, out func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session, _ := cookieStore.Get(r, "msgp-session")
+		session := getSession(w, r)
 		if _, found := session.Values["user"]; found {
 			in(w, r)
 		} else {
@@ -272,7 +303,7 @@ func main() {
 	router.HandleFunc("/admin/{user}", defaultHeaders(adminAddUser)).Methods("POST")
 	router.HandleFunc("/admin/{user}/{device}", defaultHeaders(adminAddDevice)).Methods("POST")
 
-	router.HandleFunc("/ws/user/{user}", wsHandlerUser)
+	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
 	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
 

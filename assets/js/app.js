@@ -55,6 +55,9 @@ angular.module("msgp", [])
 	socket.connect = function(url) {
 		var ws = socketData.ws = new WebSocket(url, ["msg/1/user"]);
 
+		ws.onerror = _onError;
+		ws.onclose = _onClose;
+
 		ws.onopen = function(e) {
 			if (ws.protocol != "msg/1/user") {
 				_onOpen({error: "protocol negotiation failed"});
@@ -63,8 +66,6 @@ angular.module("msgp", [])
 				return;
 			}
 
-			ws.onclose = _onClose;
-			ws.onerror = _onError;
 			ws.onmessage = onmessage;
 			_onOpen(null);
 		};
@@ -154,6 +155,9 @@ angular.module("msgp", [])
 			return;
 
 		wsclient.requestValues(new Date() - 120 * 1000, true);
+	};
+	wsclient.onClose = wsclient.onError = function(e) {
+		$scope.wsConnectionFailed = true;
 	};
 
 	wsclient.connect(wsurl);
