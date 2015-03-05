@@ -61,7 +61,7 @@ type v1DeviceCmdUpdateMetadataArgs v1DeviceMetadata
 
 type v1UserCmdGetValuesArgs struct {
 	SinceUnixMs  float64 `json:"since"`
-	WithMetadata bool    `json:"with_metadata"`
+	WithMetadata bool    `json:"withMetadata"`
 }
 
 type v1UserEventUpdateArgs struct {
@@ -465,7 +465,7 @@ func (api *wsUserAPI) Run() error {
 		var apiErr *v1Error
 
 		switch msg.Command {
-		case "get_values":
+		case "getValues":
 			apiErr = api.doGetValues(&msg)
 
 		default:

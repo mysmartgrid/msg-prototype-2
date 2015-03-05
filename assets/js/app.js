@@ -79,10 +79,10 @@ angular.module("msgp", [])
 
 	socket.requestValues = function(since, withMetadata) {
 		var cmd = {
-			"cmd": "get_values",
+			"cmd": "getValues",
 			"args": {
 				"since": +since,
-				"with_metadata": !!withMetadata
+				"withMetadata": !!withMetadata
 			}
 		};
 		socketData.ws.send(JSON.stringify(cmd));
