@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/boltdb/bolt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -105,11 +106,11 @@ func (h *influxHandler) dbUrl(args map[string]string) string {
 	return result
 }
 
-func (h *influxHandler) saveValues(values map[bufferKey][]Value) error {
+func (h *influxHandler) saveValuesAndClear(valueMap map[bufferKey][]Value) error {
 	var buf bytes.Buffer
 
 	buf.WriteRune('[')
-	for key, values := range values {
+	for key, values := range valueMap {
 		if buf.Len() > 1 {
 			buf.WriteRune(',')
 		}
@@ -123,6 +124,7 @@ func (h *influxHandler) saveValues(values map[bufferKey][]Value) error {
 			fmt.Fprintf(&buf, `[%v,%v]`, influxTime(value.Time), value.Value)
 		}
 		buf.WriteString("]}")
+		valueMap[key] = values[0:0]
 	}
 	buf.WriteRune(']')
 
@@ -209,6 +211,7 @@ type db struct {
 	bufferedValueCount uint32
 
 	bufferInput chan bufferValue
+	bufferAdd   chan bufferKey
 	bufferKill  chan bufferKey
 }
 
@@ -226,12 +229,11 @@ func (db *db) flushBuffer() {
 		return
 	}
 
-	err := db.influx.saveValues(db.bufferedValues)
+	err := db.influx.saveValuesAndClear(db.bufferedValues)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	db.bufferedValues = make(map[bufferKey][]Value)
 	db.bufferedValueCount = 0
 }
 
@@ -248,9 +250,10 @@ func (d *db) manageBuffer() {
 			if !ok {
 				return
 			}
-			slice := d.bufferedValues[bval.key]
-			if slice == nil {
-				slice = make([]Value, 0)
+			slice, found := d.bufferedValues[bval.key]
+			if !found {
+				log.Printf("adding value to bad key %v", bval.key)
+				continue
 			}
 			d.bufferedValues[bval.key] = append(slice, bval.value)
 			d.bufferedValueCount++
@@ -261,6 +264,9 @@ func (d *db) manageBuffer() {
 
 		case key := <-d.bufferKill:
 			delete(d.bufferedValues, key)
+
+		case key := <-d.bufferAdd:
+			d.bufferedValues[key] = make([]Value, 0, 4)
 
 		case <-ticker.C:
 			d.flushBuffer()
@@ -285,8 +291,22 @@ func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (Db, erro
 		bufferedValues: make(map[bufferKey][]Value),
 		bufferInput:    make(chan bufferValue),
 		bufferKill:     make(chan bufferKey),
+		bufferAdd:      make(chan bufferKey),
 	}
+
 	go result.manageBuffer()
+
+	result.View(func(tx DbTx) error {
+		for _, user := range tx.Users() {
+			for _, dev := range user.Devices() {
+				for _, sensor := range dev.Sensors() {
+					result.bufferAdd <- bufferKey{user.Id(), dev.Id(), sensor.Id()}
+				}
+			}
+		}
+		return nil
+	})
+
 	return result, nil
 }
 
@@ -469,6 +489,9 @@ func (d *dbDevice) AddSensor(id string) (Sensor, error) {
 
 	result := &dbSensor{sb, id}
 	result.init(id)
+
+	d.user.tx.db.bufferAdd <- bufferKey{d.user.Id(), d.id, result.Id()}
+
 	return result, nil
 }
 
