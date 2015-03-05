@@ -75,7 +75,7 @@ func createUsers(users, devicesPerUser, sensorsPerDev int) clientState {
 	return result
 }
 
-func runDevice(state clientState, user, device string) {
+func runDevice(state clientState, user, device string, newSensorProb float64) {
 	client, err := msgp.NewWSClientDevice("ws://[::1]:8080", user, device, []byte(device))
 	if err != nil {
 		log.Panic(err)
@@ -84,7 +84,7 @@ func runDevice(state clientState, user, device string) {
 	for {
 		sensors := state[user][device]
 
-		if rand.Float64() < 0.5 {
+		if rand.Float64() < newSensorProb {
 			maxId := 0
 			for _, sid := range sensors {
 				id := 0
@@ -155,7 +155,7 @@ func main() {
 				continue
 			}
 			for device, _ := range ds {
-				go runDevice(state, user, device)
+				go runDevice(state, user, device, 0)
 			}
 		}
 		<-make(chan int)

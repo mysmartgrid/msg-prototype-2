@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
 	"html/template"
 	"log"
 	"msgp"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strings"
 )
 
 type cmdlineArgs struct {
@@ -33,6 +35,7 @@ var args = cmdlineArgs{
 
 var templates *template.Template
 var db msgp.Db
+var cookieStore = sessions.NewCookieStore([]byte("test-key"))
 
 func init() {
 	flag.Parse()
@@ -63,12 +66,20 @@ func init() {
 	templates = template.New("")
 
 	templates.Funcs(template.FuncMap{
-		"activeIfEq": func(this, page string) template.HTMLAttr {
-			if this == page {
+		"activeIfAt": func(this, page string) template.HTMLAttr {
+			if strings.SplitN(page, ":", 2)[0] == this {
 				return `class="active"`
 			} else {
 				return ""
 			}
+		},
+		"sessionFlag": func(flag, set string) bool {
+			for _, sflag := range strings.Split(set, ":")[1:] {
+				if flag == sflag {
+					return true
+				}
+			}
+			return false
 		},
 		"alertIfMissing": func(this string, missing []string) template.HTMLAttr {
 			if missing == nil {
@@ -107,6 +118,11 @@ func defaultHeaders(fn func(http.ResponseWriter, *http.Request)) func(http.Respo
 
 func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 	return defaultHeaders(func(w http.ResponseWriter, r *http.Request) {
+		session, _ := cookieStore.Get(r, "msgp-session")
+		userId, found := session.Values["user"]
+		if !found {
+			http.Error(w, "bad request", 400)
+		}
 		var scheme = "ws://"
 		if r.TLS != nil {
 			scheme = "wss://"
@@ -117,12 +133,8 @@ func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 			User    msgp.User
 		}
 		db.View(func(tx msgp.DbTx) error {
-			user := tx.User(r.PostFormValue("user"))
-			if user == nil {
-				templates.ExecuteTemplate(w, name, ctx{Missing: []string{"user"}})
-				return nil
-			}
-			var url = scheme + r.Host + "/ws/user/" + r.PostFormValue("user")
+			user := tx.User(userId.(string))
+			var url = scheme + r.Host + "/ws/user/" + user.Id()
 			return templates.ExecuteTemplate(w, name, ctx{Ws: url, User: user})
 		})
 	})
@@ -158,6 +170,20 @@ func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
 	}
 	defer x.Close()
 	x.RunDevice(mux.Vars(r)["device"])
+}
+
+func doLogin(w http.ResponseWriter, r *http.Request) {
+	session, _ := cookieStore.Get(r, "msgp-session")
+	session.Values["user"] = r.PostFormValue("user")
+	session.Save(r, w)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func doLogout(w http.ResponseWriter, r *http.Request) {
+	session, _ := cookieStore.Get(r, "msgp-session")
+	delete(session.Values, "user")
+	session.Save(r, w)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func userRegister(w http.ResponseWriter, r *http.Request) {
@@ -221,11 +247,24 @@ func adminAddDevice(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func loggedInSwitch(in, out func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session, _ := cookieStore.Get(r, "msgp-session")
+		if _, found := session.Values["user"]; found {
+			in(w, r)
+		} else {
+			out(w, r)
+		}
+	}
+}
+
 func main() {
 	router := mux.NewRouter()
 
-	router.HandleFunc("/", wsTemplate("index")).Methods("POST")
-	router.HandleFunc("/", staticTemplate("index")).Methods("GET")
+	router.HandleFunc("/", loggedInSwitch(wsTemplate("index_user"), staticTemplate("index_nouser"))).Methods("GET")
+	router.HandleFunc("/user/login", staticTemplate("user-login")).Methods("GET")
+	router.HandleFunc("/user/login", doLogin).Methods("POST")
+	router.HandleFunc("/user/logout", doLogout).Methods("GET")
 	router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
 	router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
 

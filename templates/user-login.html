@@ -1,0 +1,15 @@
+{{define "user-login"}}
+{{template "head" "login"}}
+<div class="container">
+	<div class="row" data-ng-app="msgp">
+		<form action="/user/login" method="POST">
+			<p>
+				<label for="user" {{alertIfMissing "user" .Missing}}>Display user</label>
+				<input type="text" name="user" length="20" />
+			</p>
+			<input type="submit" value="Submit" />
+		</form>
+	</div>
+</div>
+{{template "tail"}}
+{{end}}

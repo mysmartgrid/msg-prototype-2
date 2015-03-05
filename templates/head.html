@@ -37,8 +37,13 @@
 				</div>
 				<div id="navbar" class="collapse navbar-collapse">
 					<ul class="nav navbar-nav">
-						<li {{activeIfEq "home" .}}><a href="/">Home</a></li>
-						<li {{activeIfEq "register" .}}><a href="/user/register">Register</a></li>
+						<li {{activeIfAt "home" .}}><a href="/">Home</a></li>
+						{{if not (sessionFlag "logged-in" .)}}
+						<li {{activeIfAt "login" .}}><a href="/user/login">Login</a></li>
+						<li {{activeIfAt "register" .}}><a href="/user/register">Register</a></li>
+						{{else}}
+						<li><a href="/user/logout">Logout</a></li>
+						{{end}}
 					</ul>
 				</div>
 			</div>
