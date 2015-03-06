@@ -157,6 +157,9 @@ angular.module("msgp", [])
 		wsclient.requestValues(new Date() - 120 * 1000, true);
 	};
 	wsclient.onClose = wsclient.onError = function(e) {
+		if (e.wasClean)
+			return;
+
 		$scope.wsConnectionFailed = true;
 	};
 
