@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	"log"
+	"msgp/db"
 	"msgp/hub"
 	"msgp/ws"
 	"net/http"
@@ -17,7 +18,7 @@ import (
 )
 
 type WSAPI struct {
-	Db      Db
+	Db      db.Db
 	Hub     *hub.Hub
 	Writer  http.ResponseWriter
 	Request *http.Request
@@ -148,7 +149,7 @@ func (api *WSAPI) prepare(protocols []string) error {
 		return methodNotAllowed
 	}
 
-	err := api.Db.View(func(tx DbTx) error {
+	err := api.Db.View(func(tx db.Tx) error {
 		user := tx.User(api.User)
 		if user == nil {
 			http.Error(api.Writer, notAuthorized.Error(), http.StatusUnauthorized)
@@ -206,8 +207,8 @@ func (api *WSAPI) Close() {
 	}
 }
 
-func (api *wsDeviceAPI) viewDevice(fn func(tx DbTx, user User, device Device) *v1Error) (result *v1Error) {
-	api.Db.View(func(tx DbTx) error {
+func (api *wsDeviceAPI) viewDevice(fn func(tx db.Tx, user db.User, device db.Device) *v1Error) (result *v1Error) {
+	api.Db.View(func(tx db.Tx) error {
 		u := tx.User(api.User)
 		if u == nil {
 			result = apiNotAuthorized
@@ -224,8 +225,8 @@ func (api *wsDeviceAPI) viewDevice(fn func(tx DbTx, user User, device Device) *v
 	return
 }
 
-func (api *wsDeviceAPI) updateDevice(fn func(tx DbTx, user User, device Device) *v1Error) (result *v1Error) {
-	api.Db.Update(func(tx DbTx) error {
+func (api *wsDeviceAPI) updateDevice(fn func(tx db.Tx, user db.User, device db.Device) *v1Error) (result *v1Error) {
+	api.Db.Update(func(tx db.Tx) error {
 		u := tx.User(api.User)
 		if u == nil {
 			result = apiNotAuthorized
@@ -265,7 +266,7 @@ func (api *wsDeviceAPI) authenticateDevice() (result error) {
 		return err
 	}
 
-	api.viewDevice(func(tx DbTx, user User, device Device) *v1Error {
+	api.viewDevice(func(tx db.Tx, user db.User, device db.Device) *v1Error {
 		mac := hmac.New(sha256.New, device.Key())
 		expected := mac.Sum(buf[:])
 		if !hmac.Equal(msg, expected) {
@@ -329,7 +330,7 @@ func (api *wsDeviceAPI) doUpdate(msg *v1MessageIn) *v1Error {
 		return invalidInput(err.Error(), "")
 	}
 
-	return api.viewDevice(func(tx DbTx, user User, device Device) *v1Error {
+	return api.viewDevice(func(tx db.Tx, user db.User, device db.Device) *v1Error {
 		for name, _ := range args.Values {
 			if device.Sensor(name) == nil {
 				return invalidInput(noSensor.Error(), name)
@@ -360,7 +361,7 @@ func (api *wsDeviceAPI) doAddSensor(msg *v1MessageIn) *v1Error {
 		return invalidInput(err.Error(), "")
 	}
 
-	return api.updateDevice(func(tx DbTx, user User, device Device) *v1Error {
+	return api.updateDevice(func(tx db.Tx, user db.User, device db.Device) *v1Error {
 		_, err := device.AddSensor(args.Name)
 		if err != nil {
 			return operationFailed(err.Error())
@@ -376,7 +377,7 @@ func (api *wsDeviceAPI) doRemoveSensor(msg *v1MessageIn) *v1Error {
 		return invalidInput(err.Error(), "")
 	}
 
-	return api.updateDevice(func(tx DbTx, user User, device Device) *v1Error {
+	return api.updateDevice(func(tx db.Tx, user db.User, device db.Device) *v1Error {
 		if err := device.RemoveSensor(args); err != nil {
 			return operationFailed(err.Error())
 		}
@@ -400,7 +401,7 @@ func (api *wsDeviceAPI) doUpdateMetadata(msg *v1MessageIn) *v1Error {
 		return invalidInput(err.Error(), "")
 	}
 
-	return api.updateDevice(func(tx DbTx, user User, device Device) *v1Error {
+	return api.updateDevice(func(tx db.Tx, user db.User, device db.Device) *v1Error {
 		if args.Name != "" {
 			device.SetName(args.Name)
 		}
@@ -492,16 +493,16 @@ func (api *wsUserAPI) doGetValues(cmd *v1MessageIn) (result *v1Error) {
 		goto fail
 	}
 
-	err = api.Db.View(func(tx DbTx) error {
+	err = api.Db.View(func(tx db.Tx) error {
 		user := tx.User(api.User)
 		if user == nil {
 			result = apiNotAuthorized
 			return nil
 		}
-		sensors := make(map[Device][]Sensor)
+		sensors := make(map[db.Device][]db.Sensor)
 		for _, dev := range user.Devices() {
 			smap := dev.Sensors()
-			slist := make([]Sensor, 0, len(smap))
+			slist := make([]db.Sensor, 0, len(smap))
 			for _, sensor := range smap {
 				slist = append(slist, sensor)
 			}
@@ -522,7 +523,11 @@ func (api *wsUserAPI) doGetValues(cmd *v1MessageIn) (result *v1Error) {
 				return err
 			}
 		}
-		readings, err := user.LoadReadings(goTime(args.SinceUnixMs), sensors)
+		readings, err := user.LoadReadings(
+			time.Unix(
+				int64(args.SinceUnixMs/1000),
+				int64(args.SinceUnixMs)%1000*1e6),
+			sensors)
 		if err != nil {
 			return err
 		}

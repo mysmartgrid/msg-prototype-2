@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"log"
 	"msgp"
+	msgpdb "msgp/db"
 	"msgp/hub"
 	"net/http"
 	"os"
@@ -40,7 +41,7 @@ var args = cmdlineArgs{
 }
 
 var templates *template.Template
-var db msgp.Db
+var db msgpdb.Db
 var cookieStore = sessions.NewCookieStore([]byte("test-key"))
 
 func init() {
@@ -108,7 +109,7 @@ func init() {
 		os.Exit(1)
 	}
 
-	db, err = msgp.OpenDb(*args.udbPath, *args.influxAddr, *args.influxDb, *args.influxUser, *args.influxPass)
+	db, err = msgpdb.OpenDb(*args.udbPath, *args.influxAddr, *args.influxDb, *args.influxUser, *args.influxPass)
 	if err != nil {
 		log.Fatal("error opening user db: ", err)
 		os.Exit(1)
@@ -148,9 +149,9 @@ func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 		type ctx struct {
 			Ws      string
 			Missing []string
-			User    msgp.User
+			User    msgpdb.User
 		}
-		db.View(func(tx msgp.DbTx) error {
+		db.View(func(tx msgpdb.Tx) error {
 			user := tx.User(userId.(string))
 			if user == nil {
 				http.Error(w, "not found", 404)
@@ -230,7 +231,7 @@ func userRegister(w http.ResponseWriter, r *http.Request) {
 		templates.ExecuteTemplate(w, "register", ctx{Missing: []string{"name"}})
 
 	default:
-		db.Update(func(tx msgp.DbTx) error {
+		db.Update(func(tx msgpdb.Tx) error {
 			_, err := tx.AddUser(name)
 			if err != nil {
 				templates.ExecuteTemplate(w, "register", ctx{Error: err.Error()})
@@ -243,7 +244,7 @@ func userRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func adminHandler(w http.ResponseWriter, r *http.Request) {
-	db.View(func(tx msgp.DbTx) error {
+	db.View(func(tx msgpdb.Tx) error {
 		for name, user := range tx.Users() {
 			w.Write([]byte(fmt.Sprintf("<div>User %v, %v</div>", name, user.Id())))
 			for name, device := range user.Devices() {
@@ -258,7 +259,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func adminAddUser(w http.ResponseWriter, r *http.Request) {
-	err := db.Update(func(tx msgp.DbTx) error {
+	err := db.Update(func(tx msgpdb.Tx) error {
 		_, err := tx.AddUser(mux.Vars(r)["user"])
 		return err
 	})
@@ -268,7 +269,7 @@ func adminAddUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func adminAddDevice(w http.ResponseWriter, r *http.Request) {
-	err := db.Update(func(tx msgp.DbTx) error {
+	err := db.Update(func(tx msgpdb.Tx) error {
 		u := tx.User(mux.Vars(r)["user"])
 		_, err := u.AddDevice(mux.Vars(r)["device"], []byte(mux.Vars(r)["device"]))
 		return err
