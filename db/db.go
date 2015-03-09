@@ -12,10 +12,14 @@ const (
 )
 
 var (
-	InvalidId = errors.New("id invalid")
-	IdExists  = errors.New("id exists")
+	InvalidId     = errors.New("id invalid")
+	IdExists      = errors.New("id exists")
+	AlreadyLinked = errors.New("already linked")
 
+	keyKey                 = []byte("key")
 	nameKey                = []byte("name")
+	userKey                = []byte("user")
+	registeredDevicesKey   = []byte("registeredDevices")
 	dbUsersKey             = []byte("users")
 	dbUserDevicesKey       = []byte("devices")
 	dbUserDeviceKeyKey     = []byte("key")
@@ -102,6 +106,7 @@ func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (Db, erro
 
 	store.Update(func(tx *bolt.Tx) error {
 		tx.CreateBucketIfNotExists(dbUsersKey)
+		tx.CreateBucketIfNotExists(registeredDevicesKey)
 		return nil
 	})
 

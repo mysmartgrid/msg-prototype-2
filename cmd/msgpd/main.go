@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
@@ -183,9 +184,9 @@ func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
 	x := msgp.WSAPI{
 		Db:      db,
 		Hub:     h,
-		User:    mux.Vars(r)["user"],
 		Writer:  w,
 		Request: r,
+		User:    mux.Vars(r)["user"],
 	}
 	defer x.Close()
 	x.RunUser()
@@ -195,12 +196,46 @@ func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
 	x := msgp.WSAPI{
 		Db:      db,
 		Hub:     h,
-		User:    mux.Vars(r)["user"],
 		Writer:  w,
 		Request: r,
+		User:    mux.Vars(r)["user"],
 	}
 	defer x.Close()
 	x.RunDevice(mux.Vars(r)["device"])
+}
+
+func handlerRegisteredDevice(w http.ResponseWriter, r *http.Request) {
+	db.View(func(tx msgpdb.Tx) error {
+		dev := tx.Device(mux.Vars(r)["device"])
+		if dev == nil {
+			http.Error(w, "not found", 404)
+		}
+		return nil
+	})
+	// TODO
+}
+
+func registerDevice(w http.ResponseWriter, r *http.Request) {
+	keys, hasKeys := r.Header["X-Key"]
+	if !hasKeys {
+		http.Error(w, "key missing", 400)
+		return
+	}
+	if len(keys) != 1 {
+		http.Error(w, "multiple X-Key headers", 400)
+		return
+	}
+	key, err := hex.DecodeString(keys[0])
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	err = db.Update(func(tx msgpdb.Tx) error {
+		return tx.AddDevice(mux.Vars(r)["device"], key)
+	})
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+	}
 }
 
 func doLogin(w http.ResponseWriter, r *http.Request) {
@@ -244,16 +279,43 @@ func userRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func adminHandler(w http.ResponseWriter, r *http.Request) {
+	tstr := `
+<div>Users:</div>
+<ul>
+{{range $name, $user := (.Users)}}
+	<li>
+		<div>{{$name}}</div>
+		<ul>
+		{{range $name, $dev := $user.Devices}}
+			<li>
+				<div>{{$dev.Id}}({{$dev.Name}}) key 0x{{$dev.Key | printf "%x"}}</div>
+				<ul>
+				{{range $name, $sens := $dev.Sensors}}
+					<li>{{$sens.Id}}({{$sens.Name}})</li>
+				{{end}}
+				</ul>
+			</li>
+		{{end}}
+		</ul>
+	</li>
+{{end}}
+</ul>
+
+<div>Registered devices:</div>
+<ul>
+{{range $id, $link := .Devices}}
+	<li>{{$id}} 0x{{$link.Key | printf "%x"}} -> {{$link.UserLink}}</li>
+{{end}}
+</ul>
+`
+
 	db.View(func(tx msgpdb.Tx) error {
-		for name, user := range tx.Users() {
-			w.Write([]byte(fmt.Sprintf("<div>User %v, %v</div>", name, user.Id())))
-			for name, device := range user.Devices() {
-				w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;Device %v, key %v, %v</div>", name, device.Key(), device.Name())))
-				for name, sensor := range device.Sensors() {
-					w.Write([]byte(fmt.Sprintf("<div>&nbsp;&nbsp;&nbsp;&nbsp;Sensor %v, %v</div>", name, sensor.Name())))
-				}
-			}
+		t, err := template.New("").Parse(tstr)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return nil
 		}
+		t.Execute(w, tx)
 		return nil
 	})
 }
@@ -306,6 +368,8 @@ func main() {
 
 	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
 	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
+	router.HandleFunc("/ws/regdevice/{device}", handlerRegisteredDevice).Methods("GET")
+	router.HandleFunc("/ws/regdevice/{device}", registerDevice).Methods("POST")
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
 
 	http.Handle("/", router)

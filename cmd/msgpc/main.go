@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -73,6 +75,48 @@ func createUsers(users, devicesPerUser, sensorsPerDev int) clientState {
 		}
 	}
 	return result
+}
+
+func registerDevice(device string, key []byte) error {
+	req, err := http.NewRequest("POST", "http://[::1]:8080/ws/regdevice/"+device, nil)
+	if err != nil {
+		return err
+	}
+	req.Header["X-Key"] = []string{hex.EncodeToString(key)}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return errors.New(string(body))
+	}
+	return nil
+}
+
+func runRegisteredDevice(device string, key []byte) {
+	resp, err := http.Get("http://[::1]:8080/ws/regdevice/" + device)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case 200:
+
+	case 404:
+		err := registerDevice(device, key)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		runRegisteredDevice(device, key)
+
+	default:
+		body, _ := ioutil.ReadAll(resp.Body)
+		log.Println(string(body))
+	}
 }
 
 func runDevice(state clientState, user, device string, newSensorProb float64) {
@@ -159,5 +203,8 @@ func main() {
 			}
 		}
 		<-make(chan int)
+
+	case "runreg":
+		runRegisteredDevice("snafubar", []byte("asdf"))
 	}
 }
