@@ -1,6 +1,10 @@
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -226,7 +230,35 @@ func handlerRegisteredDevice(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 
-		w.Write(data)
+		mac := hmac.New(sha256.New, dev.Key())
+
+		var iv [16]byte
+		if _, err := rand.Read(iv[:]); err != nil {
+			http.Error(w, err.Error(), 500)
+			return nil
+		}
+
+		var nonce [16]byte
+		if _, err := rand.Read(nonce[:]); err != nil {
+			http.Error(w, err.Error(), 500)
+			return nil
+		}
+
+		mac.Write(nonce[:])
+		key := mac.Sum(nil)[:16]
+		mac.Reset()
+
+		cinst, _ := aes.NewCipher(key)
+		transform := cipher.NewCFBEncrypter(cinst, iv[:])
+
+		transform.XORKeyStream(data, data)
+		mac.Write(data)
+
+		w.Header()["X-Nonce"] = []string{hex.EncodeToString(nonce[:])}
+		w.Header()["X-IV"] = []string{hex.EncodeToString(iv[:])}
+		w.Header()["X-HMAC"] = []string{hex.EncodeToString(mac.Sum(nil))}
+
+		w.Write([]byte(hex.EncodeToString(data[:])))
 
 		return nil
 	})
