@@ -268,7 +268,8 @@ func (api *wsDeviceAPI) authenticateDevice() (result error) {
 
 	api.viewDevice(func(tx db.Tx, user db.User, device db.Device) *v1Error {
 		mac := hmac.New(sha256.New, device.Key())
-		expected := mac.Sum(buf[:])
+		mac.Write(buf[:])
+		expected := mac.Sum(nil)
 		if !hmac.Equal(msg, expected) {
 			result = notAuthorized
 			return apiNotAuthorized
@@ -654,7 +655,8 @@ func (c *wsClientDevice) authenticate(key []byte) error {
 	}
 
 	mac := hmac.New(sha256.New, []byte(key))
-	response := hex.EncodeToString(mac.Sum(challenge))
+	mac.Write(challenge)
+	response := hex.EncodeToString(mac.Sum(nil))
 	if err := c.dispatch.Write(response); err != nil {
 		return err
 	}
