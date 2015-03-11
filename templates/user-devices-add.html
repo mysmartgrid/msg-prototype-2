@@ -1,0 +1,13 @@
+{{define "user-devices-add"}}
+{{template "head" "user-devices:logged-in"}}
+<div class="container">
+	<form action="/user/devices/add" method="POST">
+		<div>
+			<label for="device" {{alertIfMissing "device" .Missing}}>Device id:</label>
+			<input type="text" name="device" length="20">
+		</div>
+		<input type="submit" value="Add device" />
+	</form>
+</div>
+{{template "tail"}}
+{{end}}

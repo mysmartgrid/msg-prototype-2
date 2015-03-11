@@ -104,6 +104,16 @@ func runRegisteredDevice(device string, key []byte) {
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case 200:
+		body, _ := ioutil.ReadAll(resp.Body)
+		content := make(map[string]string)
+		if err := json.Unmarshal(body, &content); err != nil {
+			log.Panic(err)
+		}
+		if user, linked := content["linkedTo"]; linked {
+			log.Printf("device registered for user %v", user)
+		} else {
+			log.Printf("device not linked")
+		}
 
 	case 404:
 		err := registerDevice(device, key)
@@ -111,6 +121,7 @@ func runRegisteredDevice(device string, key []byte) {
 			log.Println(err)
 			return
 		}
+		log.Println("created device on server")
 		runRegisteredDevice(device, key)
 
 	default:
@@ -205,6 +216,6 @@ func main() {
 		<-make(chan int)
 
 	case "runreg":
-		runRegisteredDevice("snafubar", []byte("asdf"))
+		runRegisteredDevice(os.Args[2], []byte(os.Args[3]))
 	}
 }

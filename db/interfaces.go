@@ -32,6 +32,7 @@ type Db interface {
 
 type User interface {
 	AddDevice(id string, key []byte) (Device, error)
+	RemoveDevice(id string) error
 	Device(id string) Device
 	Devices() map[string]Device
 

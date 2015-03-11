@@ -32,6 +32,19 @@ func (u *user) AddDevice(id string, key []byte) (Device, error) {
 	return result, nil
 }
 
+func (u *user) RemoveDevice(id string) error {
+	idBytes := []byte(id)
+	if len(idBytes) == 0 || len(idBytes) >= bolt.MaxKeySize {
+		return InvalidId
+	}
+
+	b := u.b.Bucket(dbUserDevicesKey)
+	if b.Bucket(idBytes) == nil {
+		return InvalidId
+	}
+	return b.DeleteBucket(idBytes)
+}
+
 func (d *user) Device(id string) Device {
 	b := d.b.Bucket(dbUserDevicesKey).Bucket([]byte(id))
 	if b != nil {

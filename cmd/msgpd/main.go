@@ -3,6 +3,8 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
@@ -205,14 +207,29 @@ func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlerRegisteredDevice(w http.ResponseWriter, r *http.Request) {
+	type response struct {
+		LinkedTo string `json:"linkedTo,omitempty"`
+	}
+
 	db.View(func(tx msgpdb.Tx) error {
 		dev := tx.Device(mux.Vars(r)["device"])
 		if dev == nil {
 			http.Error(w, "not found", 404)
+			return nil
 		}
+
+		user, _ := dev.UserLink()
+		resp := response{user}
+		data, err := json.Marshal(resp)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return nil
+		}
+
+		w.Write(data)
+
 		return nil
 	})
-	// TODO
 }
 
 func registerDevice(w http.ResponseWriter, r *http.Request) {
@@ -304,18 +321,32 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 <div>Registered devices:</div>
 <ul>
 {{range $id, $link := .Devices}}
-	<li>{{$id}} 0x{{$link.Key | printf "%x"}} -> {{$link.UserLink}}</li>
+	<li>{{$id}} 0x{{$link.Key | printf "%x"}} -> {{userOfLink $link}}</li>
 {{end}}
 </ul>
+<strong>done</strong>
 `
 
 	db.View(func(tx msgpdb.Tx) error {
-		t, err := template.New("").Parse(tstr)
+		t := template.New("")
+		t.Funcs(template.FuncMap{
+			"userOfLink": func(link msgpdb.RegisteredDevice) template.HTML {
+				user, linked := link.UserLink()
+				if linked {
+					return template.HTML(template.HTMLEscapeString(user))
+				}
+				return "<i>none</i>"
+			},
+		})
+		_, err := t.Parse(tstr)
 		if err != nil {
 			w.Write([]byte(err.Error()))
 			return nil
 		}
-		t.Execute(w, tx)
+		err = t.Execute(w, tx)
+		if err != nil {
+			w.Write([]byte("<br/>" + err.Error()))
+		}
 		return nil
 	})
 }
@@ -352,6 +383,90 @@ func loggedInSwitch(in, out func(http.ResponseWriter, *http.Request)) func(http.
 	}
 }
 
+func userDevices(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+	db.View(func(tx msgpdb.Tx) error {
+		u := tx.User(session.Values["user"].(string))
+		if u == nil {
+			http.Error(w, "not authorized", 401)
+			return nil
+		}
+
+		templates.ExecuteTemplate(w, "user-devices", u)
+		return nil
+	})
+}
+
+func userDevicesAdd(w http.ResponseWriter, r *http.Request) {
+	type context struct {
+		Missing []string
+	}
+
+	session := getSession(w, r)
+	if r.Method == "GET" {
+		templates.ExecuteTemplate(w, "user-devices-add", context{})
+		return
+	}
+
+	devId := r.FormValue("device")
+
+	if devId == "" {
+		templates.ExecuteTemplate(w, "user-devices-add", context{[]string{"device"}})
+		return
+	}
+
+	db.Update(func(tx msgpdb.Tx) error {
+		user := tx.User(session.Values["user"].(string))
+		if user == nil {
+			http.Error(w, "not authorized", 401)
+			return errors.New("")
+		}
+		dev := tx.Device(devId)
+		if dev == nil {
+			http.Error(w, "no such device", 404)
+			return errors.New("")
+		}
+		if err := dev.LinkTo(user.Id()); err != nil {
+			http.Error(w, err.Error(), 400)
+			return errors.New("")
+		}
+		_, err := user.AddDevice(dev.Id(), dev.Key())
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return errors.New("")
+		}
+		http.Redirect(w, r, "/user/devices", 303)
+		return nil
+	})
+}
+
+func userDevicesRemove(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+	devId := mux.Vars(r)["device"]
+	db.Update(func(tx msgpdb.Tx) error {
+		user := tx.User(session.Values["user"].(string))
+		if user == nil {
+			http.Error(w, "not authorized", 401)
+			return errors.New("")
+		}
+		dev := tx.Device(devId)
+		if dev == nil {
+			http.Error(w, "no such device", 404)
+			return errors.New("")
+		}
+		if err := dev.Unlink(); err != nil {
+			http.Error(w, err.Error(), 500)
+			return errors.New("")
+		}
+		if err := user.RemoveDevice(devId); err != nil {
+			http.Error(w, err.Error(), 500)
+			return errors.New("")
+		}
+		http.Redirect(w, r, "/user/devices", 303)
+		return nil
+	})
+}
+
 func main() {
 	router := mux.NewRouter()
 
@@ -361,6 +476,9 @@ func main() {
 	router.HandleFunc("/user/logout", doLogout).Methods("GET")
 	router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
 	router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
+	router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
+	router.HandleFunc("/user/devices/add", defaultHeaders(userDevicesAdd)).Methods("GET", "POST")
+	router.HandleFunc("/user/devices/remove/{device}", userDevicesRemove).Methods("POST")
 
 	router.HandleFunc("/admin", defaultHeaders(adminHandler))
 	router.HandleFunc("/admin/{user}", defaultHeaders(adminAddUser)).Methods("POST")
