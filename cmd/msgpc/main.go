@@ -14,22 +14,6 @@ import (
 	"time"
 )
 
-func createUser(name string) {
-	resp, err := http.PostForm("http://localhost:8080/admin/"+name, nil)
-	if err != nil {
-		log.Println(resp)
-		panic(err)
-	}
-}
-
-func createDevice(user, name string) {
-	resp, err := http.PostForm("http://localhost:8080/admin/"+user+"/"+name, nil)
-	if err != nil {
-		log.Println(resp)
-		panic(err)
-	}
-}
-
 type clientState map[string]map[string][]string
 
 func (cs clientState) save() error {
@@ -54,22 +38,23 @@ func loadState() clientState {
 }
 
 func createUsers(users, devicesPerUser, sensorsPerDev int) clientState {
+	client, err := http.DefaultClient.Post(fmt.Sprintf("http://[::1]:8080/admin/preload/%v/%v/%v", users,
+		devicesPerUser, sensorsPerDev), "", nil)
+
+	if err != nil {
+		log.Panic(err)
+	}
+	defer client.Body.Close()
+
 	result := make(map[string]map[string][]string)
 	for i := 0; i < users; i++ {
 		un := fmt.Sprintf("u%v", i)
 		result[un] = make(map[string][]string)
-		createUser(un)
 		for j := 0; j < devicesPerUser; j++ {
-			dn := fmt.Sprintf("d%v", j)
+			dn := fmt.Sprintf("%v_d%v", un, j)
 			result[un][dn] = make([]string, 0, 10)
-			createDevice(un, dn)
-			client, err := msgp.NewWSClientDevice("ws://[::1]:8080", un, dn, []byte(dn))
-			if err != nil {
-				log.Panic(err)
-			}
 			for k := 0; k < sensorsPerDev; k++ {
 				sn := fmt.Sprintf("s%v", k)
-				err = client.AddSensor(sn)
 				result[un][dn] = append(result[un][dn], sn)
 			}
 		}
@@ -130,7 +115,7 @@ func runRegisteredDevice(device string, key []byte) {
 	}
 }
 
-func runDevice(state clientState, user, device string, newSensorProb float64) {
+func runDevice(state clientState, user, device string, newSensorP, renameP float64) {
 	client, err := msgp.NewWSClientDevice("ws://[::1]:8080", user, device, []byte(device))
 	if err != nil {
 		log.Panic(err)
@@ -139,7 +124,7 @@ func runDevice(state clientState, user, device string, newSensorProb float64) {
 	for {
 		sensors := state[user][device]
 
-		if rand.Float64() < newSensorProb {
+		if rand.Float64() < newSensorP {
 			maxId := 0
 			for _, sid := range sensors {
 				id := 0
@@ -175,14 +160,18 @@ func runDevice(state clientState, user, device string, newSensorProb float64) {
 		if err != nil {
 			log.Panic(err)
 		}
-		err = client.Rename(fmt.Sprintf("%v-%v", device, rand.Int31n(1000)))
-		if err != nil {
-			log.Panic(err)
-		}
-		for _, id := range sensors {
-			err = client.RenameSensor(id, fmt.Sprintf("%v-%v", id, rand.Int31n(1000)))
+		if rand.Float64() < renameP {
+			err = client.Rename(fmt.Sprintf("%v-%v", device, rand.Int31n(1000)))
 			if err != nil {
 				log.Panic(err)
+			}
+		}
+		for _, id := range sensors {
+			if rand.Float64() < renameP {
+				err = client.RenameSensor(id, fmt.Sprintf("%v-%v", id, rand.Int31n(1000)))
+				if err != nil {
+					log.Panic(err)
+				}
 			}
 		}
 		time.Sleep(1000 * time.Millisecond)
@@ -210,7 +199,7 @@ func main() {
 				continue
 			}
 			for device, _ := range ds {
-				go runDevice(state, user, device, 0)
+				go runDevice(state, user, device, 0, 0)
 			}
 		}
 		<-make(chan int)

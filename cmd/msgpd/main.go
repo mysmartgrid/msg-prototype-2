@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -30,6 +31,7 @@ type cmdlineArgs struct {
 	assets, templates                            *string
 	udbPath                                      *string
 	influxAddr, influxDb, influxUser, influxPass *string
+	motherlode                                   *bool
 }
 
 const (
@@ -45,6 +47,7 @@ var args = cmdlineArgs{
 	influxDb:   flag.String("influx-db", "", "influxdb database name"),
 	influxUser: flag.String("influx-user", "", "username for influxdb"),
 	influxPass: flag.String("influx-pass", "", "password for influxdb"),
+	motherlode: flag.Bool("motherlode", false, ""),
 }
 
 var templates *template.Template
@@ -144,7 +147,7 @@ func defaultHeaders(fn func(http.ResponseWriter, *http.Request)) func(http.Respo
 func removeSessionAndNotifyUser(w http.ResponseWriter, r *http.Request, session *sessions.Session) {
 	session.Options.MaxAge = -1
 	session.Save(r, w)
-	templates.ExecuteTemplate(w, "index_nouser", struct{Error string}{"Your session has expired"})
+	templates.ExecuteTemplate(w, "index_nouser", struct{ Error string }{"Your session has expired"})
 }
 
 func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
@@ -389,24 +392,59 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func adminAddUser(w http.ResponseWriter, r *http.Request) {
-	err := db.Update(func(tx msgpdb.Tx) error {
-		_, err := tx.AddUser(mux.Vars(r)["user"])
-		return err
-	})
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-	}
-}
+func adminPreload(w http.ResponseWriter, r *http.Request) {
+	parseUInt := func(u *uint64, name string) bool {
+		var err error
 
-func adminAddDevice(w http.ResponseWriter, r *http.Request) {
+		*u, err = strconv.ParseUint(mux.Vars(r)[name], 0, 32)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return false
+		}
+		return true
+	}
+
+	var users, devices, sensors uint64
+
+	if !parseUInt(&users, "users") || !parseUInt(&devices, "devices") || !parseUInt(&sensors, "sensors") {
+		return
+	}
+
 	err := db.Update(func(tx msgpdb.Tx) error {
-		u := tx.User(mux.Vars(r)["user"])
-		_, err := u.AddDevice(mux.Vars(r)["device"], []byte(mux.Vars(r)["device"]))
-		return err
+		for userId := uint64(0); userId < users; userId++ {
+			userName := fmt.Sprintf("u%v", userId)
+			user, err := tx.AddUser(userName)
+			if err != nil {
+				return err
+			}
+
+			for deviceId := uint64(0); deviceId < devices; deviceId++ {
+				devName := fmt.Sprintf("%v_d%v", userName, deviceId)
+				if err := tx.AddDevice(devName, []byte(devName)); err != nil {
+					return err
+				}
+				if err := tx.Device(devName).LinkTo(userName); err != nil {
+					return err
+				}
+
+				device, err := user.AddDevice(devName, []byte(devName))
+				if err != nil {
+					return err
+				}
+
+				for sensorId := uint64(0); sensorId < sensors; sensorId++ {
+					sensorName := fmt.Sprintf("s%v", sensorId)
+					_, err := device.AddSensor(sensorName)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return nil
 	})
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		http.Error(w, err.Error(), 400)
 	}
 }
 
@@ -518,9 +556,10 @@ func main() {
 	router.HandleFunc("/user/devices/add", defaultHeaders(userDevicesAdd)).Methods("GET", "POST")
 	router.HandleFunc("/user/devices/remove/{device}", userDevicesRemove).Methods("POST")
 
-	router.HandleFunc("/admin", defaultHeaders(adminHandler))
-	router.HandleFunc("/admin/{user}", defaultHeaders(adminAddUser)).Methods("POST")
-	router.HandleFunc("/admin/{user}/{device}", defaultHeaders(adminAddDevice)).Methods("POST")
+	if *args.motherlode {
+		router.HandleFunc("/admin", defaultHeaders(adminHandler))
+		router.HandleFunc("/admin/preload/{users}/{devices}/{sensors}", adminPreload).Methods("POST")
+	}
 
 	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
 	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)

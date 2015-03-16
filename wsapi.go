@@ -266,7 +266,7 @@ func (api *wsDeviceAPI) authenticateDevice() (result error) {
 		return err
 	}
 
-	api.viewDevice(func(tx db.Tx, user db.User, device db.Device) *v1Error {
+	aerr := api.viewDevice(func(tx db.Tx, user db.User, device db.Device) *v1Error {
 		mac := hmac.New(sha256.New, device.Key())
 		mac.Write(buf[:])
 		expected := mac.Sum(nil)
@@ -277,6 +277,9 @@ func (api *wsDeviceAPI) authenticateDevice() (result error) {
 		result = api.dispatch.WriteJSON(v1MessageOut{Command: "ok"})
 		return nil
 	})
+	if aerr != nil {
+		return errors.New(aerr.Code)
+	}
 	return
 }
 
