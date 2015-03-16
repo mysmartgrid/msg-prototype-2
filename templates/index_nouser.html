@@ -1,6 +1,9 @@
 {{define "index_nouser"}}
 {{template "head" "home"}}
 <div class="container">
+	{{if .Error}}
+	<div class="alert alert-danger" role="alert">{{.Error}}</div>
+	{{end}}
 </div>
 {{template "tail"}}
 {{end}}

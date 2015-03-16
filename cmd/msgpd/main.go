@@ -141,12 +141,18 @@ func defaultHeaders(fn func(http.ResponseWriter, *http.Request)) func(http.Respo
 	}
 }
 
+func removeSessionAndNotifyUser(w http.ResponseWriter, r *http.Request, session *sessions.Session) {
+	session.Options.MaxAge = -1
+	session.Save(r, w)
+	templates.ExecuteTemplate(w, "index_nouser", struct{Error string}{"Your session has expired"})
+}
+
 func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 	return defaultHeaders(func(w http.ResponseWriter, r *http.Request) {
 		session := getSession(w, r)
 		userId, found := session.Values["user"]
 		if !found {
-			http.Error(w, "bad request", 400)
+			removeSessionAndNotifyUser(w, r, session)
 			return
 		}
 		var scheme = "ws://"
@@ -161,7 +167,7 @@ func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 		db.View(func(tx msgpdb.Tx) error {
 			user := tx.User(userId.(string))
 			if user == nil {
-				http.Error(w, "not found", 404)
+				removeSessionAndNotifyUser(w, r, session)
 				return nil
 			}
 			var url = scheme + r.Host + "/ws/user/" + user.Id() + "/" + session.Values["wsToken"].(string)
@@ -420,7 +426,7 @@ func userDevices(w http.ResponseWriter, r *http.Request) {
 	db.View(func(tx msgpdb.Tx) error {
 		u := tx.User(session.Values["user"].(string))
 		if u == nil {
-			http.Error(w, "not authorized", 401)
+			removeSessionAndNotifyUser(w, r, session)
 			return nil
 		}
 
