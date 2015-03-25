@@ -12,6 +12,22 @@ import (
 	"time"
 )
 
+var badSeriesName = errors.New("bad series name")
+
+const seriesNameTemplate = "data-u%d-d%d-s%d"
+
+func seriesName(user, device, sensor uint64) string {
+	return fmt.Sprintf(seriesNameTemplate, user, device, sensor)
+}
+
+func parseSeriesName(name string) (user, device, sensor uint64, err error) {
+	scanned, err := fmt.Sscanf(name, seriesNameTemplate, &user, &device, &sensor)
+	if scanned != 3 {
+		err = badSeriesName
+	}
+	return
+}
+
 type influxHandler struct {
 	influxAddr, influxDb, influxUser, influxPass string
 }
@@ -47,7 +63,7 @@ func (h *influxHandler) saveValuesAndClear(valueMap map[bufferKey][]Value) error
 		if buf.Len() > 1 {
 			buf.WriteRune(',')
 		}
-		fmt.Fprintf(&buf, `{"name":"%v-%v-%v",`, key.user, key.device, key.sensor)
+		fmt.Fprintf(&buf, `{"name":"%v",`, seriesName(key.user, key.device, key.sensor))
 		buf.WriteString(`"columns":["time","value"],`)
 		buf.WriteString(`"points":[`)
 		for i, value := range values {
@@ -84,7 +100,7 @@ func (h *influxHandler) loadValues(since time.Time, keys []bufferKey) (map[buffe
 
 	series := make([]string, 0, len(keys))
 	for _, key := range keys {
-		series = append(series, fmt.Sprintf("%v-%v-%v", key.user, key.device, key.sensor))
+		series = append(series, seriesName(key.user, key.device, key.sensor))
 	}
 	query := fmt.Sprintf("select * from /%v/ where time > %vms", strings.Join(series, "|"), influxTime(since))
 
@@ -106,8 +122,12 @@ func (h *influxHandler) loadValues(since time.Time, keys []bufferKey) (map[buffe
 
 	result := make(map[bufferKey][]Value, len(keys))
 	for _, series := range queryResult {
-		parts := strings.Split(series.Name, "-")
-		key := bufferKey{parts[0], parts[1], parts[2]}
+		uid, did, sid, err := parseSeriesName(series.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		key := bufferKey{uid, did, sid}
 		values := make([]Value, 0, len(series.Points))
 		for _, point := range series.Points {
 			values = append(values, Value{goTime(point[0]), point[2]})
@@ -118,7 +138,7 @@ func (h *influxHandler) loadValues(since time.Time, keys []bufferKey) (map[buffe
 	return result, nil
 }
 
-func (h *influxHandler) removeSeriesFor(user, device, sensor string) error {
+func (h *influxHandler) removeSeriesFor(user, device, sensor uint64) error {
 	query := fmt.Sprintf("drop series \"%v-%v-%v\"", user, device, sensor)
 
 	client := http.Client{Timeout: 1 * time.Second}

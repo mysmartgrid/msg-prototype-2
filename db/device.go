@@ -10,10 +10,11 @@ type device struct {
 	id   string
 }
 
-func (d *device) init(key []byte, name string) {
+func (d *device) init(key []byte, name string, dbId uint64) {
 	d.b.CreateBucketIfNotExists(dbUserDeviceSensorsKey)
 	d.b.Put(dbUserDeviceKeyKey, key)
 	d.b.Put(nameKey, []byte(name))
+	d.b.Put(dbIdKey, htoleu64(dbId))
 }
 
 func (d *device) AddSensor(id string) (Sensor, error) {
@@ -27,11 +28,15 @@ func (d *device) AddSensor(id string) (Sensor, error) {
 	if err != nil {
 		return nil, IdExists
 	}
+	seq, err := b.NextSequence()
+	if err != nil {
+		return nil, err
+	}
 
 	result := &sensor{sb, id}
-	result.init(id)
+	result.init(id, seq)
 
-	d.user.tx.db.bufferAdd <- bufferKey{d.user.Id(), d.id, result.Id()}
+	d.user.tx.db.bufferAdd <- bufferKey{d.user.dbId(), d.dbId(), result.dbId()}
 
 	return result, nil
 }
@@ -55,10 +60,13 @@ func (d *device) Sensors() map[string]Sensor {
 }
 
 func (d *device) RemoveSensor(id string) error {
-	if err := d.b.Bucket(dbUserDeviceSensorsKey).DeleteBucket([]byte(id)); err != nil {
+	sens := d.Sensor(id)
+	if sens == nil {
 		return InvalidId
 	}
-	return d.user.tx.removeSeriesFor(d.user.Id(), d.Id(), id)
+	sid := sens.dbId()
+	d.b.Bucket(dbUserDeviceSensorsKey).DeleteBucket([]byte(id))
+	return d.user.tx.removeSeriesFor(d.user.dbId(), d.dbId(), sid)
 }
 
 func (d *device) Key() []byte {
@@ -67,6 +75,10 @@ func (d *device) Key() []byte {
 
 func (d *device) Id() string {
 	return d.id
+}
+
+func (d *device) dbId() uint64 {
+	return letohu64(d.b.Get(dbIdKey))
 }
 
 func (d *device) Name() string {

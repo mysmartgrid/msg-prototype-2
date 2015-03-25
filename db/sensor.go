@@ -9,12 +9,17 @@ type sensor struct {
 	id string
 }
 
-func (s *sensor) init(name string) {
+func (s *sensor) init(name string, dbId uint64) {
 	s.b.Put(nameKey, []byte(name))
+	s.b.Put(dbIdKey, htoleu64(dbId))
 }
 
 func (s *sensor) Id() string {
 	return s.id
+}
+
+func (s *sensor) dbId() uint64 {
+	return letohu64(s.b.Get(dbIdKey))
 }
 
 func (s *sensor) Name() string {

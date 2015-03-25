@@ -37,6 +37,7 @@ type User interface {
 	Devices() map[string]Device
 
 	Id() string
+	dbId() uint64
 
 	LoadReadings(since time.Time, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error)
 }
@@ -48,6 +49,7 @@ type Device interface {
 	RemoveSensor(id string) error
 
 	Id() string
+	dbId() uint64
 	Key() []byte
 
 	Name() string
@@ -56,6 +58,7 @@ type Device interface {
 
 type Sensor interface {
 	Id() string
+	dbId() uint64
 
 	Name() string
 	SetName(string)

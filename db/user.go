@@ -11,8 +11,9 @@ type user struct {
 	id string
 }
 
-func (u *user) init() {
+func (u *user) init(dbId uint64) {
 	u.b.CreateBucketIfNotExists(dbUserDevicesKey)
+	u.b.Put(dbIdKey, htoleu64(dbId))
 }
 
 func (u *user) AddDevice(id string, key []byte) (Device, error) {
@@ -26,9 +27,13 @@ func (u *user) AddDevice(id string, key []byte) (Device, error) {
 	if err != nil {
 		return nil, IdExists
 	}
+	seq, err := b.NextSequence()
+	if err != nil {
+		return nil, err
+	}
 
 	result := &device{db, u, id}
-	result.init(key, id)
+	result.init(key, id, seq)
 	return result, nil
 }
 
@@ -63,10 +68,14 @@ func (d *user) Devices() map[string]Device {
 	return result
 }
 
-func (d *user) Id() string {
-	return d.id
+func (u *user) Id() string {
+	return u.id
 }
 
-func (d *user) LoadReadings(since time.Time, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
-	return d.tx.loadReadings(since, d, sensors)
+func (u *user) dbId() uint64 {
+	return letohu64(u.b.Get(dbIdKey))
+}
+
+func (u *user) LoadReadings(since time.Time, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
+	return u.tx.loadReadings(since, u, sensors)
 }

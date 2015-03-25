@@ -21,9 +21,13 @@ func (tx *tx) AddUser(id string) (User, error) {
 	if err != nil {
 		return nil, IdExists
 	}
+	seq, err := b.NextSequence()
+	if err != nil {
+		return nil, err
+	}
 
 	result := &user{tx, ub, id}
-	result.init()
+	result.init(seq)
 	return result, nil
 }
 
@@ -77,14 +81,14 @@ func (tx *tx) Devices() map[string]RegisteredDevice {
 
 func (tx *tx) loadReadings(since time.Time, user User, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
 	keys := make([]bufferKey, 0)
-	dmap := make(map[string]Device)
-	smap := make(map[Device]map[string]Sensor)
+	dmap := make(map[uint64]Device)
+	smap := make(map[Device]map[uint64]Sensor)
 	for device, sensors := range sensors {
-		dmap[device.Id()] = device
-		smap[device] = make(map[string]Sensor)
+		dmap[device.dbId()] = device
+		smap[device] = make(map[uint64]Sensor)
 		for _, sensor := range sensors {
-			smap[device][sensor.Id()] = sensor
-			keys = append(keys, bufferKey{user.Id(), device.Id(), sensor.Id()})
+			smap[device][sensor.dbId()] = sensor
+			keys = append(keys, bufferKey{user.dbId(), device.dbId(), sensor.dbId()})
 		}
 	}
 
@@ -107,7 +111,7 @@ func (tx *tx) loadReadings(since time.Time, user User, sensors map[Device][]Sens
 	return result, nil
 }
 
-func (tx *tx) removeSeriesFor(user, device, sensor string) error {
+func (tx *tx) removeSeriesFor(user, device, sensor uint64) error {
 	tx.db.bufferKill <- bufferKey{user, device, sensor}
 	return tx.db.influx.removeSeriesFor(user, device, sensor)
 }

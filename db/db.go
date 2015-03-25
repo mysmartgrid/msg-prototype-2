@@ -20,6 +20,7 @@ var (
 	nameKey                = []byte("name")
 	userKey                = []byte("user")
 	registeredDevicesKey   = []byte("registeredDevices")
+	dbIdKey                = []byte("dbId")
 	dbUsersKey             = []byte("users")
 	dbUserDevicesKey       = []byte("devices")
 	dbUserDeviceKeyKey     = []byte("key")
@@ -40,7 +41,7 @@ type db struct {
 }
 
 type bufferKey struct {
-	user, device, sensor string
+	user, device, sensor uint64
 }
 
 type bufferValue struct {
@@ -125,7 +126,7 @@ func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (Db, erro
 		for _, user := range tx.Users() {
 			for _, dev := range user.Devices() {
 				for _, sensor := range dev.Sensors() {
-					result.bufferAdd <- bufferKey{user.Id(), dev.Id(), sensor.Id()}
+					result.bufferAdd <- bufferKey{user.dbId(), dev.dbId(), sensor.dbId()}
 				}
 			}
 		}
@@ -153,6 +154,6 @@ func (d *db) Update(fn func(Tx) error) error {
 }
 
 func (d *db) AddReading(user User, device Device, sensor Sensor, time time.Time, value float64) error {
-	d.bufferInput <- bufferValue{bufferKey{user.Id(), device.Id(), sensor.Id()}, Value{time, value}}
+	d.bufferInput <- bufferValue{bufferKey{user.dbId(), device.dbId(), sensor.dbId()}, Value{time, value}}
 	return nil
 }
