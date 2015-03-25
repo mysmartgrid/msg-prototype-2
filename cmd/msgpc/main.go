@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -15,6 +16,9 @@ import (
 )
 
 type clientState map[string]map[string][]string
+
+var useSSL bool
+var tlsConfig *tls.Config
 
 func (cs clientState) save() error {
 	data, err := json.MarshalIndent(cs, "", " ")
@@ -38,7 +42,11 @@ func loadState() clientState {
 }
 
 func createUsers(users, devicesPerUser, sensorsPerDev int) clientState {
-	client, err := http.DefaultClient.Post(fmt.Sprintf("http://[::1]:8080/admin/preload/%v/%v/%v", users,
+	protocol := "http"
+	if useSSL {
+		protocol += "s"
+	}
+	client, err := http.DefaultClient.Post(fmt.Sprintf(protocol+"://[::1]:8080/admin/preload/%v/%v/%v", users,
 		devicesPerUser, sensorsPerDev), "", nil)
 
 	if err != nil {
@@ -63,7 +71,11 @@ func createUsers(users, devicesPerUser, sensorsPerDev int) clientState {
 }
 
 func registerDevice(device string, key []byte) error {
-	req, err := http.NewRequest("POST", "http://[::1]:8080/ws/regdevice/"+device, nil)
+	protocol := "http"
+	if useSSL {
+		protocol += "s"
+	}
+	req, err := http.NewRequest("POST", protocol+"://[::1]:8080/ws/regdevice/"+device, nil)
 	if err != nil {
 		return err
 	}
@@ -81,7 +93,11 @@ func registerDevice(device string, key []byte) error {
 }
 
 func runRegisteredDevice(device string, key []byte) {
-	resp, err := http.Get("http://[::1]:8080/ws/regdevice/" + device)
+	protocol := "http"
+	if useSSL {
+		protocol += "s"
+	}
+	resp, err := http.Get(protocol + "://[::1]:8080/ws/regdevice/" + device)
 	if err != nil {
 		log.Println(err)
 		return
@@ -116,7 +132,11 @@ func runRegisteredDevice(device string, key []byte) {
 }
 
 func runDevice(state clientState, user, device string, newSensorP, renameP float64) {
-	client, err := msgp.NewWSClientDevice("ws://[::1]:8080", user, device, []byte(device))
+	protocol := "ws"
+	if useSSL {
+		protocol += "s"
+	}
+	client, err := msgp.NewWSClientDevice(protocol+"://[::1]:8080", user, device, []byte(device), tlsConfig)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -183,6 +203,17 @@ func main() {
 	if len(os.Args) < 2 {
 		log.Println("usage: msgpc (init uc,dc,sc | run)")
 		return
+	}
+
+	switch os.Getenv("SSL") {
+	case "1":
+		useSSL = true
+	case "2":
+		useSSL = true
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: true,
+		}
+		http.DefaultTransport.(*http.Transport).TLSClientConfig = tlsConfig
 	}
 
 	switch os.Args[1] {

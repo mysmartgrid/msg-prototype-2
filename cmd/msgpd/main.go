@@ -31,6 +31,7 @@ type cmdlineArgs struct {
 	assets, templates                            *string
 	udbPath                                      *string
 	influxAddr, influxDb, influxUser, influxPass *string
+	sslCert, sslKey                              *string
 	motherlode                                   *bool
 }
 
@@ -47,6 +48,8 @@ var args = cmdlineArgs{
 	influxDb:   flag.String("influx-db", "", "influxdb database name"),
 	influxUser: flag.String("influx-user", "", "username for influxdb"),
 	influxPass: flag.String("influx-pass", "", "password for influxdb"),
+	sslCert:    flag.String("ssl-cert", "", "ssl certificate file"),
+	sslKey:     flag.String("ssl-key", "", "ssl key file"),
 	motherlode: flag.Bool("motherlode", false, ""),
 }
 
@@ -79,6 +82,13 @@ func init() {
 	bailIfMissing(args.influxDb, "-influx-db")
 	bailIfMissing(args.influxUser, "-influx-user")
 	bailIfMissing(args.influxPass, "-influx-pass")
+
+	if *args.sslCert != "" {
+		bailIfMissing(args.sslKey, "-ssl-key")
+	}
+	if *args.sslKey != "" {
+		bailIfMissing(args.sslCert, "-ssl-cert")
+	}
 
 	templates = template.New("")
 
@@ -570,7 +580,15 @@ func main() {
 	http.Handle("/", router)
 
 	log.Print("Listening on ", *args.listen)
-	if err := http.ListenAndServe(*args.listen, nil); err != nil {
-		log.Fatal("failed: ", err)
+	if *args.sslCert != "" {
+		log.Printf("Using SSL cert and key %v, %v", *args.sslCert, *args.sslKey)
+
+		if err := http.ListenAndServeTLS(*args.listen, *args.sslCert, *args.sslKey, nil); err != nil {
+			log.Fatal("failed: ", err)
+		}
+	} else {
+		if err := http.ListenAndServe(*args.listen, nil); err != nil {
+			log.Fatal("failed: ", err)
+		}
 	}
 }

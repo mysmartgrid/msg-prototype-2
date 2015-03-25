@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -598,15 +599,16 @@ type WSClientDevice interface {
 	RemoveSensor(id string) error
 }
 
-func (c *wsClient) prepare(url string, protocols []string) error {
+func (c *wsClient) prepare(url string, protocols []string, tlsConfig *tls.Config) error {
 	if c.dispatch != nil {
 		return nil
 	}
 
-	headers := http.Header{
-		"Sec-Websocket-Protocol": protocols,
+	dialer := websocket.Dialer{
+		TLSClientConfig: tlsConfig,
+		Subprotocols:    protocols,
 	}
-	sock, _, err := websocket.DefaultDialer.Dial(url, headers)
+	sock, _, err := dialer.Dial(url, nil)
 	if err != nil {
 		return err
 	}
@@ -627,10 +629,10 @@ func (c *wsClient) Close() {
 	c.dispatch.Close()
 }
 
-func NewWSClientDevice(url, user, device string, key []byte) (WSClientDevice, error) {
+func NewWSClientDevice(url, user, device string, key []byte, tlsConfig *tls.Config) (WSClientDevice, error) {
 	result := new(wsClientDevice)
 
-	if err := result.prepare(url+"/ws/device/"+user+"/"+device, deviceApiProtocols); err != nil {
+	if err := result.prepare(url+"/ws/device/"+user+"/"+device, deviceApiProtocols, tlsConfig); err != nil {
 		return nil, err
 	}
 
