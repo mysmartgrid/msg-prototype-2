@@ -274,7 +274,7 @@ func (api *wsDeviceAPI) authenticateDevice() (result error) {
 			result = notAuthorized
 			return apiNotAuthorized
 		}
-		result = api.dispatch.WriteJSON(v1MessageOut{Command: "ok"})
+		result = api.dispatch.Write("proceed")
 		return nil
 	})
 	if aerr != nil {
@@ -642,8 +642,6 @@ func NewWSClientDevice(url, user, device string, key []byte) (WSClientDevice, er
 }
 
 func (c *wsClientDevice) authenticate(key []byte) error {
-	var cmd v1MessageIn
-
 	msgType, msg, err := c.dispatch.Receive()
 	switch {
 	case err != nil:
@@ -664,16 +662,14 @@ func (c *wsClientDevice) authenticate(key []byte) error {
 		return err
 	}
 
-	if err := c.dispatch.ReceiveJSON(&cmd); err != nil {
+	msgType, msg, err = c.dispatch.Receive()
+	switch {
+	case err != nil:
 		return err
-	}
-
-	if cmd.Error != nil {
-		return errors.New(cmd.Error.Code)
-	}
-
-	if cmd.Command != "ok" {
+	case msgType != websocket.TextMessage:
 		return protocolViolation
+	case string(msg) != "proceed":
+		return errors.New(string(msg))
 	}
 
 	return nil

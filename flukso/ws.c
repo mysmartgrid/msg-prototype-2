@@ -83,7 +83,7 @@ static unsigned char response[32];
 static struct pollfd pollSet[2];
 static char inputBuffer[4096];
 static unsigned inputBufferLength;
-static const char authResponseOK[] = "{\"cmd\":\"ok\"}";
+static const char authResponseOK[] = "proceed";
 
 void go_to_background()
 {
