@@ -1,7 +1,10 @@
+#define _BSD_SOURCE
+
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,7 +60,7 @@ static void hexEncode(const unsigned char* in, char* out, int len)
 	}
 }
 
-static void log(const char* fmt, ...)
+static void ws_log(const char* fmt, ...)
 {
 	va_list args;
 
@@ -96,7 +99,7 @@ void go_to_background()
 		break;
 
 	case -1:
-		log("could not fork");
+		ws_log("could not fork");
 		exit(ERR_INTERNAL);
 
 	default:
@@ -114,16 +117,16 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 			unsigned char challenge[32];
 
 			if (len != 64) {
-				log("bad challenge length %u", (unsigned) len);
+				ws_log("bad challenge length %u", (unsigned) len);
 				exit(ERR_PROTOCOL_VIOLATION);
 			}
 			if (!hexDecode(in, challenge, sizeof(challenge))) {
-				log("bad challenge format");
+				ws_log("bad challenge format");
 				exit(ERR_PROTOCOL_VIOLATION);
 			}
 
 			if (!HMAC(EVP_sha256(), devKey, devKeyLen, challenge, sizeof(challenge), response, NULL)) {
-				log("error computing response");
+				ws_log("error computing response");
 				exit(ERR_INTERNAL);
 			}
 
@@ -134,7 +137,7 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 
 		case CS_AUTH_SENT:
 			if (len != sizeof(authResponseOK) - 1 || memcmp(in, authResponseOK, sizeof(authResponseOK) - 1)) {
-				log("authentication failed: got %*s", (int) len, in);
+				ws_log("authentication failed: got %*s", (int) len, in);
 				exit(ERR_AUTHENTICATION_FAILED);
 			}
 			if (forkWhenReady)
@@ -148,13 +151,13 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 				if (errno == ESPIPE) {
 					exit(ERR_PIPE);
 				} else {
-					log("write(1): %s", strerror(errno));
+					ws_log("write(1): %s", strerror(errno));
 					exit(ERR_INTERNAL);
 				}
 			} else {
 				char nl = '\n';
 				if (write(STDOUT_FILENO, &nl, 1) < 0) {
-					log("write(1): %s", strerror(errno));
+					ws_log("write(1): %s", strerror(errno));
 					exit(ERR_PIPE);
 				}
 			}
@@ -170,7 +173,7 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 
 			hexEncode(response, (char*) responseText + LWS_SEND_BUFFER_PRE_PADDING, l);
 			if (libwebsocket_write(wsi, responseText + LWS_SEND_BUFFER_PRE_PADDING, 2 * l, LWS_WRITE_TEXT) != 2 * l) {
-				log("error sending response");
+				ws_log("error sending response");
 				exit(ERR_NETWORK);
 			}
 			clientState = CS_AUTH_SENT;
@@ -183,7 +186,7 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 			memcpy(buffer + LWS_SEND_BUFFER_PRE_PADDING, inputBuffer, inputBufferLength);
 			int sent = libwebsocket_write(wsi, buffer + LWS_SEND_BUFFER_PRE_PADDING, inputBufferLength, LWS_WRITE_TEXT);
 			if (sent != inputBufferLength) {
-				log("short send");
+				ws_log("short send");
 				exit(ERR_NETWORK);
 			}
 			inputBufferLength = 0;
@@ -195,11 +198,11 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 	case LWS_CALLBACK_CLOSED:
 		switch (clientState) {
 		case CS_AUTH_SENT:
-			log("authentication failed");
+			ws_log("authentication failed");
 			exit(ERR_AUTHENTICATION_FAILED);
 
 		default:
-			log("peer closed connection");
+			ws_log("peer closed connection");
 			exit(ERR_NONE);
 		}
 		break;
@@ -216,7 +219,7 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 		break;
 
 	case LWS_CALLBACK_WSI_DESTROY:
-		log("websocket closed unexpectedly");
+		ws_log("websocket closed unexpectedly");
 		exit(ERR_NETWORK);
 
 	default:
@@ -249,7 +252,7 @@ static void runDevice()
 
 	struct libwebsocket_context* context = libwebsocket_create_context(&ccinfo);
 	if (!context) {
-		log("creating websocket context failed");
+		ws_log("creating websocket context failed");
 		exit(ERR_INTERNAL);
 	}
 
@@ -257,7 +260,7 @@ static void runDevice()
 	struct libwebsocket* socket = libwebsocket_client_connect(context, host, port, useSSL, wsPath,
 			host, NULL, protocols[0].name, -1);
 	if (!socket) {
-		log("connect failed");
+		ws_log("connect failed");
 		goto fail_context;
 	}
 
@@ -280,7 +283,7 @@ static void runDevice()
 					break;
 				}
 				if (inputBufferLength >= sizeof(inputBuffer)) {
-					log("input overflow");
+					ws_log("input overflow");
 					exit(ERR_PROTOCOL_VIOLATION);
 				}
 				inputBuffer[inputBufferLength++] = buffer;
@@ -361,7 +364,7 @@ int main(int argc, char* argv[])
 			errno = 0;
 			port = strtoul(optarg, &ep, 10);
 			if (errno || port > 0xffff) {
-				log("port out of range");
+				ws_log("port out of range");
 				return ERR_ARG;
 			}
 			break;
@@ -375,12 +378,12 @@ int main(int argc, char* argv[])
 		case WS_ARG_KEY: {
 			size_t len = strlen(optarg + 2);
 			if (len > sizeof(devKey)) {
-				log("--key argument invalid");
+				ws_log("--key argument invalid");
 				return ERR_ARG;
 			}
 			if (optarg[0] == '0' && optarg[1] == 'x') {
 				if (len % 2 || !hexDecode(optarg + 2, devKey, len / 2)) {
-					log("--key argument invalid");
+					ws_log("--key argument invalid");
 					return ERR_ARG;
 				}
 				devKeyLen = len / 2;
@@ -409,13 +412,13 @@ int main(int argc, char* argv[])
 
 		int fd = open(argv[optind], O_RDONLY);
 		if (fd < 0 || dup2(fd, STDIN_FILENO) < 0 || close(fd)) {
-			log("could not open in fifo; %s", strerror(errno));
+			ws_log("could not open in fifo; %s", strerror(errno));
 			return ERR_ARG;
 		}
 
 		fd = open(argv[optind + 1], O_WRONLY);
 		if (fd < 0 || dup2(fd, STDOUT_FILENO) < 0 || close(fd)) {
-			log("could not open out fifo; %s", strerror(errno));
+			ws_log("could not open out fifo; %s", strerror(errno));
 			return ERR_ARG;
 		}
 	}
@@ -423,7 +426,7 @@ int main(int argc, char* argv[])
 #define REQUIRE(arg, name) \
 	do { \
 		if (!(argsFound & (1 << (WS_ARG_ ## arg - WS_ARG_UNKNOWN)))) { \
-			log(name " missing\n"); \
+			ws_log(name " missing\n"); \
 			return 1; \
 		} \
 	} while (0)
@@ -437,7 +440,7 @@ int main(int argc, char* argv[])
 #undef REQUIRE
 
 	if (snprintf(wsPath, sizeof(wsPath), "/ws/device/%s/%s", user, device) >= sizeof(wsPath)) {
-		log("ws path way too long, check args");
+		ws_log("ws path way too long, check args");
 		return ERR_ARG;
 	}
 
