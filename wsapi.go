@@ -100,8 +100,8 @@ type measurementWithMetadata struct {
 const (
 	upgradeTimeout = 10 * time.Second
 
-	deviceApiProtocolV1 = "msg/1/device"
-	userApiProtocolV1   = "msg/1/user"
+	deviceApiProtocolV1 = "v1.device.msg"
+	userApiProtocolV1   = "v1.user.msg"
 )
 
 var (

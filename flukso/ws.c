@@ -233,7 +233,7 @@ static void runDevice()
 {
 	struct libwebsocket_protocols protocols[] = {
 		{
-			.name = "msg/1/device",
+			.name = "v1.device.msg",
 			.callback = msg_1_device_callback,
 			.rx_buffer_size = 4096,
 		},
@@ -335,7 +335,7 @@ static const struct option options[] = {
 
 static void usage(FILE* target)
 {
-	printf("Usage: ws --url <ws-url> --user <user> --device <device> --key <device-key> [in-fifo] [out-fifo]\n");
+	printf("Usage: ws --host <ws-host> --port <ws-port> --user <user> --device <device> --key <device-key> [in-fifo out-fifo]\n");
 }
 
 int main(int argc, char* argv[])

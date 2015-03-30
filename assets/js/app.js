@@ -53,13 +53,13 @@ angular.module("msgp", [])
 	};
 
 	socket.connect = function(url) {
-		var ws = socketData.ws = new WebSocket(url, ["msg/1/user"]);
+		var ws = socketData.ws = new WebSocket(url, ["v1.user.msg"]);
 
 		ws.onerror = _onError;
 		ws.onclose = _onClose;
 
 		ws.onopen = function(e) {
-			if (ws.protocol != "msg/1/user") {
+			if (ws.protocol != "v1.user.msg") {
 				_onOpen({error: "protocol negotiation failed"});
 				ws.close();
 				socketData.ws = null;
