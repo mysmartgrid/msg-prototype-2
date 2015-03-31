@@ -88,9 +88,6 @@ static char inputBuffer[4096];
 static unsigned inputBufferLength;
 static const char authResponseOK[] = "proceed";
 
-static char stdinBuf[4096];
-static unsigned stdinBufPos, stdinBufAvail;
-
 void go_to_background()
 {
 	switch (fork()) {
@@ -276,49 +273,29 @@ static void runDevice()
 	// run once to register the socket in pollSet
 	libwebsocket_service(context, 0);
 
-	while (poll(pollSet, 2, stdinBufAvail ? 0 : -1) >= 0 || errno == EINTR) {
+	while (poll(pollSet, 2, -1) >= 0 || errno == EINTR) {
 		if (pollSet[0].revents & ~POLLIN)
 			exit(ERR_PIPE);
-		if ((pollSet[0].revents & POLLIN) || (stdinBufAvail && pollSet[0].events)) {
-			bool dispatch = false;
-			while (stdinBufAvail) {
-				char buffer = stdinBuf[stdinBufPos];
-
-				stdinBufPos++;
-				stdinBufAvail--;
+		if (pollSet[0].revents & POLLIN) {
+			char buffer;
+			while (read(STDIN_FILENO, &buffer, 1) != -1) {
 				if (buffer == '\r' || buffer == '\n') {
-					dispatch = true;
 					break;
 				}
-
 				if (inputBufferLength >= sizeof(inputBuffer)) {
 					ws_log("input overflow");
 					exit(ERR_PROTOCOL_VIOLATION);
 				}
 				inputBuffer[inputBufferLength++] = buffer;
 			}
-
-			if (dispatch && inputBufferLength > 0) {
+			if (errno != EAGAIN && errno != EINPROGRESS && errno != 0) {
+				perror("read(0)");
+				exit(1);
+			}
+			if ((buffer == '\r' || buffer == '\n') && inputBufferLength > 0)
 				libwebsocket_callback_on_writable(context, socket);
-
-				pollSet[0].events = 0;
-				pollSet[0].revents = 0;
-			}
-
-			if (stdinBufAvail == 0) {
-				stdinBufPos = 0;
-				stdinBufAvail = 0;
-
-				int amt = read(STDIN_FILENO, stdinBuf, sizeof(stdinBuf));
-				if (amt < 0) {
-					if (errno != EAGAIN && errno != EINPROGRESS) {
-						perror("read(0)");
-						exit(1);
-					}
-				} else {
-					stdinBufAvail = amt;
-				}
-			}
+			pollSet[0].events = 0;
+			pollSet[0].revents = 0;
 		}
 		libwebsocket_service(context, 0);
 	}
