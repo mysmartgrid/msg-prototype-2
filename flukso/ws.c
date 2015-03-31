@@ -292,10 +292,11 @@ static void runDevice()
 				perror("read(0)");
 				exit(1);
 			}
-			if ((buffer == '\r' || buffer == '\n') && inputBufferLength > 0)
+			if ((buffer == '\r' || buffer == '\n') && inputBufferLength > 0) {
 				libwebsocket_callback_on_writable(context, socket);
-			pollSet[0].events = 0;
-			pollSet[0].revents = 0;
+				pollSet[0].events = 0;
+				pollSet[0].revents = 0;
+			}
 		}
 		libwebsocket_service(context, 0);
 	}
