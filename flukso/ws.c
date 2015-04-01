@@ -36,6 +36,8 @@ static unsigned port;
 static const char* user;
 static const char* device;
 static const char* caPath;
+static const char* inFIFO;
+static const char* outFIFO;
 static int useSSL;
 static char wsPath[4096];
 static unsigned char devKey[128], devKeyLen;
@@ -88,6 +90,34 @@ static struct pollfd pollSet[2];
 static char inputBuffer[4096];
 static unsigned inputBufferLength;
 static const char authResponseOK[] = "proceed";
+
+void open_in_out_fifos()
+{
+	if (inFIFO) {
+		int fd = open(inFIFO, O_RDONLY | O_NONBLOCK);
+		if (fd < 0 || dup2(fd, STDIN_FILENO) < 0 || close(fd)) {
+			ws_log("could not open in fifo; %s", strerror(errno));
+			exit(ERR_ARG);
+		}
+	}
+
+	if (outFIFO) {
+		for (int i = 0; i < 3; i++) {
+			int fd = open(outFIFO, O_WRONLY | O_NONBLOCK);
+			if (fd < 0 && errno == ENXIO) {
+				poll(0, 0, 1000);
+				continue;
+			}
+			if (fd < 0 || dup2(fd, STDOUT_FILENO) < 0 || close(fd)) {
+				ws_log("could not open out fifo; %s", strerror(errno));
+				exit(ERR_ARG);
+			}
+			int value = 0;
+			fcntl(fd, F_SETFL, O_NONBLOCK, &value);
+			return;
+		}
+	}
+}
 
 void go_to_background()
 {
@@ -143,6 +173,7 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 			}
 			if (forkWhenReady)
 				go_to_background();
+			open_in_out_fifos();
 			clientState = CS_BRIDGING;
 			pollSet[0].events = POLLIN;
 			break;
@@ -417,23 +448,8 @@ int main(int argc, char* argv[])
 			return ERR_ARG;
 		}
 
-		int fd = open(argv[optind], O_RDONLY | O_NONBLOCK);
-		if (fd < 0 || dup2(fd, STDIN_FILENO) < 0 || close(fd)) {
-			ws_log("could not open in fifo; %s", strerror(errno));
-			return ERR_ARG;
-		}
-
-		struct pollfd pfd = {0, POLLIN, 0};
-		if (poll(&pfd, 1, -1) < 0) {
-			ws_log("could not open out fifo; %s", strerror(errno));
-			return ERR_ARG;
-		}
-
-		fd = open(argv[optind + 1], O_WRONLY);
-		if (fd < 0 || dup2(fd, STDOUT_FILENO) < 0 || close(fd)) {
-			ws_log("could not open out fifo; %s", strerror(errno));
-			return ERR_ARG;
-		}
+		inFIFO = argv[optind];
+		outFIFO = argv[optind + 1];
 	}
 
 #define REQUIRE(arg, name) \
