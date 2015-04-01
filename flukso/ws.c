@@ -36,6 +36,7 @@ static unsigned port;
 static const char* user;
 static const char* device;
 static const char* caPath;
+static int useSSL;
 static char wsPath[4096];
 static unsigned char devKey[128], devKeyLen;
 static bool forked, forkWhenReady;
@@ -256,7 +257,6 @@ static void runDevice()
 		exit(ERR_INTERNAL);
 	}
 
-	int useSSL = caPath ? 1 : 0;
 	struct libwebsocket* socket = libwebsocket_client_connect(context, host, port, useSSL, wsPath,
 			host, NULL, protocols[0].name, -1);
 	if (!socket) {
@@ -318,6 +318,7 @@ enum {
 	WS_ARG_DEVICE,
 	WS_ARG_KEY,
 	WS_ARG_CA_PATH,
+	WS_ARG_SSL,
 	WS_ARG_FORK,
 	WS_ARG_HELP,
 };
@@ -329,6 +330,7 @@ static const struct option options[] = {
 	{ "device", required_argument, NULL, WS_ARG_DEVICE },
 	{ "key",    required_argument, NULL, WS_ARG_KEY },
 	{ "capath", required_argument, NULL, WS_ARG_CA_PATH },
+	{ "ssl",    no_argument,       NULL, WS_ARG_SSL },
 	{ "fork",   no_argument,       NULL, WS_ARG_FORK },
 	{ "help",   no_argument,       NULL, WS_ARG_HELP },
 	{ 0, },
@@ -396,7 +398,10 @@ int main(int argc, char* argv[])
 		}
 		case WS_ARG_CA_PATH:
 			caPath = optarg;
+			useSSL = 1;
 			break;
+		case WS_ARG_SSL:
+			useSSL = 1;
 		case WS_ARG_FORK:
 			forkWhenReady = true;
 			break;
