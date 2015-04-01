@@ -113,7 +113,7 @@ void open_in_out_fifos()
 				exit(ERR_ARG);
 			}
 			int value = 0;
-			fcntl(fd, F_SETFL, O_NONBLOCK, &value);
+			fcntl(STDOUT_FILENO, F_SETFL, O_NONBLOCK, &value);
 			return;
 		}
 
