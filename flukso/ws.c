@@ -417,9 +417,15 @@ int main(int argc, char* argv[])
 			return ERR_ARG;
 		}
 
-		int fd = open(argv[optind], O_RDONLY);
+		int fd = open(argv[optind], O_RDONLY | O_NONBLOCK);
 		if (fd < 0 || dup2(fd, STDIN_FILENO) < 0 || close(fd)) {
 			ws_log("could not open in fifo; %s", strerror(errno));
+			return ERR_ARG;
+		}
+
+		struct pollfd pfd = {0, POLLIN, 0};
+		if (poll(&pfd, 1, -1) < 0) {
+			ws_log("could not open out fifo; %s", strerror(errno));
 			return ERR_ARG;
 		}
 
