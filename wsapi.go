@@ -318,7 +318,7 @@ func (api *wsDeviceAPI) Run() error {
 			api.dispatch.WriteJSON(v1MessageOut{Error: apiErr})
 		} else {
 			now := time.Now().Unix()
-			api.dispatch.WriteJSON(v1MessageOut{Command: "ok", Now: &now})
+			api.dispatch.WriteJSON(v1MessageOut{Now: &now})
 		}
 	}
 
@@ -688,10 +688,10 @@ func (c *wsClientDevice) executeCommand(cmd *v1MessageOut) error {
 	if err := c.dispatch.ReceiveJSON(&result); err != nil {
 		return err
 	}
-	if result.Command != "ok" {
-		return result.Error
+	if result.Error == nil {
+		return nil
 	}
-	return nil
+	return result.Error
 }
 
 func (c *wsClientDevice) Update(values map[string][]Measurement) error {
