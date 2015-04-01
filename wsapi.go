@@ -47,6 +47,7 @@ type v1MessageIn struct {
 
 type v1MessageOut struct {
 	Command string      `json:"cmd,omitempty"`
+	Now     *int64      `json:"now,omitempty"`
 	Error   *v1Error    `json:"error,omitempty"`
 	Args    interface{} `json:"args,omitempty"`
 }
@@ -316,7 +317,8 @@ func (api *wsDeviceAPI) Run() error {
 		if apiErr != nil {
 			api.dispatch.WriteJSON(v1MessageOut{Error: apiErr})
 		} else {
-			api.dispatch.WriteJSON(v1MessageOut{Command: "ok"})
+			now := time.Now().Unix()
+			api.dispatch.WriteJSON(v1MessageOut{Command: "ok", Now: &now})
 		}
 	}
 
