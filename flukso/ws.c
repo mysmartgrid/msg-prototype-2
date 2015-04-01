@@ -112,8 +112,7 @@ void open_in_out_fifos()
 				ws_log("could not open out fifo; %s", strerror(errno));
 				exit(ERR_ARG);
 			}
-			int value = 0;
-			fcntl(STDOUT_FILENO, F_SETFL, O_NONBLOCK, &value);
+			fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) & ~O_NONBLOCK);
 			return;
 		}
 
@@ -322,11 +321,12 @@ static void runDevice()
 				}
 				inputBuffer[inputBufferLength++] = buffer;
 			}
-			if (errno != EAGAIN && errno != EINPROGRESS && errno != 0) {
+			bool eol = buffer == '\r' || buffer == '\n';
+			if (!eol && errno != EAGAIN && errno != EINPROGRESS) {
 				perror("read(0)");
 				exit(1);
 			}
-			if ((buffer == '\r' || buffer == '\n') && inputBufferLength > 0) {
+			if (eol && inputBufferLength > 0) {
 				libwebsocket_callback_on_writable(context, socket);
 				pollSet[0].events = 0;
 				pollSet[0].revents = 0;
