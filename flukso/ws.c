@@ -402,6 +402,7 @@ int main(int argc, char* argv[])
 			break;
 		case WS_ARG_SSL:
 			useSSL = 1;
+			break;
 		case WS_ARG_FORK:
 			forkWhenReady = true;
 			break;
