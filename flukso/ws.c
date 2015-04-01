@@ -116,6 +116,9 @@ void open_in_out_fifos()
 			fcntl(fd, F_SETFL, O_NONBLOCK, &value);
 			return;
 		}
+
+		ws_log("could not open out fifo; %s", strerror(errno));
+		exit(ERR_ARG);
 	}
 }
 
