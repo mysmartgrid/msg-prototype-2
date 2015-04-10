@@ -84,12 +84,22 @@ enum {
 	CS_BRIDGING,
 };
 
-static int clientState = CS_AUTH_INIT;
+enum {
+	CR_STILL_OPEN,
+	CR_AUTH_FAILED,
+	CR_PEER_CLOSED,
+	CR_PEER_LOST,
+	CR_CONNECTION_ERROR,
+};
+
+static int clientState;
 static unsigned char response[32];
 static struct pollfd pollSet[2];
 static char inputBuffer[4096];
 static unsigned inputBufferLength;
 static const char authResponseOK[] = "proceed";
+static int websocketCloseReason;
+static int initialSetupComplete;
 
 void open_in_out_fifos()
 {
@@ -144,6 +154,10 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 		enum libwebsocket_callback_reasons reason, void *user, void *in, size_t len)
 {
 	switch (reason) {
+	case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
+		websocketCloseReason = CR_CONNECTION_ERROR;
+		return 0;
+
 	case LWS_CALLBACK_CLIENT_RECEIVE:
 		switch (clientState) {
 		case CS_AUTH_INIT: {
@@ -171,11 +185,15 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 		case CS_AUTH_SENT:
 			if (len != sizeof(authResponseOK) - 1 || memcmp(in, authResponseOK, sizeof(authResponseOK) - 1)) {
 				ws_log("authentication failed: got %*s", (int) len, in);
-				exit(ERR_AUTHENTICATION_FAILED);
+				websocketCloseReason = CR_AUTH_FAILED;
+				return 0;
 			}
-			if (forkWhenReady)
-				go_to_background();
-			open_in_out_fifos();
+			if (!initialSetupComplete) {
+				if (forkWhenReady)
+					go_to_background();
+				open_in_out_fifos();
+				initialSetupComplete = 1;
+			}
 			clientState = CS_BRIDGING;
 			pollSet[0].events = POLLIN;
 			break;
@@ -232,12 +250,12 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 	case LWS_CALLBACK_CLOSED:
 		switch (clientState) {
 		case CS_AUTH_SENT:
-			ws_log("authentication failed");
-			exit(ERR_AUTHENTICATION_FAILED);
+			websocketCloseReason = CR_AUTH_FAILED;
+			return 0;
 
 		default:
-			ws_log("peer closed connection");
-			exit(ERR_NONE);
+			websocketCloseReason = CR_PEER_CLOSED;
+			return 0;
 		}
 		break;
 
@@ -253,8 +271,9 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 		break;
 
 	case LWS_CALLBACK_WSI_DESTROY:
-		ws_log("websocket closed unexpectedly");
-		exit(ERR_NETWORK);
+		if (!websocketCloseReason)
+			websocketCloseReason = CR_PEER_LOST;
+		return 0;
 
 	default:
 		break;
@@ -303,10 +322,12 @@ static void runDevice()
 
 	fcntl(0, F_SETFL, O_NONBLOCK);
 
+	clientState = CS_AUTH_INIT;
+	websocketCloseReason = CR_STILL_OPEN;
 	// run once to register the socket in pollSet
 	libwebsocket_service(context, 0);
 
-	while (poll(pollSet, 2, -1) >= 0 || errno == EINTR) {
+	while (websocketCloseReason == CR_STILL_OPEN && (poll(pollSet, 2, -1) >= 0 || errno == EINTR)) {
 		if (pollSet[0].revents & ~POLLIN)
 			exit(ERR_PIPE);
 		if (pollSet[0].revents & POLLIN) {
@@ -476,7 +497,29 @@ int main(int argc, char* argv[])
 		return ERR_ARG;
 	}
 
-	runDevice();
+	while (true) {
+		runDevice();
+
+		switch (websocketCloseReason) {
+		case CR_AUTH_FAILED:
+			ws_log("authentication failed");
+			break;
+
+		case CR_PEER_CLOSED:
+			ws_log("peer closed connection");
+			break;
+
+		case CR_PEER_LOST:
+			ws_log("unexpeccted close");
+			break;
+
+		case CR_CONNECTION_ERROR:
+			ws_log("connection error");
+			break;
+		}
+
+		poll(0, 0, 10000);
+	}
 
 	return ERR_NONE;
 }
