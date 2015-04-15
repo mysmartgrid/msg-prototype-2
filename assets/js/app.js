@@ -205,6 +205,9 @@ angular.module("msgp", [])
 			var mergeGraphData = function(data) {
 				var needsSorting = false;
 
+				while (graphData.length > 0 && isNaN(graphData[graphData.length - 1][1]))
+					graphData.pop();
+
 				for (var i = 0; i < data.length; i++) {
 					var at = new Date(Math.floor(data[i][0]));
 
@@ -222,6 +225,7 @@ angular.module("msgp", [])
 				}
 
 				if (needsSorting) {
+					graphData = graphData.filter(function(a) { return !isNaN(a[1]); });
 					graphData.sort(function(a, b) { return a[0] - b[0]; });
 					var data = graphData;
 					graphData = [];
