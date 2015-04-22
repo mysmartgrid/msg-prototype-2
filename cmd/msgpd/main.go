@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"msgp"
 	msgpdb "msgp/db"
@@ -32,6 +33,7 @@ type cmdlineArgs struct {
 	udbPath                                      *string
 	influxAddr, influxDb, influxUser, influxPass *string
 	sslCert, sslKey                              *string
+	deviceProxyConfig                            *string
 	motherlode                                   *bool
 }
 
@@ -40,22 +42,27 @@ const (
 )
 
 var args = cmdlineArgs{
-	listen:     flag.String("listen", ":8080", "listen address"),
-	assets:     flag.String("assets", "./assets", "assets path"),
-	templates:  flag.String("templates", "./templates", "template path"),
-	udbPath:    flag.String("userdb", "", "path to user database"),
-	influxAddr: flag.String("influx-addr", "", "address of influxdb"),
-	influxDb:   flag.String("influx-db", "", "influxdb database name"),
-	influxUser: flag.String("influx-user", "", "username for influxdb"),
-	influxPass: flag.String("influx-pass", "", "password for influxdb"),
-	sslCert:    flag.String("ssl-cert", "", "ssl certificate file"),
-	sslKey:     flag.String("ssl-key", "", "ssl key file"),
-	motherlode: flag.Bool("motherlode", false, ""),
+	listen:            flag.String("listen", ":8080", "listen address"),
+	assets:            flag.String("assets", "./assets", "assets path"),
+	templates:         flag.String("templates", "./templates", "template path"),
+	udbPath:           flag.String("userdb", "", "path to user database"),
+	influxAddr:        flag.String("influx-addr", "", "address of influxdb"),
+	influxDb:          flag.String("influx-db", "", "influxdb database name"),
+	influxUser:        flag.String("influx-user", "", "username for influxdb"),
+	influxPass:        flag.String("influx-pass", "", "password for influxdb"),
+	sslCert:           flag.String("ssl-cert", "", "ssl certificate file"),
+	sslKey:            flag.String("ssl-key", "", "ssl key file"),
+	motherlode:        flag.Bool("motherlode", false, ""),
+	deviceProxyConfig: flag.String("dev-proxy-conf", "", "device->msg proxy config"),
 }
 
 var templates *template.Template
 var db msgpdb.Db
 var cookieStore = sessions.NewCookieStore([]byte("test-key"))
+var proxyConf struct {
+	PostUrl    string
+	DeviceKeys map[string]string
+}
 
 func init() {
 	flag.Parse()
@@ -72,8 +79,7 @@ func init() {
 
 	bailIfMissing := func(value *string, flag string) {
 		if *value == "" {
-			log.Fatal(flag + " missing")
-			os.Exit(1)
+			log.Fatal("%v missing", flag)
 		}
 	}
 
@@ -88,6 +94,16 @@ func init() {
 	}
 	if *args.sslKey != "" {
 		bailIfMissing(args.sslCert, "-ssl-cert")
+	}
+
+	if *args.deviceProxyConfig != "" {
+		fcontents, err := ioutil.ReadFile(*args.deviceProxyConfig)
+		if err != nil {
+			log.Fatal("could not read device key map: %v", err.Error())
+		}
+		if err := json.Unmarshal(fcontents, &proxyConf); err != nil {
+			log.Fatal("could not load device key map: %v", err.Error())
+		}
 	}
 
 	templates = template.New("")
@@ -227,6 +243,19 @@ func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
 	}
 	defer x.Close()
 	x.RunDevice(mux.Vars(r)["device"])
+}
+
+func wsHandlerDeviceProxy(w http.ResponseWriter, r *http.Request) {
+	x := msgp.WSAPI{
+		Db:      db,
+		Hub:     h,
+		Writer:  w,
+		Request: r,
+		User:    mux.Vars(r)["user"],
+	}
+	defer x.Close()
+	devId := mux.Vars(r)["device"]
+	x.RunDeviceProxy(devId, proxyConf.DeviceKeys[devId], proxyConf.PostUrl)
 }
 
 func handlerRegisteredDevice(w http.ResponseWriter, r *http.Request) {
@@ -556,26 +585,30 @@ func userDevicesRemove(w http.ResponseWriter, r *http.Request) {
 func main() {
 	router := mux.NewRouter()
 
-	router.HandleFunc("/", loggedInSwitch(wsTemplate("index_user"), staticTemplate("index_nouser"))).Methods("GET")
-	router.HandleFunc("/user/login", staticTemplate("user-login")).Methods("GET")
-	router.HandleFunc("/user/login", doLogin).Methods("POST")
-	router.HandleFunc("/user/logout", doLogout).Methods("GET")
-	router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
-	router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
-	router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
-	router.HandleFunc("/user/devices/add", defaultHeaders(userDevicesAdd)).Methods("GET", "POST")
-	router.HandleFunc("/user/devices/remove/{device}", userDevicesRemove).Methods("POST")
+	if *args.deviceProxyConfig == "" {
+		router.HandleFunc("/", loggedInSwitch(wsTemplate("index_user"), staticTemplate("index_nouser"))).Methods("GET")
+		router.HandleFunc("/user/login", staticTemplate("user-login")).Methods("GET")
+		router.HandleFunc("/user/login", doLogin).Methods("POST")
+		router.HandleFunc("/user/logout", doLogout).Methods("GET")
+		router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
+		router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
+		router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
+		router.HandleFunc("/user/devices/add", defaultHeaders(userDevicesAdd)).Methods("GET", "POST")
+		router.HandleFunc("/user/devices/remove/{device}", userDevicesRemove).Methods("POST")
 
-	if *args.motherlode {
-		router.HandleFunc("/admin", defaultHeaders(adminHandler))
-		router.HandleFunc("/admin/preload/{users}/{devices}/{sensors}", adminPreload).Methods("POST")
+		if *args.motherlode {
+			router.HandleFunc("/admin", defaultHeaders(adminHandler))
+			router.HandleFunc("/admin/preload/{users}/{devices}/{sensors}", adminPreload).Methods("POST")
+		}
+
+		router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
+		router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
+		router.HandleFunc("/ws/regdevice/{device}", handlerRegisteredDevice).Methods("GET")
+		router.HandleFunc("/ws/regdevice/{device}", registerDevice).Methods("POST")
+		router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
+	} else {
+		router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDeviceProxy)
 	}
-
-	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
-	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
-	router.HandleFunc("/ws/regdevice/{device}", handlerRegisteredDevice).Methods("GET")
-	router.HandleFunc("/ws/regdevice/{device}", registerDevice).Methods("POST")
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
 
 	http.Handle("/", router)
 

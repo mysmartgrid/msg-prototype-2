@@ -1,8 +1,10 @@
 package msgp
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
@@ -10,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
+	"io/ioutil"
 	"log"
 	"msgp/db"
 	"msgp/hub"
@@ -33,6 +36,14 @@ type wsDeviceAPI struct {
 	*WSAPI
 
 	Device string
+}
+
+type wsDeviceProxyAPI struct {
+	*WSAPI
+
+	Device  string
+	Key     string
+	PostUrl string
 }
 
 type wsUserAPI struct {
@@ -191,6 +202,14 @@ func (api *WSAPI) RunDevice(device string) error {
 		return err
 	}
 	devapi := wsDeviceAPI{api, device}
+	return devapi.Run()
+}
+
+func (api *WSAPI) RunDeviceProxy(device, key, postUrl string) error {
+	if err := api.prepare(deviceApiProtocols); err != nil {
+		return err
+	}
+	devapi := wsDeviceProxyAPI{api, device, key, postUrl}
 	return devapi.Run()
 }
 
@@ -429,6 +448,144 @@ func (api *wsDeviceAPI) doUpdateMetadata(msg *v1MessageIn) *v1Error {
 
 		return nil
 	})
+}
+
+func (api *wsDeviceProxyAPI) authenticateDevice() (result error) {
+	var buf [sha256.Size]byte
+
+	if _, err := rand.Read(buf[:]); err != nil {
+		return err
+	}
+
+	challenge := hex.EncodeToString(buf[:])
+	api.dispatch.Write(challenge)
+
+	msgType, msg, err := api.dispatch.Receive()
+	switch {
+	case err != nil:
+		return err
+	case msgType != websocket.TextMessage:
+		return protocolViolation
+	}
+
+	msg, err = hex.DecodeString(string(msg))
+	if err != nil {
+		return err
+	}
+
+	devkey, err := hex.DecodeString(api.Key)
+	if err != nil {
+		return err
+	}
+
+	mac := hmac.New(sha256.New, devkey)
+	mac.Write(buf[:])
+	expected := mac.Sum(nil)
+
+	if !hmac.Equal(msg, expected) {
+		result = notAuthorized
+		return
+	}
+	result = api.dispatch.Write("proceed")
+	return
+}
+
+func (api *wsDeviceProxyAPI) Run() error {
+	var err error
+
+	if err = api.authenticateDevice(); err != nil {
+		goto fail
+	}
+
+	for {
+		var msg v1MessageIn
+
+		if err = api.dispatch.ReceiveJSON(&msg); err != nil {
+			goto fail
+		}
+
+		var apiErr *v1Error
+
+		switch msg.Command {
+		case "update":
+			apiErr = api.doUpdate(&msg)
+		default:
+			apiErr = badCommand(msg.Command)
+		}
+
+		if apiErr != nil {
+			api.dispatch.WriteJSON(v1MessageOut{Error: apiErr})
+		} else {
+			now := time.Now().Unix()
+			api.dispatch.WriteJSON(v1MessageOut{Now: &now})
+		}
+	}
+
+	return nil
+
+fail:
+	api.dispatch.CloseWith(websocket.CloseProtocolError, err.Error())
+	api.dispatch = nil
+	return err
+}
+
+func (api *wsDeviceProxyAPI) doUpdate(msg *v1MessageIn) *v1Error {
+	var args v1DeviceCmdUpdateArgs
+
+	if err := json.Unmarshal(msg.Args, &args); err != nil {
+		return invalidInput(err.Error(), "")
+	}
+
+	if len(args.Values) != 1 {
+		return invalidInput("exactly one sensor required", "")
+	}
+
+	var buf bytes.Buffer
+	var sensor string
+	buf.WriteString(`{"measurements":[`)
+	for s, values := range args.Values {
+		sensor = s
+		writtenAny := false
+		for _, value := range values {
+			if writtenAny {
+				buf.WriteString(",")
+			}
+			buf.WriteString(fmt.Sprintf("[%v,%v]", value.Time.Unix(), value.Value))
+			writtenAny = true
+		}
+	}
+	buf.WriteString(`]}`)
+
+	body := buf.Bytes()
+
+	mac := hmac.New(sha1.New, []byte(api.Key))
+	mac.Write(body)
+
+	req, err := http.NewRequest("POST", api.PostUrl + sensor, &buf)
+	if err != nil {
+		return operationFailed(err.Error())
+	}
+	req.Header["Content-Type"] = []string{"application/json"}
+	req.Header["X-Version"] = []string{"1.0"}
+	req.Header["X-Digest"] = []string{hex.EncodeToString(mac.Sum(nil))}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return operationFailed(err.Error())
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return operationFailed(resp.Status)
+	}
+
+	respBody, _ := ioutil.ReadAll(resp.Body)
+	respBodyStr := string(respBody)
+	if respBodyStr != `{"response":"ok"}` {
+		return operationFailed(respBodyStr)
+	}
+
+	return nil
 }
 
 func (api *wsUserAPI) Run() error {
