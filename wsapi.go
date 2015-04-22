@@ -152,7 +152,7 @@ func (e *v1Error) Error() string {
 	return result
 }
 
-func (api *WSAPI) prepare(protocols []string) error {
+func (api *WSAPI) prepare(protocols []string, checkUserDb bool) error {
 	if api.dispatch != nil {
 		return nil
 	}
@@ -162,16 +162,18 @@ func (api *WSAPI) prepare(protocols []string) error {
 		return methodNotAllowed
 	}
 
-	err := api.Db.View(func(tx db.Tx) error {
-		user := tx.User(api.User)
-		if user == nil {
-			http.Error(api.Writer, notAuthorized.Error(), http.StatusUnauthorized)
-			return notAuthorized
+	if checkUserDb {
+		err := api.Db.View(func(tx db.Tx) error {
+			user := tx.User(api.User)
+			if user == nil {
+				http.Error(api.Writer, notAuthorized.Error(), http.StatusUnauthorized)
+				return notAuthorized
+			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
-		return nil
-	})
-	if err != nil {
-		return err
 	}
 
 	upgrader := websocket.Upgrader{
@@ -198,7 +200,7 @@ func (api *WSAPI) prepare(protocols []string) error {
 }
 
 func (api *WSAPI) RunDevice(device string) error {
-	if err := api.prepare(deviceApiProtocols); err != nil {
+	if err := api.prepare(deviceApiProtocols, true); err != nil {
 		return err
 	}
 	devapi := wsDeviceAPI{api, device}
@@ -206,7 +208,7 @@ func (api *WSAPI) RunDevice(device string) error {
 }
 
 func (api *WSAPI) RunDeviceProxy(device, key, postUrl string) error {
-	if err := api.prepare(deviceApiProtocols); err != nil {
+	if err := api.prepare(deviceApiProtocols, false); err != nil {
 		return err
 	}
 	devapi := wsDeviceProxyAPI{api, device, key, postUrl}
@@ -214,7 +216,7 @@ func (api *WSAPI) RunDeviceProxy(device, key, postUrl string) error {
 }
 
 func (api *WSAPI) RunUser() error {
-	if err := api.prepare(userApiProtocols); err != nil {
+	if err := api.prepare(userApiProtocols, true); err != nil {
 		return err
 	}
 	uapi := wsUserAPI{api}

@@ -67,6 +67,17 @@ var proxyConf struct {
 func init() {
 	flag.Parse()
 
+	if *args.deviceProxyConfig != "" {
+		fcontents, err := ioutil.ReadFile(*args.deviceProxyConfig)
+		if err != nil {
+			log.Fatalf("could not read device key map: %v", err.Error())
+		}
+		if err := json.Unmarshal(fcontents, &proxyConf); err != nil {
+			log.Fatalf("could not load device key map: %v", err.Error())
+		}
+		return;
+	}
+
 	switch fi, err := os.Stat(*args.assets); true {
 	case err != nil:
 		log.Fatal("bad -assets: ", err)
@@ -79,7 +90,7 @@ func init() {
 
 	bailIfMissing := func(value *string, flag string) {
 		if *value == "" {
-			log.Fatal("%v missing", flag)
+			log.Fatalf("%v missing", flag)
 		}
 	}
 
@@ -94,16 +105,6 @@ func init() {
 	}
 	if *args.sslKey != "" {
 		bailIfMissing(args.sslCert, "-ssl-cert")
-	}
-
-	if *args.deviceProxyConfig != "" {
-		fcontents, err := ioutil.ReadFile(*args.deviceProxyConfig)
-		if err != nil {
-			log.Fatal("could not read device key map: %v", err.Error())
-		}
-		if err := json.Unmarshal(fcontents, &proxyConf); err != nil {
-			log.Fatal("could not load device key map: %v", err.Error())
-		}
 	}
 
 	templates = template.New("")
