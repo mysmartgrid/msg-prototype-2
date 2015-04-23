@@ -242,14 +242,15 @@ static int msg_1_device_callback(struct libwebsocket_context *context, struct li
 		break;
 
 	case LWS_CALLBACK_ADD_POLL_FD:
-	case LWS_CALLBACK_DEL_POLL_FD:
-		// poll descriptor is already reserved and will never be freed
-		break;
-
+		// can only add a single socket fd, we have an entry for that
 	case LWS_CALLBACK_CHANGE_MODE_POLL_FD:
 		pollSet[1].fd = ((struct libwebsocket_pollargs*) in)->fd;
 		pollSet[1].events = ((struct libwebsocket_pollargs*) in)->events;
 		pollSet[1].revents = ((struct libwebsocket_pollargs*) in)->prev_events;
+		break;
+
+	case LWS_CALLBACK_DEL_POLL_FD:
+		pollSet[1].fd = 0;
 		break;
 
 	case LWS_CALLBACK_WSI_DESTROY:
@@ -282,6 +283,10 @@ static void runDevice()
 		.ssl_ca_filepath = caPath,
 	};
 
+	memset(pollSet, 0, sizeof(pollSet));
+	pollSet[0].fd = 0;
+	pollSet[0].events = 0;
+
 	lws_set_log_level(LLL_ERR | LLL_WARN, NULL);
 
 	struct libwebsocket_context* context = libwebsocket_create_context(&ccinfo);
@@ -296,10 +301,6 @@ static void runDevice()
 		ws_log("connect failed");
 		goto fail_context;
 	}
-
-	memset(pollSet, 0, sizeof(pollSet));
-	pollSet[0].fd = 0;
-	pollSet[0].events = 0;
 
 	fcntl(0, F_SETFL, O_NONBLOCK);
 
