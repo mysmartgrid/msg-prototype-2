@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -44,6 +45,8 @@ type wsDeviceProxyAPI struct {
 	Device  string
 	Key     string
 	PostUrl string
+
+	client *http.Client
 }
 
 type wsUserAPI struct {
@@ -207,11 +210,34 @@ func (api *WSAPI) RunDevice(device string) error {
 	return devapi.Run()
 }
 
-func (api *WSAPI) RunDeviceProxy(device, key, postUrl string) error {
+func (api *WSAPI) RunDeviceProxy(device, key, postUrl, certFile string) error {
 	if err := api.prepare(deviceApiProtocols, false); err != nil {
 		return err
 	}
-	devapi := wsDeviceProxyAPI{api, device, key, postUrl}
+
+	client := http.DefaultClient
+
+	if certFile != "" {
+		cert, err := ioutil.ReadFile(certFile)
+		if err != nil {
+			return err
+		}
+
+		certPool := x509.NewCertPool()
+		if !certPool.AppendCertsFromPEM(cert) {
+			return errors.New("could not parse cert")
+		}
+
+		tlsConfig := &tls.Config{
+			RootCAs: certPool,
+		}
+		client = &http.Client{
+			Transport: &http.Transport{TLSClientConfig: tlsConfig},
+			Timeout: 2 * time.Second,
+		}
+	}
+
+	devapi := wsDeviceProxyAPI{api, device, key, postUrl, client}
 	return devapi.Run()
 }
 
@@ -571,7 +597,7 @@ func (api *wsDeviceProxyAPI) doUpdate(msg *v1MessageIn) *v1Error {
 	req.Header["X-Version"] = []string{"1.0"}
 	req.Header["X-Digest"] = []string{hex.EncodeToString(mac.Sum(nil))}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := api.client.Do(req)
 	if err != nil {
 		return operationFailed(err.Error())
 	}

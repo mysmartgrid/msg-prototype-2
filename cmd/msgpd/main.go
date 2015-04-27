@@ -61,6 +61,7 @@ var db msgpdb.Db
 var cookieStore = sessions.NewCookieStore([]byte("test-key"))
 var proxyConf struct {
 	PostUrl    string
+	CertPath   string
 	DeviceKeys map[string]string
 }
 
@@ -256,7 +257,7 @@ func wsHandlerDeviceProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer x.Close()
 	devId := mux.Vars(r)["device"]
-	x.RunDeviceProxy(devId, proxyConf.DeviceKeys[devId], proxyConf.PostUrl)
+	x.RunDeviceProxy(devId, proxyConf.DeviceKeys[devId], proxyConf.PostUrl, proxyConf.CertPath)
 }
 
 func handlerRegisteredDevice(w http.ResponseWriter, r *http.Request) {
