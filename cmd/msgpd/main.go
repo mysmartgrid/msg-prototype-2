@@ -76,7 +76,7 @@ func init() {
 		if err := json.Unmarshal(fcontents, &proxyConf); err != nil {
 			log.Fatalf("could not load device key map: %v", err.Error())
 		}
-		return;
+		return
 	}
 
 	switch fi, err := os.Stat(*args.assets); true {
