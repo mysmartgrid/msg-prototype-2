@@ -4,16 +4,14 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/mysmartgrid/msg2api"
 	"io/ioutil"
 	"log"
-	"msgp/db"
-	"msgp/hub"
+	"github.com/mysmartgrid/msg-prototype-2/db"
+	"github.com/mysmartgrid/msg-prototype-2/hub"
 	"net/http"
 	"time"
 )
@@ -30,17 +28,21 @@ type measurementWithMetadata struct {
 	Value          float64
 }
 
-type wsDevApi struct {
+type WsDevApi struct {
 	User, Device string
 	Db           db.Db
 	Hub          *hub.Hub
 	Writer       http.ResponseWriter
 	Request      *http.Request
 
+	Key        []byte
+	PostUrl    string
+	PostClient *http.Client
+
 	server *msg2api.DeviceServer
 }
 
-func (api *wsDevApi) Run() error {
+func (api *WsDevApi) Run() error {
 	var key []byte
 
 	err := api.Db.View(func(tx db.Tx) error {
@@ -75,7 +77,13 @@ func (api *wsDevApi) Run() error {
 	return api.server.Run(key)
 }
 
-func (api *wsDevApi) viewDevice(fn func(tx db.Tx, user db.User, device db.Device) *msg2api.Error) (err *msg2api.Error) {
+func (api *WsDevApi) Close() {
+	if api.server != nil {
+		api.server.Close()
+	}
+}
+
+func (api *WsDevApi) viewDevice(fn func(tx db.Tx, user db.User, device db.Device) *msg2api.Error) (err *msg2api.Error) {
 	api.Db.View(func(tx db.Tx) error {
 		u := tx.User(api.User)
 		if u == nil {
@@ -93,7 +101,7 @@ func (api *wsDevApi) viewDevice(fn func(tx db.Tx, user db.User, device db.Device
 	return
 }
 
-func (api *wsDevApi) updateDevice(fn func(tx db.Tx, user db.User, device db.Device) *msg2api.Error) (err *msg2api.Error) {
+func (api *WsDevApi) updateDevice(fn func(tx db.Tx, user db.User, device db.Device) *msg2api.Error) (err *msg2api.Error) {
 	api.Db.Update(func(tx db.Tx) error {
 		u := tx.User(api.User)
 		if u == nil {
@@ -111,7 +119,54 @@ func (api *wsDevApi) updateDevice(fn func(tx db.Tx, user db.User, device db.Devi
 	return
 }
 
-func (api *wsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.Error {
+func (api *WsDevApi) postValuesToOldMSG(sensor string, values []msg2api.Measurement) *msg2api.Error {
+	var buf bytes.Buffer
+	buf.WriteString(`{"measurements":[`)
+	writtenAny := false
+	for _, value := range values {
+		if writtenAny {
+			buf.WriteString(",")
+		}
+		buf.WriteString(fmt.Sprintf("[%v,%v]", value.Time.Unix(), value.Value))
+		writtenAny = true
+	}
+	buf.WriteString(`]}`)
+
+	mac := hmac.New(sha1.New, api.Key)
+	mac.Write(buf.Bytes())
+
+	req, err := http.NewRequest("POST", api.PostUrl+sensor, &buf)
+	if err != nil {
+		return &msg2api.Error{Code: "operation failed", Extra: err.Error()}
+	}
+	req.Header["Content-Type"] = []string{"application/json"}
+	req.Header["X-Version"] = []string{"1.0"}
+	req.Header["X-Digest"] = []string{hex.EncodeToString(mac.Sum(nil))}
+
+	resp, err := api.PostClient.Do(req)
+	if err != nil {
+		return &msg2api.Error{Code: "operation failed", Extra: err.Error()}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return &msg2api.Error{Code: "operation failed", Extra: resp.Status}
+	}
+
+	respBody, _ := ioutil.ReadAll(resp.Body)
+	respBodyStr := string(respBody)
+	if respBodyStr != `{"response":"ok"}` {
+		return &msg2api.Error{Code: "operation failed", Extra: respBodyStr}
+	}
+
+	return nil
+}
+
+func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.Error {
+	if len(values) != 1 {
+		return &msg2api.Error{Code: "invalid input", Extra: "exactly one sensor required"}
+	}
+
 	return api.viewDevice(func(tx db.Tx, user db.User, device db.Device) *msg2api.Error {
 		for name, _ := range values {
 			if device.Sensor(name) == nil {
@@ -120,6 +175,10 @@ func (api *wsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 		}
 
 		for sensor, values := range values {
+			if err := api.postValuesToOldMSG(sensor, values); err != nil {
+				return err
+			}
+
 			s := device.Sensor(sensor)
 			for _, value := range values {
 				err := api.Db.AddReading(user, device, s, value.Time, value.Value)
@@ -130,13 +189,14 @@ func (api *wsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 			}
 		}
 
+		api.server.RequestPrint(time.Now().String())
 		return nil
 	})
 
 	return nil
 }
 
-func (api *wsDevApi) doAddSensor(name string) *msg2api.Error {
+func (api *WsDevApi) doAddSensor(name string) *msg2api.Error {
 	return api.updateDevice(func(tx db.Tx, user db.User, device db.Device) *msg2api.Error {
 		_, err := device.AddSensor(name)
 		if err != nil {
@@ -146,7 +206,7 @@ func (api *wsDevApi) doAddSensor(name string) *msg2api.Error {
 	})
 }
 
-func (api *wsDevApi) doRemoveSensor(name string) *msg2api.Error {
+func (api *WsDevApi) doRemoveSensor(name string) *msg2api.Error {
 	return api.updateDevice(func(tx db.Tx, user db.User, device db.Device) *msg2api.Error {
 		if err := device.RemoveSensor(name); err != nil {
 			return &msg2api.Error{Code: "operation failed", Extra: err.Error()}
@@ -164,7 +224,7 @@ func (api *wsDevApi) doRemoveSensor(name string) *msg2api.Error {
 	})
 }
 
-func (api *wsDevApi) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api.Error {
+func (api *WsDevApi) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api.Error {
 	return api.updateDevice(func(tx db.Tx, user db.User, device db.Device) *msg2api.Error {
 		if metadata.Name != "" {
 			device.SetName(metadata.Name)
@@ -188,105 +248,7 @@ func (api *wsDevApi) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api
 	})
 }
 
-type wsProxyDevApi struct {
-	Device, PostUrl, CertFile string
-	Key                       []byte
-	Writer                    http.ResponseWriter
-	Request                   *http.Request
-
-	server *msg2api.DeviceServer
-	client *http.Client
-}
-
-func (api *wsProxyDevApi) Run() error {
-	client := http.DefaultClient
-
-	if api.CertFile != "" {
-		cert, err := ioutil.ReadFile(api.CertFile)
-		if err != nil {
-			return err
-		}
-
-		certPool := x509.NewCertPool()
-		if !certPool.AppendCertsFromPEM(cert) {
-			return errors.New("could not parse cert")
-		}
-
-		tlsConfig := &tls.Config{
-			RootCAs: certPool,
-		}
-		client = &http.Client{
-			Transport: &http.Transport{TLSClientConfig: tlsConfig},
-			Timeout:   2 * time.Second,
-		}
-	}
-
-	api.client = client
-
-	server, err := msg2api.NewDeviceServer(api.Writer, api.Request)
-	if err != nil {
-		return err
-	}
-
-	api.server = server
-	api.server.Update = api.doUpdate
-	return api.server.Run(api.Key)
-}
-
-func (api *wsProxyDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.Error {
-	if len(values) != 1 {
-		return &msg2api.Error{Code: "invalid input", Extra: "exactly one sensor required"}
-	}
-
-	var buf bytes.Buffer
-	var sensor string
-	buf.WriteString(`{"measurements":[`)
-	for s, values := range values {
-		sensor = s
-		writtenAny := false
-		for _, value := range values {
-			if writtenAny {
-				buf.WriteString(",")
-			}
-			buf.WriteString(fmt.Sprintf("[%v,%v]", value.Time.Unix(), value.Value))
-			writtenAny = true
-		}
-	}
-	buf.WriteString(`]}`)
-
-	body := buf.Bytes()
-
-	mac := hmac.New(sha1.New, []byte(api.Key))
-	mac.Write(body)
-
-	req, err := http.NewRequest("POST", api.PostUrl+sensor, &buf)
-	if err != nil {
-		return &msg2api.Error{Code: "operation failed", Extra: err.Error()}
-	}
-	req.Header["Content-Type"] = []string{"application/json"}
-	req.Header["X-Version"] = []string{"1.0"}
-	req.Header["X-Digest"] = []string{hex.EncodeToString(mac.Sum(nil))}
-
-	resp, err := api.client.Do(req)
-	if err != nil {
-		return &msg2api.Error{Code: "operation failed", Extra: err.Error()}
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return &msg2api.Error{Code: "operation failed", Extra: resp.Status}
-	}
-
-	respBody, _ := ioutil.ReadAll(resp.Body)
-	respBodyStr := string(respBody)
-	if respBodyStr != `{"response":"ok"}` {
-		return &msg2api.Error{Code: "operation failed", Extra: respBodyStr}
-	}
-
-	return nil
-}
-
-type wsUserApi struct {
+type WsUserApi struct {
 	User    string
 	Db      db.Db
 	Hub     *hub.Hub
@@ -296,7 +258,7 @@ type wsUserApi struct {
 	server msg2api.UserServer
 }
 
-func (api *wsUserApi) Run() error {
+func (api *WsUserApi) Run() error {
 	conn := api.Hub.Connect()
 	defer conn.Close()
 	conn.Subscribe(api.User)
@@ -330,7 +292,11 @@ func (api *wsUserApi) Run() error {
 	return api.server.Run()
 }
 
-func (api *wsUserApi) doGetValues(since time.Time, withMetadata bool) error {
+func (api *WsUserApi) Close() {
+	api.server.Close()
+}
+
+func (api *WsUserApi) doGetValues(since time.Time, withMetadata bool) error {
 	return api.Db.View(func(tx db.Tx) error {
 		user := tx.User(api.User)
 		if user == nil {

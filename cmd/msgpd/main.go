@@ -5,6 +5,8 @@ import (
 	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,9 +18,9 @@ import (
 	"html/template"
 	"io/ioutil"
 	"log"
-	"msgp"
-	msgpdb "msgp/db"
-	"msgp/hub"
+	msgp "github.com/mysmartgrid/msg-prototype-2"
+	msgpdb "github.com/mysmartgrid/msg-prototype-2/db"
+	"github.com/mysmartgrid/msg-prototype-2/hub"
 	"net/http"
 	"os"
 	"path"
@@ -64,6 +66,7 @@ var proxyConf struct {
 	CertPath   string
 	DeviceKeys map[string]string
 }
+var oldApiPostClient *http.Client
 
 func init() {
 	flag.Parse()
@@ -76,7 +79,25 @@ func init() {
 		if err := json.Unmarshal(fcontents, &proxyConf); err != nil {
 			log.Fatalf("could not load device key map: %v", err.Error())
 		}
-		return
+		oldApiPostClient = &http.Client{
+			Timeout: 2 * time.Second,
+		}
+		if proxyConf.CertPath != "" {
+			cert, err := ioutil.ReadFile(proxyConf.CertPath)
+			if err != nil {
+				log.Fatalf("could not load proxy CA: %v", err)
+			}
+
+			certPool := x509.NewCertPool()
+			if !certPool.AppendCertsFromPEM(cert) {
+				log.Fatal("could not parse proxy cert")
+			}
+
+			tlsConfig := &tls.Config{
+				RootCAs: certPool,
+			}
+			oldApiPostClient.Transport = &http.Transport{TLSClientConfig: tlsConfig}
+		}
 	}
 
 	switch fi, err := os.Stat(*args.assets); true {
@@ -224,40 +245,33 @@ func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	x := msgp.WSAPI{
+	x := msgp.WsUserApi{
+		User:    mux.Vars(r)["user"],
 		Db:      db,
 		Hub:     h,
 		Writer:  w,
 		Request: r,
-		User:    mux.Vars(r)["user"],
 	}
 	defer x.Close()
-	x.RunUser()
+	x.Run()
 }
 
 func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
-	x := msgp.WSAPI{
+	x := msgp.WsDevApi{
+		User:    mux.Vars(r)["user"],
+		Device:    mux.Vars(r)["device"],
 		Db:      db,
 		Hub:     h,
 		Writer:  w,
 		Request: r,
-		User:    mux.Vars(r)["user"],
+	}
+	if oldApiPostClient != nil {
+		x.Key = []byte(proxyConf.DeviceKeys[x.Device])
+		x.PostUrl = proxyConf.PostUrl
+		x.PostClient = oldApiPostClient
 	}
 	defer x.Close()
-	x.RunDevice(mux.Vars(r)["device"])
-}
-
-func wsHandlerDeviceProxy(w http.ResponseWriter, r *http.Request) {
-	x := msgp.WSAPI{
-		Db:      db,
-		Hub:     h,
-		Writer:  w,
-		Request: r,
-		User:    mux.Vars(r)["user"],
-	}
-	defer x.Close()
-	devId := mux.Vars(r)["device"]
-	x.RunDeviceProxy(devId, proxyConf.DeviceKeys[devId], proxyConf.PostUrl, proxyConf.CertPath)
+	x.Run()
 }
 
 func handlerRegisteredDevice(w http.ResponseWriter, r *http.Request) {
@@ -587,30 +601,26 @@ func userDevicesRemove(w http.ResponseWriter, r *http.Request) {
 func main() {
 	router := mux.NewRouter()
 
-	if *args.deviceProxyConfig == "" {
-		router.HandleFunc("/", loggedInSwitch(wsTemplate("index_user"), staticTemplate("index_nouser"))).Methods("GET")
-		router.HandleFunc("/user/login", staticTemplate("user-login")).Methods("GET")
-		router.HandleFunc("/user/login", doLogin).Methods("POST")
-		router.HandleFunc("/user/logout", doLogout).Methods("GET")
-		router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
-		router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
-		router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
-		router.HandleFunc("/user/devices/add", defaultHeaders(userDevicesAdd)).Methods("GET", "POST")
-		router.HandleFunc("/user/devices/remove/{device}", userDevicesRemove).Methods("POST")
+	router.HandleFunc("/", loggedInSwitch(wsTemplate("index_user"), staticTemplate("index_nouser"))).Methods("GET")
+	router.HandleFunc("/user/login", staticTemplate("user-login")).Methods("GET")
+	router.HandleFunc("/user/login", doLogin).Methods("POST")
+	router.HandleFunc("/user/logout", doLogout).Methods("GET")
+	router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
+	router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
+	router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
+	router.HandleFunc("/user/devices/add", defaultHeaders(userDevicesAdd)).Methods("GET", "POST")
+	router.HandleFunc("/user/devices/remove/{device}", userDevicesRemove).Methods("POST")
 
-		if *args.motherlode {
-			router.HandleFunc("/admin", defaultHeaders(adminHandler))
-			router.HandleFunc("/admin/preload/{users}/{devices}/{sensors}", adminPreload).Methods("POST")
-		}
-
-		router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
-		router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
-		router.HandleFunc("/ws/regdevice/{device}", handlerRegisteredDevice).Methods("GET")
-		router.HandleFunc("/ws/regdevice/{device}", registerDevice).Methods("POST")
-		router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
-	} else {
-		router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDeviceProxy)
+	if *args.motherlode {
+		router.HandleFunc("/admin", defaultHeaders(adminHandler))
+		router.HandleFunc("/admin/preload/{users}/{devices}/{sensors}", adminPreload).Methods("POST")
 	}
+
+	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
+	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
+	router.HandleFunc("/ws/regdevice/{device}", handlerRegisteredDevice).Methods("GET")
+	router.HandleFunc("/ws/regdevice/{device}", registerDevice).Methods("POST")
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
 
 	http.Handle("/", router)
 
