@@ -447,6 +447,54 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func adminAddUser(w http.ResponseWriter, r *http.Request) {
+	user := r.FormValue("user")
+
+	err := db.Update(func(tx msgpdb.Tx) error {
+		_, err := tx.AddUser(user)
+		return err
+	})
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+	}
+}
+
+func adminUser_AddDev(w http.ResponseWriter, r *http.Request) {
+	user := mux.Vars(r)["user"]
+	device := r.FormValue("device")
+	key := r.FormValue("key")
+	rawKey, err := hex.DecodeString(key)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	err = db.Update(func(tx msgpdb.Tx) error {
+		user := tx.User(user)
+		_, err := user.AddDevice(device, rawKey)
+		return err
+	})
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+	}
+}
+
+func adminDevice_AddSensor(w http.ResponseWriter, r *http.Request) {
+	user := mux.Vars(r)["user"]
+	device := mux.Vars(r)["device"]
+	sensor := r.FormValue("sensor")
+
+	err := db.Update(func(tx msgpdb.Tx) error {
+		user := tx.User(user)
+		device := user.Device(device)
+		_, err := device.AddSensor(sensor)
+		return err
+	})
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+	}
+}
+
 func adminPreload(w http.ResponseWriter, r *http.Request) {
 	parseUInt := func(u *uint64, name string) bool {
 		var err error
@@ -614,6 +662,9 @@ func main() {
 	if *args.motherlode {
 		router.HandleFunc("/admin", defaultHeaders(adminHandler))
 		router.HandleFunc("/admin/preload/{users}/{devices}/{sensors}", adminPreload).Methods("POST")
+		router.HandleFunc("/admin/add-user", adminAddUser).Methods("POST")
+		router.HandleFunc("/admin/user/{user}/add-device", adminUser_AddDev).Methods("POST")
+		router.HandleFunc("/admin/device/{user}/{device}/add-sensor", adminDevice_AddSensor).Methods("POST")
 	}
 
 	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
