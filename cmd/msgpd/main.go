@@ -495,6 +495,21 @@ func adminDevice_AddSensor(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func adminDevice_RemoveSensor(w http.ResponseWriter, r *http.Request) {
+	user := mux.Vars(r)["user"]
+	device := mux.Vars(r)["device"]
+	sensor := r.FormValue("sensor")
+
+	err := db.Update(func(tx msgpdb.Tx) error {
+		user := tx.User(user)
+		device := user.Device(device)
+		return device.RemoveSensor(sensor)
+	})
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+	}
+}
+
 func adminPreload(w http.ResponseWriter, r *http.Request) {
 	parseUInt := func(u *uint64, name string) bool {
 		var err error
@@ -665,6 +680,7 @@ func main() {
 		router.HandleFunc("/admin/add-user", adminAddUser).Methods("POST")
 		router.HandleFunc("/admin/user/{user}/add-device", adminUser_AddDev).Methods("POST")
 		router.HandleFunc("/admin/device/{user}/{device}/add-sensor", adminDevice_AddSensor).Methods("POST")
+		router.HandleFunc("/admin/device/{user}/{device}/remove-sensor", adminDevice_RemoveSensor).Methods("POST")
 	}
 
 	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
