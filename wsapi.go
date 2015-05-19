@@ -255,7 +255,7 @@ type WsUserApi struct {
 	Writer  http.ResponseWriter
 	Request *http.Request
 
-	server msg2api.UserServer
+	server *msg2api.UserServer
 }
 
 func (api *WsUserApi) Run() error {
@@ -288,12 +288,20 @@ func (api *WsUserApi) Run() error {
 		}
 	}()
 
+	server, err := msg2api.NewUserServer(api.Writer, api.Request)
+	if err != nil {
+		return err
+	}
+
+	api.server = server
 	api.server.GetValues = api.doGetValues
 	return api.server.Run()
 }
 
 func (api *WsUserApi) Close() {
-	api.server.Close()
+	if api.server != nil {
+		api.server.Close()
+	}
 }
 
 func (api *WsUserApi) doGetValues(since time.Time, withMetadata bool) error {
