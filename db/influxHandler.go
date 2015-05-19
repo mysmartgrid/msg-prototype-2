@@ -139,7 +139,7 @@ func (h *influxHandler) loadValues(since time.Time, keys []bufferKey) (map[buffe
 }
 
 func (h *influxHandler) removeSeriesFor(user, device, sensor uint64) error {
-	query := fmt.Sprintf("drop series \"%v-%v-%v\"", user, device, sensor)
+	query := fmt.Sprintf("drop series \"%s\"", seriesName(user, device, sensor))
 
 	client := http.Client{Timeout: 1 * time.Second}
 	resp, err := client.Get(h.dbUrl(map[string]string{"q": query}))
