@@ -59,7 +59,6 @@ var args = cmdlineArgs{
 }
 
 var templates *template.Template
-var db msgpdb.Db
 var cookieStore = sessions.NewCookieStore([]byte("test-key"))
 var proxyConf struct {
 	PostUrl    string
@@ -67,6 +66,11 @@ var proxyConf struct {
 	DeviceKeys map[string]string
 }
 var oldApiPostClient *http.Client
+
+var db msgpdb.Db
+var h = hub.New()
+
+var apiCtx msgp.WsApiContext
 
 func init() {
 	flag.Parse()
@@ -173,6 +177,11 @@ func init() {
 		log.Fatal("error opening user db: ", err)
 		os.Exit(1)
 	}
+
+	apiCtx = msgp.WsApiContext{
+		Db: db,
+		Hub: h,
+	}
 }
 
 func getSession(w http.ResponseWriter, r *http.Request) *sessions.Session {
@@ -234,8 +243,6 @@ func staticTemplate(name string) func(http.ResponseWriter, *http.Request) {
 	})
 }
 
-var h = hub.New()
-
 func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 
@@ -246,9 +253,8 @@ func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	x := msgp.WsUserApi{
+		Ctx:     &apiCtx,
 		User:    mux.Vars(r)["user"],
-		Db:      db,
-		Hub:     h,
 		Writer:  w,
 		Request: r,
 	}
@@ -260,8 +266,6 @@ func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
 	x := msgp.WsDevApi{
 		User:    mux.Vars(r)["user"],
 		Device:    mux.Vars(r)["device"],
-		Db:      db,
-		Hub:     h,
 		Writer:  w,
 		Request: r,
 	}
@@ -270,7 +274,11 @@ func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
 		x.PostUrl = proxyConf.PostUrl
 		x.PostClient = oldApiPostClient
 	}
-	defer x.Close()
+	apiCtx.RegisterDevice(&x)
+	defer func() {
+		apiCtx.RemoveDevice(&x)
+		x.Close()
+	}()
 	x.Run()
 }
 

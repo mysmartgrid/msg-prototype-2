@@ -89,6 +89,14 @@ angular.module("msgp", [])
 		socketData.ws.send(JSON.stringify(cmd));
 	};
 
+	socket.requestRealtimeUpdates = function(sensors) {
+		var cmd = {
+			"cmd": "requestRealtimeUpdates",
+			"args": sensors
+		};
+		socketData.ws.send(JSON.stringify(cmd));
+	};
+
 	return socket;
 }])
 .controller("GraphPage", ["$scope", "$interval", "WSUserClient", "wsurl", function($scope, $interval, wsclient, wsurl) {
@@ -97,12 +105,15 @@ angular.module("msgp", [])
 	var getDevice = function(id) {
 		if (!(id in $scope.devices)) {
 			var dev = $scope.devices[id] = {
-				sensors: {}
+				sensors: {},
+				id: id
 			};
 
 			dev.getSensor = function(id) {
 				if (!(id in dev.sensors)) {
-					var sens = dev.sensors[id] = {};
+					var sens = dev.sensors[id] = {
+						id: id
+					};
 
 					sens.update = function(data) {
 						if (sens.graph !== undefined) {
@@ -121,6 +132,18 @@ angular.module("msgp", [])
 			};
 		}
 		return $scope.devices[id];
+	};
+
+	var requestRealtimeUpdates = function() {
+		var sensors = {};
+
+		Object.getOwnPropertyNames($scope.devices).forEach(function(dev) {
+			dev = $scope.devices[dev];
+			sensors[dev.id] = Object.getOwnPropertyNames(dev.sensors);
+		});
+
+		wsclient.requestRealtimeUpdates(sensors);
+		window.setTimeout(requestRealtimeUpdates, 30000);
 	};
 
 	wsclient.onMetadata = function(md) {
@@ -142,6 +165,8 @@ angular.module("msgp", [])
 				msens.name = sens;
 			});
 		});
+
+		requestRealtimeUpdates();
 	};
 	wsclient.onUpdate = function(data) {
 		Object.getOwnPropertyNames(data).forEach(function(did) {

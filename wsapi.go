@@ -13,6 +13,7 @@ import (
 	"github.com/mysmartgrid/msg-prototype-2/db"
 	"github.com/mysmartgrid/msg-prototype-2/hub"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -20,6 +21,9 @@ var (
 	notAuthorized    = errors.New("not authorized")
 	apiNotAuthorized = &msg2api.Error{Code: notAuthorized.Error()}
 	noSensor         = errors.New("sensor not found")
+
+	deviceNotRegistered     = errors.New("device not registered")
+	deviceAlreadyRegistered = errors.New("device already registered")
 )
 
 type measurementWithMetadata struct {
@@ -28,24 +32,73 @@ type measurementWithMetadata struct {
 	Value          float64
 }
 
+type WsApiContext struct {
+	Db  db.Db
+	Hub *hub.Hub
+
+	devices map[string]*WsDevApi
+	devMtx  sync.RWMutex
+}
+
+func (ctx *WsApiContext) RegisterDevice(dev *WsDevApi) (error, *WsDevApi) {
+	ctx.devMtx.Lock()
+	defer ctx.devMtx.Unlock()
+
+	if ctx.devices == nil {
+		ctx.devices = make(map[string]*WsDevApi)
+	}
+
+	if ctx.devices[dev.Device] != nil {
+		return deviceAlreadyRegistered, ctx.devices[dev.Device]
+	}
+
+	ctx.devices[dev.Device] = dev
+	dev.ctx = ctx
+
+	return nil, dev
+}
+
+func (ctx *WsApiContext) WithDevice(device string, fn func(dev *WsDevApi) error) error {
+	ctx.devMtx.RLock()
+	defer ctx.devMtx.RUnlock()
+
+	dev := ctx.devices[device]
+	if dev == nil {
+		return deviceNotRegistered
+	}
+
+	return fn(dev)
+}
+
+func (ctx *WsApiContext) RemoveDevice(dev *WsDevApi) error {
+	ctx.devMtx.Lock()
+	defer ctx.devMtx.Unlock()
+
+	if ctx.devices[dev.Device] == nil {
+		return deviceNotRegistered
+	}
+	delete(ctx.devices, dev.Device)
+	return nil
+}
+
+
 type WsDevApi struct {
+	ctx    *WsApiContext
+	server *msg2api.DeviceServer
+
 	User, Device string
-	Db           db.Db
-	Hub          *hub.Hub
 	Writer       http.ResponseWriter
 	Request      *http.Request
 
 	Key        []byte
 	PostUrl    string
 	PostClient *http.Client
-
-	server *msg2api.DeviceServer
 }
 
 func (api *WsDevApi) Run() error {
 	var key []byte
 
-	err := api.Db.View(func(tx db.Tx) error {
+	err := api.ctx.Db.View(func(tx db.Tx) error {
 		user := tx.User(api.User)
 		if user == nil {
 			http.Error(api.Writer, notAuthorized.Error(), http.StatusUnauthorized)
@@ -77,6 +130,10 @@ func (api *WsDevApi) Run() error {
 	return api.server.Run(key)
 }
 
+func (api *WsDevApi) RequestRealtimeUpdates(req msg2api.DeviceCmdRequestRealtimeUpdatesArgs) {
+	api.server.RequestRealtimeUpdates(req)
+}
+
 func (api *WsDevApi) Close() {
 	if api.server != nil {
 		api.server.Close()
@@ -84,7 +141,7 @@ func (api *WsDevApi) Close() {
 }
 
 func (api *WsDevApi) viewDevice(fn func(tx db.Tx, user db.User, device db.Device) *msg2api.Error) (err *msg2api.Error) {
-	api.Db.View(func(tx db.Tx) error {
+	api.ctx.Db.View(func(tx db.Tx) error {
 		u := tx.User(api.User)
 		if u == nil {
 			err = apiNotAuthorized
@@ -102,7 +159,7 @@ func (api *WsDevApi) viewDevice(fn func(tx db.Tx, user db.User, device db.Device
 }
 
 func (api *WsDevApi) updateDevice(fn func(tx db.Tx, user db.User, device db.Device) *msg2api.Error) (err *msg2api.Error) {
-	api.Db.Update(func(tx db.Tx) error {
+	api.ctx.Db.Update(func(tx db.Tx) error {
 		u := tx.User(api.User)
 		if u == nil {
 			err = apiNotAuthorized
@@ -175,21 +232,22 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 		}
 
 		for sensor, values := range values {
-			if err := api.postValuesToOldMSG(sensor, values); err != nil {
-				return err
+			if sensor[len(sensor)-3:] == "/wh" {
+				if err := api.postValuesToOldMSG(sensor[0:len(sensor)-3], values); err != nil {
+					return err
+				}
 			}
 
 			s := device.Sensor(sensor)
 			for _, value := range values {
-				err := api.Db.AddReading(user, device, s, value.Time, value.Value)
+				err := api.ctx.Db.AddReading(user, device, s, value.Time, value.Value)
 				if err != nil {
 					return &msg2api.Error{Code: "could not add readings"}
 				}
-				api.Hub.Publish(api.User, measurementWithMetadata{device.Id(), s.Id(), value.Time, value.Value})
+				api.ctx.Hub.Publish(api.User, measurementWithMetadata{device.Id(), s.Id(), value.Time, value.Value})
 			}
 		}
 
-		api.server.RequestPrint(time.Now().String())
 		return nil
 	})
 
@@ -211,7 +269,7 @@ func (api *WsDevApi) doRemoveSensor(name string) *msg2api.Error {
 		if err := device.RemoveSensor(name); err != nil {
 			return &msg2api.Error{Code: "operation failed", Extra: err.Error()}
 		}
-		api.Hub.Publish(api.User, msg2api.UserEventMetadataArgs{
+		api.ctx.Hub.Publish(api.User, msg2api.UserEventMetadataArgs{
 			Devices: map[string]msg2api.DeviceMetadata{
 				api.Device: msg2api.DeviceMetadata{
 					DeletedSensors: map[string]*string{
@@ -238,7 +296,7 @@ func (api *WsDevApi) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api
 			dbs.SetName(sname)
 		}
 
-		api.Hub.Publish(api.User, msg2api.UserEventMetadataArgs{
+		api.ctx.Hub.Publish(api.User, msg2api.UserEventMetadataArgs{
 			Devices: map[string]msg2api.DeviceMetadata{
 				api.Device: msg2api.DeviceMetadata(*metadata),
 			},
@@ -249,17 +307,16 @@ func (api *WsDevApi) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api
 }
 
 type WsUserApi struct {
+	Ctx    *WsApiContext
+	server *msg2api.UserServer
+
 	User    string
-	Db      db.Db
-	Hub     *hub.Hub
 	Writer  http.ResponseWriter
 	Request *http.Request
-
-	server *msg2api.UserServer
 }
 
 func (api *WsUserApi) Run() error {
-	conn := api.Hub.Connect()
+	conn := api.Ctx.Hub.Connect()
 	defer conn.Close()
 	conn.Subscribe(api.User)
 
@@ -295,6 +352,7 @@ func (api *WsUserApi) Run() error {
 
 	api.server = server
 	api.server.GetValues = api.doGetValues
+	api.server.RequestRealtimeUpdates = api.doRequestRealtimeUpdates
 	return api.server.Run()
 }
 
@@ -305,7 +363,7 @@ func (api *WsUserApi) Close() {
 }
 
 func (api *WsUserApi) doGetValues(since time.Time, withMetadata bool) error {
-	return api.Db.View(func(tx db.Tx) error {
+	return api.Ctx.Db.View(func(tx db.Tx) error {
 		user := tx.User(api.User)
 		if user == nil {
 			return notAuthorized
@@ -352,4 +410,17 @@ func (api *WsUserApi) doGetValues(since time.Time, withMetadata bool) error {
 		}
 		return api.server.SendUpdate(update)
 	})
+}
+
+func (api *WsUserApi) doRequestRealtimeUpdates(sensors map[string][]string) error {
+	for dev, sensors := range sensors {
+		err := api.Ctx.WithDevice(dev, func(dev *WsDevApi) error {
+			dev.RequestRealtimeUpdates(sensors)
+			return nil
+		})
+		if err != nil && err != deviceNotRegistered {
+			return err
+		}
+	}
+	return nil
 }
