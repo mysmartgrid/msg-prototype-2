@@ -32,6 +32,11 @@
 			"Rev": "a3ec486e6a7a41858210b0fc5d7b5df593b3c4a3"
 		},
 		{
+			"ImportPath": "github.com/influxdb/influxdb/client",
+			"Comment": "v0.8.8",
+			"Rev": "afde71eb1740fd763ab9450e1f700ba0e53c36d0"
+		},
+		{
 			"ImportPath": "github.com/mysmartgrid/msg2api",
 			"Rev": "ca7511bfe60e39ad494ca8fbe5ce08aeedcefb3f"
 		}

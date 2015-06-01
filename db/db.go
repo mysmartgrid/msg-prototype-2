@@ -5,6 +5,7 @@ import (
 	"github.com/boltdb/bolt"
 	"log"
 	"time"
+	"github.com/influxdb/influxdb/client"
 )
 
 const (
@@ -104,9 +105,20 @@ func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (Db, erro
 		return nil
 	})
 
+	cfg := client.ClientConfig{
+		Host: influxAddr,
+		Username: influxUser,
+		Password: influxPass,
+		Database: influxDb,
+	}
+	influxC, err := client.New(&cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	result := &db{
 		store:          store,
-		influx:         influxHandler{influxAddr, influxDb, influxUser, influxPass},
+		influx:         influxHandler{influxC},
 		bufferedValues: make(map[bufferKey][]Value),
 		bufferInput:    make(chan bufferValue),
 		bufferKill:     make(chan bufferKey),
