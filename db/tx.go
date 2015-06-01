@@ -16,7 +16,7 @@ func (tx *tx) AddUser(id string) (User, error) {
 		return nil, InvalidId
 	}
 
-	b := tx.Bucket(dbUsersKey)
+	b := tx.Bucket(db_users)
 	ub, err := b.CreateBucket(idBytes)
 	if err != nil {
 		return nil, IdExists
@@ -32,7 +32,7 @@ func (tx *tx) AddUser(id string) (User, error) {
 }
 
 func (tx *tx) User(id string) User {
-	b := tx.Bucket(dbUsersKey)
+	b := tx.Bucket(db_users)
 	ub := b.Bucket([]byte(id))
 	if ub != nil {
 		return &user{tx, ub, id}
@@ -42,7 +42,7 @@ func (tx *tx) User(id string) User {
 
 func (tx *tx) Users() map[string]User {
 	result := make(map[string]User)
-	b := tx.Bucket(dbUsersKey)
+	b := tx.Bucket(db_users)
 	b.ForEach(func(k, v []byte) error {
 		result[string(k)] = &user{tx, b.Bucket(k), string(k)}
 		return nil
@@ -51,10 +51,10 @@ func (tx *tx) Users() map[string]User {
 }
 
 func (tx *tx) AddDevice(id string, key []byte) error {
-	if tx.Bucket(registeredDevicesKey).Bucket([]byte(id)) != nil {
+	if tx.Bucket(db_registeredDevices).Bucket([]byte(id)) != nil {
 		return IdExists
 	}
-	db, err := tx.Bucket(registeredDevicesKey).CreateBucket([]byte(id))
+	db, err := tx.Bucket(db_registeredDevices).CreateBucket([]byte(id))
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func (tx *tx) AddDevice(id string, key []byte) error {
 }
 
 func (tx *tx) Device(devId string) RegisteredDevice {
-	if db := tx.Bucket(registeredDevicesKey).Bucket([]byte(devId)); db != nil {
+	if db := tx.Bucket(db_registeredDevices).Bucket([]byte(devId)); db != nil {
 		return &registeredDevice{db, devId}
 	}
 	return nil
@@ -71,7 +71,7 @@ func (tx *tx) Device(devId string) RegisteredDevice {
 
 func (tx *tx) Devices() map[string]RegisteredDevice {
 	result := make(map[string]RegisteredDevice)
-	b := tx.Bucket(registeredDevicesKey)
+	b := tx.Bucket(db_registeredDevices)
 	b.ForEach(func(k, v []byte) error {
 		result[string(k)] = &registeredDevice{b.Bucket(k), string(k)}
 		return nil

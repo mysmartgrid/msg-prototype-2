@@ -7,11 +7,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/mysmartgrid/msg-prototype-2/db"
+	"github.com/mysmartgrid/msg-prototype-2/hub"
 	"github.com/mysmartgrid/msg2api"
 	"io/ioutil"
 	"log"
-	"github.com/mysmartgrid/msg-prototype-2/db"
-	"github.com/mysmartgrid/msg-prototype-2/hub"
 	"net/http"
 	"sync"
 	"time"
@@ -80,7 +80,6 @@ func (ctx *WsApiContext) RemoveDevice(dev *WsDevApi) error {
 	delete(ctx.devices, dev.Device)
 	return nil
 }
-
 
 type WsDevApi struct {
 	ctx    *WsApiContext

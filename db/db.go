@@ -16,15 +16,8 @@ var (
 	IdExists      = errors.New("id exists")
 	AlreadyLinked = errors.New("already linked")
 
-	keyKey                 = []byte("key")
-	nameKey                = []byte("name")
-	userKey                = []byte("user")
-	registeredDevicesKey   = []byte("registeredDevices")
-	dbIdKey                = []byte("dbId")
-	dbUsersKey             = []byte("users")
-	dbUserDevicesKey       = []byte("devices")
-	dbUserDeviceKeyKey     = []byte("key")
-	dbUserDeviceSensorsKey = []byte("sensors")
+	db_registeredDevices = []byte("registeredDevices")
+	db_users             = []byte("users")
 )
 
 type db struct {
@@ -106,8 +99,8 @@ func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (Db, erro
 	}
 
 	store.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists(dbUsersKey)
-		tx.CreateBucketIfNotExists(registeredDevicesKey)
+		tx.CreateBucketIfNotExists(db_users)
+		tx.CreateBucketIfNotExists(db_registeredDevices)
 		return nil
 	})
 

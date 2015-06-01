@@ -10,11 +10,18 @@ type device struct {
 	id   string
 }
 
+var (
+	device_name    = []byte("name")
+	device_id      = []byte("dbId")
+	device_key     = []byte("key")
+	device_sensors = []byte("sensors")
+)
+
 func (d *device) init(key []byte, name string, dbId uint64) {
-	d.b.CreateBucketIfNotExists(dbUserDeviceSensorsKey)
-	d.b.Put(dbUserDeviceKeyKey, key)
-	d.b.Put(nameKey, []byte(name))
-	d.b.Put(dbIdKey, htoleu64(dbId))
+	d.b.CreateBucketIfNotExists(device_sensors)
+	d.b.Put(device_key, key)
+	d.b.Put(device_name, []byte(name))
+	d.b.Put(device_id, htoleu64(dbId))
 }
 
 func (d *device) AddSensor(id string) (Sensor, error) {
@@ -23,7 +30,7 @@ func (d *device) AddSensor(id string) (Sensor, error) {
 		return nil, InvalidId
 	}
 
-	b := d.b.Bucket(dbUserDeviceSensorsKey)
+	b := d.b.Bucket(device_sensors)
 	sb, err := b.CreateBucket(idBytes)
 	if err != nil {
 		return nil, IdExists
@@ -42,7 +49,7 @@ func (d *device) AddSensor(id string) (Sensor, error) {
 }
 
 func (d *device) Sensor(id string) Sensor {
-	b := d.b.Bucket(dbUserDeviceSensorsKey).Bucket([]byte(id))
+	b := d.b.Bucket(device_sensors).Bucket([]byte(id))
 	if b != nil {
 		return &sensor{b, id}
 	}
@@ -51,7 +58,7 @@ func (d *device) Sensor(id string) Sensor {
 
 func (d *device) Sensors() map[string]Sensor {
 	result := make(map[string]Sensor)
-	b := d.b.Bucket(dbUserDeviceSensorsKey)
+	b := d.b.Bucket(device_sensors)
 	b.ForEach(func(k, v []byte) error {
 		result[string(k)] = &sensor{b.Bucket(k), string(k)}
 		return nil
@@ -65,12 +72,12 @@ func (d *device) RemoveSensor(id string) error {
 		return InvalidId
 	}
 	sid := sens.dbId()
-	d.b.Bucket(dbUserDeviceSensorsKey).DeleteBucket([]byte(id))
+	d.b.Bucket(device_sensors).DeleteBucket([]byte(id))
 	return d.user.tx.removeSeriesFor(d.user.dbId(), d.dbId(), sid)
 }
 
 func (d *device) Key() []byte {
-	return d.b.Get(dbUserDeviceKeyKey)
+	return d.b.Get(device_key)
 }
 
 func (d *device) Id() string {
@@ -78,13 +85,13 @@ func (d *device) Id() string {
 }
 
 func (d *device) dbId() uint64 {
-	return letohu64(d.b.Get(dbIdKey))
+	return letohu64(d.b.Get(device_id))
 }
 
 func (d *device) Name() string {
-	return string(d.b.Get(nameKey))
+	return string(d.b.Get(device_name))
 }
 
 func (d *device) SetName(name string) {
-	d.b.Put(nameKey, []byte(name))
+	d.b.Put(device_name, []byte(name))
 }

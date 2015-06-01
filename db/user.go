@@ -11,9 +11,14 @@ type user struct {
 	id string
 }
 
+var (
+	user_id      = []byte("dbId")
+	user_devices = []byte("devices")
+)
+
 func (u *user) init(dbId uint64) {
-	u.b.CreateBucketIfNotExists(dbUserDevicesKey)
-	u.b.Put(dbIdKey, htoleu64(dbId))
+	u.b.CreateBucketIfNotExists(user_devices)
+	u.b.Put(user_id, htoleu64(dbId))
 }
 
 func (u *user) AddDevice(id string, key []byte) (Device, error) {
@@ -22,7 +27,7 @@ func (u *user) AddDevice(id string, key []byte) (Device, error) {
 		return nil, InvalidId
 	}
 
-	b := u.b.Bucket(dbUserDevicesKey)
+	b := u.b.Bucket(user_devices)
 	db, err := b.CreateBucket(idBytes)
 	if err != nil {
 		return nil, IdExists
@@ -43,7 +48,7 @@ func (u *user) RemoveDevice(id string) error {
 		return InvalidId
 	}
 
-	b := u.b.Bucket(dbUserDevicesKey)
+	b := u.b.Bucket(user_devices)
 	if b.Bucket(idBytes) == nil {
 		return InvalidId
 	}
@@ -51,7 +56,7 @@ func (u *user) RemoveDevice(id string) error {
 }
 
 func (d *user) Device(id string) Device {
-	b := d.b.Bucket(dbUserDevicesKey).Bucket([]byte(id))
+	b := d.b.Bucket(user_devices).Bucket([]byte(id))
 	if b != nil {
 		return &device{b, d, id}
 	}
@@ -60,7 +65,7 @@ func (d *user) Device(id string) Device {
 
 func (d *user) Devices() map[string]Device {
 	result := make(map[string]Device)
-	b := d.b.Bucket(dbUserDevicesKey)
+	b := d.b.Bucket(user_devices)
 	b.ForEach(func(k, v []byte) error {
 		result[string(k)] = &device{b.Bucket(k), d, string(k)}
 		return nil
@@ -73,7 +78,7 @@ func (u *user) Id() string {
 }
 
 func (u *user) dbId() uint64 {
-	return letohu64(u.b.Get(dbIdKey))
+	return letohu64(u.b.Get(user_id))
 }
 
 func (u *user) LoadReadings(since time.Time, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
