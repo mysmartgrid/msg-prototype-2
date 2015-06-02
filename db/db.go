@@ -3,9 +3,9 @@ package db
 import (
 	"errors"
 	"github.com/boltdb/bolt"
+	"github.com/influxdb/influxdb/client"
 	"log"
 	"time"
-	"github.com/influxdb/influxdb/client"
 )
 
 const (
@@ -13,12 +13,10 @@ const (
 )
 
 var (
-	InvalidId     = errors.New("id invalid")
-	IdExists      = errors.New("id exists")
-	AlreadyLinked = errors.New("already linked")
+	InvalidId = errors.New("id invalid")
+	IdExists  = errors.New("id exists")
 
-	db_registeredDevices = []byte("registeredDevices")
-	db_users             = []byte("users")
+	db_users = []byte("users")
 )
 
 type db struct {
@@ -101,12 +99,11 @@ func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (Db, erro
 
 	store.Update(func(tx *bolt.Tx) error {
 		tx.CreateBucketIfNotExists(db_users)
-		tx.CreateBucketIfNotExists(db_registeredDevices)
 		return nil
 	})
 
 	cfg := client.ClientConfig{
-		Host: influxAddr,
+		Host:     influxAddr,
 		Username: influxUser,
 		Password: influxPass,
 		Database: influxDb,

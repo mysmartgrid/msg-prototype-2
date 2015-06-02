@@ -3,9 +3,9 @@ package db
 import (
 	"errors"
 	"fmt"
+	"github.com/influxdb/influxdb/client"
 	"strings"
 	"time"
-	"github.com/influxdb/influxdb/client"
 )
 
 var badSeriesName = errors.New("bad series name")
@@ -41,9 +41,9 @@ func (h *influxHandler) saveValuesAndClear(valueMap map[bufferKey][]Value) error
 
 	for key, values := range valueMap {
 		item := &client.Series{
-			Name: seriesName(key.user, key.device, key.sensor),
+			Name:    seriesName(key.user, key.device, key.sensor),
 			Columns: []string{"time", "value"},
-			Points: make([][]interface{}, len(values)),
+			Points:  make([][]interface{}, len(values)),
 		}
 		for i, value := range values {
 			item.Points[i] = []interface{}{influxTime(value.Time), value.Value}

@@ -1,4 +1,4 @@
-package db
+package regdev
 
 import (
 	"github.com/boltdb/bolt"

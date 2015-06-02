@@ -6,19 +6,6 @@ type Tx interface {
 	AddUser(id string) (User, error)
 	User(id string) User
 	Users() map[string]User
-
-	AddDevice(id string, key []byte) error
-	Device(devId string) RegisteredDevice
-	Devices() map[string]RegisteredDevice
-}
-
-type RegisteredDevice interface {
-	Id() string
-	Key() []byte
-	UserLink() (string, bool)
-
-	LinkTo(uid string) error
-	Unlink() error
 }
 
 type Db interface {

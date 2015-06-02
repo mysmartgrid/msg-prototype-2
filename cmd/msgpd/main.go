@@ -1,13 +1,9 @@
 package main
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/hmac"
-	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -15,16 +11,16 @@ import (
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
-	"html/template"
-	"io/ioutil"
-	"log"
 	msgp "github.com/mysmartgrid/msg-prototype-2"
 	msgpdb "github.com/mysmartgrid/msg-prototype-2/db"
 	"github.com/mysmartgrid/msg-prototype-2/hub"
+	"github.com/mysmartgrid/msg-prototype-2/regdev"
+	"html/template"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -32,7 +28,7 @@ import (
 type cmdlineArgs struct {
 	listen                                       *string
 	assets, templates                            *string
-	udbPath                                      *string
+	udbPath, devdbPath                           *string
 	influxAddr, influxDb, influxUser, influxPass *string
 	sslCert, sslKey                              *string
 	deviceProxyConfig                            *string
@@ -48,6 +44,7 @@ var args = cmdlineArgs{
 	assets:            flag.String("assets", "./assets", "assets path"),
 	templates:         flag.String("templates", "./templates", "template path"),
 	udbPath:           flag.String("userdb", "", "path to user database"),
+	devdbPath:         flag.String("devdb", "", "path to device database"),
 	influxAddr:        flag.String("influx-addr", "", "address of influxdb"),
 	influxDb:          flag.String("influx-db", "", "influxdb database name"),
 	influxUser:        flag.String("influx-user", "", "username for influxdb"),
@@ -68,6 +65,7 @@ var proxyConf struct {
 var oldApiPostClient *http.Client
 
 var db msgpdb.Db
+var devdb regdev.Db
 var h = hub.New()
 
 var apiCtx msgp.WsApiContext
@@ -121,6 +119,7 @@ func init() {
 	}
 
 	bailIfMissing(args.udbPath, "-userdb")
+	bailIfMissing(args.devdbPath, "-devdb")
 	bailIfMissing(args.influxAddr, "-influx-addr")
 	bailIfMissing(args.influxDb, "-influx-db")
 	bailIfMissing(args.influxUser, "-influx-user")
@@ -169,17 +168,20 @@ func init() {
 	_, err := templates.ParseGlob(path.Join(*args.templates, "*.html"))
 	if err != nil {
 		log.Fatal("error parsing templates: ", err)
-		os.Exit(1)
 	}
 
 	db, err = msgpdb.OpenDb(*args.udbPath, *args.influxAddr, *args.influxDb, *args.influxUser, *args.influxPass)
 	if err != nil {
 		log.Fatal("error opening user db: ", err)
-		os.Exit(1)
+	}
+
+	devdb, err = regdev.Open(*args.devdbPath)
+	if err != nil {
+		log.Fatal("error opening device db: ", err)
 	}
 
 	apiCtx = msgp.WsApiContext{
-		Db: db,
+		Db:  db,
 		Hub: h,
 	}
 }
@@ -265,7 +267,7 @@ func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
 func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
 	x := msgp.WsDevApi{
 		User:    mux.Vars(r)["user"],
-		Device:    mux.Vars(r)["device"],
+		Device:  mux.Vars(r)["device"],
 		Writer:  w,
 		Request: r,
 	}
@@ -280,83 +282,6 @@ func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
 		x.Close()
 	}()
 	x.Run()
-}
-
-func handlerRegisteredDevice(w http.ResponseWriter, r *http.Request) {
-	type response struct {
-		LinkedTo string `json:"linkedTo,omitempty"`
-	}
-
-	db.View(func(tx msgpdb.Tx) error {
-		dev := tx.Device(mux.Vars(r)["device"])
-		if dev == nil {
-			http.Error(w, "not found", 404)
-			return nil
-		}
-
-		user, _ := dev.UserLink()
-		resp := response{user}
-		data, err := json.Marshal(resp)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return nil
-		}
-
-		mac := hmac.New(sha256.New, dev.Key())
-
-		var iv [16]byte
-		if _, err := rand.Read(iv[:]); err != nil {
-			http.Error(w, err.Error(), 500)
-			return nil
-		}
-
-		var nonce [16]byte
-		if _, err := rand.Read(nonce[:]); err != nil {
-			http.Error(w, err.Error(), 500)
-			return nil
-		}
-
-		mac.Write(nonce[:])
-		key := mac.Sum(nil)[:16]
-		mac.Reset()
-
-		cinst, _ := aes.NewCipher(key)
-		transform := cipher.NewCFBEncrypter(cinst, iv[:])
-
-		transform.XORKeyStream(data, data)
-		mac.Write(data)
-
-		w.Header()["X-Nonce"] = []string{hex.EncodeToString(nonce[:])}
-		w.Header()["X-IV"] = []string{hex.EncodeToString(iv[:])}
-		w.Header()["X-HMAC"] = []string{hex.EncodeToString(mac.Sum(nil))}
-
-		w.Write([]byte(hex.EncodeToString(data[:])))
-
-		return nil
-	})
-}
-
-func registerDevice(w http.ResponseWriter, r *http.Request) {
-	keys, hasKeys := r.Header["X-Key"]
-	if !hasKeys {
-		http.Error(w, "key missing", 400)
-		return
-	}
-	if len(keys) != 1 {
-		http.Error(w, "multiple X-Key headers", 400)
-		return
-	}
-	key, err := hex.DecodeString(keys[0])
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-		return
-	}
-	err = db.Update(func(tx msgpdb.Tx) error {
-		return tx.AddDevice(mux.Vars(r)["device"], key)
-	})
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-	}
 }
 
 func doLogin(w http.ResponseWriter, r *http.Request) {
@@ -403,7 +328,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	tstr := `
 <div>Users:</div>
 <ul>
-{{range $name, $user := (.Users)}}
+{{range $name, $user := (.U.Users)}}
 	<li>
 		<div>{{$name}}</div>
 		<ul>
@@ -424,34 +349,40 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 
 <div>Registered devices:</div>
 <ul>
-{{range $id, $link := .Devices}}
+{{range $id, $link := .D.Devices}}
 	<li>{{$id}} 0x{{$link.Key | printf "%x"}} -> {{userOfLink $link}}</li>
 {{end}}
 </ul>
 <strong>done</strong>
 `
 
-	db.View(func(tx msgpdb.Tx) error {
-		t := template.New("")
-		t.Funcs(template.FuncMap{
-			"userOfLink": func(link msgpdb.RegisteredDevice) template.HTML {
-				user, linked := link.UserLink()
-				if linked {
-					return template.HTML(template.HTMLEscapeString(user))
-				}
-				return "<i>none</i>"
-			},
-		})
-		_, err := t.Parse(tstr)
-		if err != nil {
-			w.Write([]byte(err.Error()))
+	db.View(func(utx msgpdb.Tx) error {
+		return devdb.View(func(dtx regdev.Tx) error {
+			t := template.New("")
+			t.Funcs(template.FuncMap{
+				"userOfLink": func(link regdev.RegisteredDevice) template.HTML {
+					user, linked := link.UserLink()
+					if linked {
+						return template.HTML(template.HTMLEscapeString(user))
+					}
+					return "<i>none</i>"
+				},
+			})
+			_, err := t.Parse(tstr)
+			if err != nil {
+				w.Write([]byte(err.Error()))
+				return nil
+			}
+			type ctx struct {
+				U msgpdb.Tx
+				D regdev.Tx
+			}
+			err = t.Execute(w, ctx{utx, dtx})
+			if err != nil {
+				w.Write([]byte("<br/>" + err.Error()))
+			}
 			return nil
-		}
-		err = t.Execute(w, tx)
-		if err != nil {
-			w.Write([]byte("<br/>" + err.Error()))
-		}
-		return nil
+		})
 	})
 }
 
@@ -518,62 +449,6 @@ func adminDevice_RemoveSensor(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func adminPreload(w http.ResponseWriter, r *http.Request) {
-	parseUInt := func(u *uint64, name string) bool {
-		var err error
-
-		*u, err = strconv.ParseUint(mux.Vars(r)[name], 0, 32)
-		if err != nil {
-			http.Error(w, err.Error(), 400)
-			return false
-		}
-		return true
-	}
-
-	var users, devices, sensors uint64
-
-	if !parseUInt(&users, "users") || !parseUInt(&devices, "devices") || !parseUInt(&sensors, "sensors") {
-		return
-	}
-
-	err := db.Update(func(tx msgpdb.Tx) error {
-		for userId := uint64(0); userId < users; userId++ {
-			userName := fmt.Sprintf("u%v", userId)
-			user, err := tx.AddUser(userName)
-			if err != nil {
-				return err
-			}
-
-			for deviceId := uint64(0); deviceId < devices; deviceId++ {
-				devName := fmt.Sprintf("%v_d%v", userName, deviceId)
-				if err := tx.AddDevice(devName, []byte(devName)); err != nil {
-					return err
-				}
-				if err := tx.Device(devName).LinkTo(userName); err != nil {
-					return err
-				}
-
-				device, err := user.AddDevice(devName, []byte(devName))
-				if err != nil {
-					return err
-				}
-
-				for sensorId := uint64(0); sensorId < sensors; sensorId++ {
-					sensorName := fmt.Sprintf("s%v", sensorId)
-					_, err := device.AddSensor(sensorName)
-					if err != nil {
-						return err
-					}
-				}
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-	}
-}
-
 func loggedInSwitch(in, out func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := getSession(w, r)
@@ -617,60 +492,65 @@ func userDevicesAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db.Update(func(tx msgpdb.Tx) error {
-		user := tx.User(session.Values["user"].(string))
-		if user == nil {
-			http.Error(w, "not authorized", 401)
-			return errors.New("")
-		}
-		dev := tx.Device(devId)
-		if dev == nil {
-			http.Error(w, "no such device", 404)
-			return errors.New("")
-		}
-		if err := dev.LinkTo(user.Id()); err != nil {
-			http.Error(w, err.Error(), 400)
-			return errors.New("")
-		}
-		_, err := user.AddDevice(dev.Id(), dev.Key())
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return errors.New("")
-		}
-		http.Redirect(w, r, "/user/devices", 303)
-		return nil
+	db.Update(func(utx msgpdb.Tx) error {
+		return devdb.Update(func(dtx regdev.Tx) error {
+			user := utx.User(session.Values["user"].(string))
+			if user == nil {
+				http.Error(w, "not authorized", 401)
+				return errors.New("")
+			}
+			dev := dtx.Device(devId)
+			if dev == nil {
+				http.Error(w, "no such device", 404)
+				return errors.New("")
+			}
+			if err := dev.LinkTo(user.Id()); err != nil {
+				http.Error(w, err.Error(), 400)
+				return errors.New("")
+			}
+			_, err := user.AddDevice(dev.Id(), dev.Key())
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return errors.New("")
+			}
+			http.Redirect(w, r, "/user/devices", 303)
+			return nil
+		})
 	})
 }
 
 func userDevicesRemove(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	devId := mux.Vars(r)["device"]
-	db.Update(func(tx msgpdb.Tx) error {
-		user := tx.User(session.Values["user"].(string))
-		if user == nil {
-			http.Error(w, "not authorized", 401)
-			return errors.New("")
-		}
-		dev := tx.Device(devId)
-		if dev == nil {
-			http.Error(w, "no such device", 404)
-			return errors.New("")
-		}
-		if err := dev.Unlink(); err != nil {
-			http.Error(w, err.Error(), 500)
-			return errors.New("")
-		}
-		if err := user.RemoveDevice(devId); err != nil {
-			http.Error(w, err.Error(), 500)
-			return errors.New("")
-		}
-		http.Redirect(w, r, "/user/devices", 303)
-		return nil
+	db.Update(func(utx msgpdb.Tx) error {
+		return devdb.Update(func(dtx regdev.Tx) error {
+			user := utx.User(session.Values["user"].(string))
+			if user == nil {
+				http.Error(w, "not authorized", 401)
+				return errors.New("")
+			}
+			dev := dtx.Device(devId)
+			if dev == nil {
+				http.Error(w, "no such device", 404)
+				return errors.New("")
+			}
+			if err := dev.Unlink(); err != nil {
+				http.Error(w, err.Error(), 500)
+				return errors.New("")
+			}
+			if err := user.RemoveDevice(devId); err != nil {
+				http.Error(w, err.Error(), 500)
+				return errors.New("")
+			}
+			http.Redirect(w, r, "/user/devices", 303)
+			return nil
+		})
 	})
 }
 
 func main() {
 	router := mux.NewRouter()
+	server := regdev.DeviceServer{Db: devdb}
 
 	router.HandleFunc("/", loggedInSwitch(wsTemplate("index_user"), staticTemplate("index_nouser"))).Methods("GET")
 	router.HandleFunc("/user/login", staticTemplate("user-login")).Methods("GET")
@@ -684,7 +564,6 @@ func main() {
 
 	if *args.motherlode {
 		router.HandleFunc("/admin", defaultHeaders(adminHandler))
-		router.HandleFunc("/admin/preload/{users}/{devices}/{sensors}", adminPreload).Methods("POST")
 		router.HandleFunc("/admin/add-user", adminAddUser).Methods("POST")
 		router.HandleFunc("/admin/user/{user}/add-device", adminUser_AddDev).Methods("POST")
 		router.HandleFunc("/admin/device/{user}/{device}/add-sensor", adminDevice_AddSensor).Methods("POST")
@@ -693,8 +572,7 @@ func main() {
 
 	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
 	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
-	router.HandleFunc("/ws/regdevice/{device}", handlerRegisteredDevice).Methods("GET")
-	router.HandleFunc("/ws/regdevice/{device}", registerDevice).Methods("POST")
+	router.PathPrefix("/regdev").Handler(&server)
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
 
 	http.Handle("/", router)
