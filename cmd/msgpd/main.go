@@ -350,7 +350,12 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 <div>Registered devices:</div>
 <ul>
 {{range $id, $link := .D.Devices}}
-	<li>{{$id}} 0x{{$link.Key | printf "%x"}} -> {{userOfLink $link}}</li>
+	<li>
+		{{$id}} 0x{{$link.Key | printf "%x"}} -> {{userOfLink $link}}
+		<ul>
+			<li>{{configOf $link}}</li>
+		</ul>
+	</li>
 {{end}}
 </ul>
 <strong>done</strong>
@@ -366,6 +371,13 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 						return template.HTML(template.HTMLEscapeString(user))
 					}
 					return "<i>none</i>"
+				},
+				"configOf": func(link regdev.RegisteredDevice) string {
+					data, err := json.Marshal(link.GetNetworkConfig())
+					if err != nil {
+						return err.Error()
+					}
+					return string(data)
 				},
 			})
 			_, err := t.Parse(tstr)

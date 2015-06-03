@@ -50,7 +50,8 @@ func (s *DeviceServer) getDeviceInfo(w http.ResponseWriter, r *http.Request) {
 		}
 
 		user, _ := dev.UserLink()
-		resp := DeviceConfiguration{user}
+		net := dev.GetNetworkConfig()
+		resp := DeviceConfiguration{user, &net}
 		data, err := json.Marshal(resp)
 		if err != nil {
 			http.Error(w, err.Error(), 500)

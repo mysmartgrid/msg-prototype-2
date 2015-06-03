@@ -1,6 +1,7 @@
 package regdev
 
 import (
+	"encoding/json"
 	"github.com/boltdb/bolt"
 )
 
@@ -10,8 +11,9 @@ type registeredDevice struct {
 }
 
 var (
-	registeredDevice_key  = []byte("key")
-	registeredDevice_user = []byte("user")
+	registeredDevice_key     = []byte("key")
+	registeredDevice_user    = []byte("user")
+	registeredDevice_network = []byte("network")
 )
 
 func (r *registeredDevice) init(key []byte) {
@@ -42,4 +44,23 @@ func (r *registeredDevice) LinkTo(uid string) error {
 
 func (r *registeredDevice) Unlink() error {
 	return r.b.Delete(registeredDevice_user)
+}
+
+func (r *registeredDevice) GetNetworkConfig() DeviceConfigNetwork {
+	var result DeviceConfigNetwork
+
+	data := r.b.Get(registeredDevice_network)
+	if data == nil || json.Unmarshal(data, &result) != nil {
+		return DeviceConfigNetwork{}
+	}
+
+	return result
+}
+
+func (r *registeredDevice) SetNetworkConfig(conf *DeviceConfigNetwork) error {
+	data, err := json.Marshal(conf)
+	if err != nil {
+		return err
+	}
+	return r.b.Put(registeredDevice_network, data)
 }
