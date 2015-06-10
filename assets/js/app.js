@@ -297,4 +297,41 @@ angular.module("msgp", [])
 			};
 		}
 	};
+}])
+.controller("DeviceEditNetwork", ["$scope", "$http", function($scope, $http) {
+	$scope.lan = {};
+	$scope.wifi = {};
+
+	$scope.startEdit = function(e) {
+		$scope.loadingSettings = true;
+		var url = $(e.target).parents(".msgp-edit-device-netconf").attr("data-conf-url");
+
+		$http.get(url)
+			.success(function(data, status, headers, config) {
+				$scope.loadingSettings = false;
+				$scope.lan = data.lan || {};
+				$scope.wifi = data.wifi || {};
+				$scope.editing = true;
+			})
+			.error(function(data, status, headers, config) {
+				$scope.loadingSettings = false;
+				$scope.loadingSettingsError = true;
+				console.log(data);
+			});
+	};
+
+	$scope.save = function(e) {
+		var url = $(e.target).parents(".msgp-edit-device-netconf").attr("data-conf-url");
+
+		$http.post(url, {lan: $scope.lan, wifi: $scope.wifi})
+			.success(function(data, status, headers, config) {
+				$scope.editing = false;
+				$scope.savingSettingsError = false;
+			})
+			.error(function(data, status, headers, config) {
+				$scope.editing = false;
+				$scope.savingSettingsError = true;
+				console.log(data);
+			});
+	};
 }]);

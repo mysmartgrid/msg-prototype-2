@@ -2,7 +2,11 @@ package regdev
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/boltdb/bolt"
+	"net"
+	"strings"
+	"unicode"
 )
 
 type registeredDevice struct {
@@ -14,6 +18,8 @@ var (
 	registeredDevice_key     = []byte("key")
 	registeredDevice_user    = []byte("user")
 	registeredDevice_network = []byte("network")
+
+	badNetworkConfig = errors.New("bad network config")
 )
 
 func (r *registeredDevice) init(key []byte) {
@@ -57,7 +63,74 @@ func (r *registeredDevice) GetNetworkConfig() DeviceConfigNetwork {
 	return result
 }
 
+func checkAndCleanProtocol(conf *DeviceIfaceIPConfig) bool {
+	switch conf.Protocol {
+	case "dhcp":
+		conf.IP = ""
+		conf.Netmask = ""
+		conf.Gateway = ""
+		conf.Nameserver = ""
+		return true
+
+	case "static":
+		if net.ParseIP(conf.IP) == nil || net.ParseIP(conf.Netmask) == nil || net.ParseIP(conf.Gateway) == nil ||
+				net.ParseIP(conf.Nameserver) == nil {
+			return false
+		}
+		return true
+
+	default:
+		return false
+	}
+}
+
+func checkConfigLan(conf *DeviceConfigNetLan) bool {
+	if !conf.Enabled {
+		return true
+	}
+
+	return checkAndCleanProtocol(&conf.DeviceIfaceIPConfig)
+}
+
+func checkConfigWifi(conf *DeviceConfigNetWifi) bool {
+	if !conf.Enabled {
+		return true
+	}
+
+	if !checkAndCleanProtocol(&conf.DeviceIfaceIPConfig) {
+		return false
+	}
+
+	isPrintable := func(s string) bool {
+		return -1 == strings.IndexFunc(s, func(r rune) bool {
+			return !unicode.IsPrint(r)
+		})
+	}
+
+	if !isPrintable(conf.SSID) {
+		return false
+	}
+
+	switch conf.Encryption {
+	case "wpa", "wpa2":
+		if !isPrintable(conf.PSK) {
+			return false
+		}
+		return true
+
+	case "open":
+		conf.PSK = ""
+		return true
+	}
+
+	return false
+}
+
 func (r *registeredDevice) SetNetworkConfig(conf *DeviceConfigNetwork) error {
+	if !checkConfigLan(conf.LAN) || !checkConfigWifi(conf.Wifi) {
+		return badNetworkConfig
+	}
+
 	data, err := json.Marshal(conf)
 	if err != nil {
 		return err

@@ -6,8 +6,7 @@ type Tx interface {
 	Devices() map[string]RegisteredDevice
 }
 
-type DeviceConfigNetLan struct {
-	Enabled    bool   `json:"enabled"`
+type DeviceIfaceIPConfig struct {
 	Protocol   string `json:"protocol,omitempty"`
 	IP         string `json:"ip,omitempty"`
 	Netmask    string `json:"netmask,omitempty"`
@@ -15,16 +14,19 @@ type DeviceConfigNetLan struct {
 	Nameserver string `json:"nameserver,omitempty"`
 }
 
+type DeviceConfigNetLan struct {
+	DeviceIfaceIPConfig
+
+	Enabled    bool   `json:"enabled"`
+}
+
 type DeviceConfigNetWifi struct {
+	DeviceIfaceIPConfig
+
 	Enabled    bool   `json:"enabled"`
 	SSID       string `json:"essid,omitempty"`
 	Encryption string `json:"enc,omitempty"`
 	PSK        string `json:"psk,omitempty"`
-	Protocol   string `json:"protocol,omitempty"`
-	IP         string `json:"ip,omitempty"`
-	Netmask    string `json:"netmask,omitempty"`
-	Gateway    string `json:"gateway,omitempty"`
-	Nameserver string `json:"nameserver,omitempty"`
 }
 
 type DeviceConfigNetwork struct {

@@ -560,6 +560,71 @@ func userDevicesRemove(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func userDevicesNetconf_get(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+	devId := mux.Vars(r)["device"]
+	db.View(func(utx msgpdb.Tx) error {
+		return devdb.View(func(dtx regdev.Tx) error {
+			user := utx.User(session.Values["user"].(string))
+			if user == nil {
+				http.Error(w, "not authorized", 401)
+				return errors.New("")
+			}
+			dev := dtx.Device(devId)
+			if dev == nil {
+				http.Error(w, "no such device", 404)
+				return errors.New("")
+			}
+			conf := dev.GetNetworkConfig()
+			data, err := json.Marshal(conf)
+			if err != nil {
+				http.Error(w, "server error", 500)
+				return err
+			}
+			w.Write(data)
+			return nil
+		})
+	})
+}
+
+func userDevicesNetconf_post(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+	devId := mux.Vars(r)["device"]
+	db.Update(func(utx msgpdb.Tx) error {
+		return devdb.Update(func(dtx regdev.Tx) error {
+			user := utx.User(session.Values["user"].(string))
+			if user == nil {
+				http.Error(w, "not authorized", 401)
+				return errors.New("")
+			}
+			dev := dtx.Device(devId)
+			if dev == nil {
+				http.Error(w, "no such device", 404)
+				return errors.New("")
+			}
+
+			var conf regdev.DeviceConfigNetwork
+
+			data, err := ioutil.ReadAll(r.Body)
+			if err != nil {
+				http.Error(w, "server error", 500)
+				return err
+			}
+
+			if err := json.Unmarshal(data, &conf); err != nil {
+				http.Error(w, "bad request", 400)
+				return err
+			}
+
+			if err := dev.SetNetworkConfig(&conf); err != nil {
+				http.Error(w, "bad request", 400)
+				return err
+			}
+			return nil
+		})
+	})
+}
+
 func main() {
 	router := mux.NewRouter()
 	server := regdev.DeviceServer{Db: devdb}
@@ -573,6 +638,8 @@ func main() {
 	router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
 	router.HandleFunc("/user/devices/add", defaultHeaders(userDevicesAdd)).Methods("GET", "POST")
 	router.HandleFunc("/user/devices/remove/{device}", userDevicesRemove).Methods("POST")
+	router.HandleFunc("/user/devices/network-config/{device}", userDevicesNetconf_get).Methods("GET")
+	router.HandleFunc("/user/devices/network-config/{device}", userDevicesNetconf_post).Methods("POST")
 
 	if *args.motherlode {
 		router.HandleFunc("/admin", defaultHeaders(adminHandler))
