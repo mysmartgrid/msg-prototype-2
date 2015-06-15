@@ -48,10 +48,18 @@ func (u *user) RemoveDevice(id string) error {
 		return InvalidId
 	}
 
-	b := u.b.Bucket(user_devices)
-	if b.Bucket(idBytes) == nil {
+	dev := u.Device(id)
+	if dev == nil {
 		return InvalidId
 	}
+
+	for id, _ := range dev.Sensors() {
+		if err := dev.RemoveSensor(id); err != nil {
+			return err
+		}
+	}
+
+	b := u.b.Bucket(user_devices)
 	return b.DeleteBucket(idBytes)
 }
 
