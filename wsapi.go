@@ -152,6 +152,9 @@ func (api *WsDevApi) viewDevice(fn func(tx db.Tx, user db.User, device db.Device
 			return err
 		}
 		err = fn(tx, u, d)
+		if err == nil {
+			return nil
+		}
 		return err
 	})
 	return
@@ -170,6 +173,9 @@ func (api *WsDevApi) updateDevice(fn func(tx db.Tx, user db.User, device db.Devi
 			return err
 		}
 		err = fn(tx, u, d)
+		if err == nil {
+			return nil
+		}
 		return err
 	})
 	return
