@@ -17,7 +17,7 @@ type DeviceIfaceIPConfig struct {
 type DeviceConfigNetLan struct {
 	DeviceIfaceIPConfig
 
-	Enabled    bool   `json:"enabled"`
+	Enabled bool `json:"enabled"`
 }
 
 type DeviceConfigNetWifi struct {

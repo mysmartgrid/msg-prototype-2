@@ -3,7 +3,9 @@
 	"GoVersion": "go1.4.1",
 	"Packages": [
 		".",
-		"./cmd/msgpd"
+		"./cmd/msgpd",
+		"./cmd/msgpdevd",
+		"./cmd/msgpc"
 	],
 	"Deps": [
 		{
@@ -38,7 +40,7 @@
 		},
 		{
 			"ImportPath": "github.com/mysmartgrid/msg2api",
-			"Rev": "ca7511bfe60e39ad494ca8fbe5ce08aeedcefb3f"
+			"Rev": "1a68a3380befe4e4b954d282a07a8e8778a1a741"
 		}
 	]
 }

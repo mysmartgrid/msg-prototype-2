@@ -74,7 +74,7 @@ func checkAndCleanProtocol(conf *DeviceIfaceIPConfig) bool {
 
 	case "static":
 		if net.ParseIP(conf.IP) == nil || net.ParseIP(conf.Netmask) == nil || net.ParseIP(conf.Gateway) == nil ||
-				net.ParseIP(conf.Nameserver) == nil {
+			net.ParseIP(conf.Nameserver) == nil {
 			return false
 		}
 		return true

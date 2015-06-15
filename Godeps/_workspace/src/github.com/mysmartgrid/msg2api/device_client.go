@@ -91,7 +91,9 @@ func (c *deviceClient) RenameSensor(id, name string) error {
 func (c *deviceClient) RemoveSensor(id string) error {
 	cmd := MessageOut{
 		Command: "removeSensor",
-		Args:    id,
+		Args:    DeviceCmdRemoveSensorArgs{
+			Name: id,
+		},
 	}
 
 	return c.executeCommand(&cmd)
