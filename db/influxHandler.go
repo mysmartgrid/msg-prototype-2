@@ -51,7 +51,14 @@ func (h *influxHandler) saveValuesAndClear(valueMap map[bufferKey][]Value) error
 		series = append(series, item)
 	}
 
-	return h.client.WriteSeriesWithTimePrecision(series, client.Millisecond)
+	if err := h.client.WriteSeriesWithTimePrecision(series, client.Millisecond); err != nil {
+		return err
+	}
+
+	for id, _ := range valueMap {
+		valueMap[id] = make([]Value, 0, 1)
+	}
+	return nil
 }
 
 func (h *influxHandler) loadValues(since time.Time, keys []bufferKey) (map[bufferKey][]Value, error) {
