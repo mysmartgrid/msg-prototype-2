@@ -245,6 +245,15 @@ func (dev *Device) Rename() error {
 	return dev.client().Rename(fmt.Sprintf("%v (%v)", dev.Id, rand.Int31n(100)))
 }
 
+func (dev *Device) Wait(count uint64) error {
+	for ; count > 0; count-- {
+		if err := dev.client().RunOnce(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		log.Println("bad args")
@@ -334,6 +343,12 @@ func main() {
 
 		case "rename":
 			bailIf(dev.Rename())
+
+		case "wait":
+			next("count")
+			count, err := strconv.ParseUint(os.Args[i], 10, 32)
+			bailIf(err)
+			bailIf(dev.Wait(count))
 
 		default:
 			log.Fatalf("bad command %v", cmdName)
