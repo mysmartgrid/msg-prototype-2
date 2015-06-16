@@ -1,5 +1,9 @@
 package regdev
 
+import (
+	"time"
+)
+
 type Tx interface {
 	AddDevice(id string, key []byte) error
 	Device(devId string) RegisteredDevice
@@ -46,6 +50,9 @@ type RegisteredDevice interface {
 	UserLink() (string, bool)
 	LinkTo(uid string) error
 	Unlink() error
+
+	RegisterHeartbeat(at time.Time) error
+	GetHeartbeats() map[time.Time]bool
 
 	GetNetworkConfig() DeviceConfigNetwork
 	SetNetworkConfig(conf *DeviceConfigNetwork) error

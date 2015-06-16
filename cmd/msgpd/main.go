@@ -355,6 +355,11 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		<ul>
 			<li>{{configOf $link}}</li>
 		</ul>
+		{{range $ts, $_ := $link.GetHeartbeats}}
+		<ul>
+			<li>Heartbeat at {{$ts}}</li>
+		</ul>
+		{{end}}
 	</li>
 {{end}}
 </ul>

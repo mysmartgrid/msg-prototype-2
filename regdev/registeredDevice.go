@@ -5,7 +5,9 @@ import (
 	"errors"
 	"github.com/boltdb/bolt"
 	"net"
+	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -15,15 +17,17 @@ type registeredDevice struct {
 }
 
 var (
-	registeredDevice_key     = []byte("key")
-	registeredDevice_user    = []byte("user")
-	registeredDevice_network = []byte("network")
+	registeredDevice_key       = []byte("key")
+	registeredDevice_user      = []byte("user")
+	registeredDevice_network   = []byte("network")
+	registeredDevice_heartbeat = []byte("heartbeat")
 
 	badNetworkConfig = errors.New("bad network config")
 )
 
 func (r *registeredDevice) init(key []byte) {
 	r.b.Put(registeredDevice_key, key)
+	r.b.CreateBucket(registeredDevice_heartbeat)
 }
 
 func (r *registeredDevice) Id() string {
@@ -53,6 +57,30 @@ func (r *registeredDevice) Unlink() error {
 		return err
 	}
 	return r.b.Delete(registeredDevice_network)
+}
+
+func (r *registeredDevice) RegisterHeartbeat(at time.Time) error {
+	hbKey := []byte(strconv.FormatInt(at.Unix(), 10))
+
+	bucket := r.b.Bucket(registeredDevice_heartbeat)
+	bucket, err := bucket.CreateBucket(hbKey)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *registeredDevice) GetHeartbeats() map[time.Time]bool {
+	result := make(map[time.Time]bool)
+	r.b.Bucket(registeredDevice_heartbeat).ForEach(func(k, v []byte) error {
+		ts, err := strconv.ParseInt(string(k), 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		result[time.Unix(ts, 0)] = true
+		return nil
+	})
+	return result
 }
 
 func (r *registeredDevice) GetNetworkConfig() DeviceConfigNetwork {

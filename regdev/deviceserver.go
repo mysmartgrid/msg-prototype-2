@@ -8,8 +8,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"github.com/gorilla/mux"
+	"math"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 type DeviceServer struct {
@@ -17,6 +21,9 @@ type DeviceServer struct {
 
 	router *mux.Router
 }
+
+var badHeartbeat = errors.New("invalid heartbeat")
+var badArgs = errors.New("bad arguments")
 
 func (s *DeviceServer) registerDevice(w http.ResponseWriter, r *http.Request) {
 	keys, hasKeys := r.Header["X-Key"]
@@ -41,12 +48,53 @@ func (s *DeviceServer) registerDevice(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *DeviceServer) getDeviceInfo(w http.ResponseWriter, r *http.Request) {
-	s.Db.View(func(tx Tx) error {
+func parseHeartbeatParams(r *http.Request) (ts time.Time, tsRaw []byte, sig []byte, err error) {
+	args := r.URL.Query()
+	if len(args["ts"]) != 1 || len(args["sig"]) != 1 {
+		err = badArgs
+		return
+	}
+
+	tsArg, err := strconv.ParseInt(args["ts"][0], 10, 64)
+	if err != nil {
+		return
+	}
+	ts = time.Unix(tsArg, 0)
+	tsRaw = []byte(args["ts"][0])
+
+	sig, err = hex.DecodeString(args["sig"][0])
+	return
+}
+
+func (s *DeviceServer) heartbeat(w http.ResponseWriter, r *http.Request) {
+	s.Db.Update(func(tx Tx) error {
 		dev := tx.Device(mux.Vars(r)["device"])
 		if dev == nil {
 			http.Error(w, "not found", 404)
-			return nil
+			return badHeartbeat
+		}
+
+		mac := hmac.New(sha256.New, dev.Key())
+
+		ts, tsRaw, sig, err := parseHeartbeatParams(r)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return err
+		}
+		if math.Abs(ts.Sub(time.Now()).Hours()) > 4 {
+			http.Error(w, "bad timestamp", 400)
+			return err
+		}
+		mac.Write(tsRaw)
+		if !hmac.Equal(mac.Sum(nil), sig) {
+			http.Error(w, "bad request", 400)
+			return badHeartbeat
+		}
+		mac.Reset()
+
+		if err := dev.RegisterHeartbeat(ts); err != nil {
+			http.Error(w, err.Error(), 500)
+			return err
 		}
 
 		user, _ := dev.UserLink()
@@ -55,21 +103,19 @@ func (s *DeviceServer) getDeviceInfo(w http.ResponseWriter, r *http.Request) {
 		data, err := json.Marshal(resp)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
-			return nil
+			return err
 		}
-
-		mac := hmac.New(sha256.New, dev.Key())
 
 		var iv [16]byte
 		if _, err := rand.Read(iv[:]); err != nil {
 			http.Error(w, err.Error(), 500)
-			return nil
+			return err
 		}
 
 		var nonce [16]byte
 		if _, err := rand.Read(nonce[:]); err != nil {
 			http.Error(w, err.Error(), 500)
-			return nil
+			return err
 		}
 
 		mac.Write(nonce[:])
@@ -97,7 +143,7 @@ func (s *DeviceServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.router = mux.NewRouter()
 
 		s.router.HandleFunc("/regdev/v1/{device}", s.registerDevice).Methods("POST")
-		s.router.HandleFunc("/regdev/v1/{device}", s.getDeviceInfo).Methods("GET")
+		s.router.HandleFunc("/regdev/v1/{device}/status", s.heartbeat).Methods("POST")
 	}
 
 	s.router.ServeHTTP(w, r)

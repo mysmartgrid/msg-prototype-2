@@ -16,6 +16,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -112,12 +113,29 @@ func (dev *Device) Register() error {
 	return nil
 }
 
-func (dev *Device) GetInfo() (map[string]interface{}, error) {
-	resp, err := http.Get(dev.regdevApi + "/" + dev.Id)
+func (dev *Device) Heartbeat() (map[string]interface{}, error) {
+	mac := hmac.New(sha256.New, dev.Key)
+
+	hbUrl, _ := url.Parse(dev.regdevApi + "/" + dev.Id + "/status")
+	params := url.Values{
+		"ts": []string{strconv.FormatInt(time.Now().Unix(), 10)},
+	}
+	mac.Write([]byte(params["ts"][0]))
+	params["sig"] = []string{hex.EncodeToString(mac.Sum(nil))}
+	hbUrl.RawQuery = params.Encode()
+	mac.Reset()
+
+	req, err := http.NewRequest("POST", hbUrl.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
 	switch resp.StatusCode {
 	case 200:
 		var err error
@@ -140,7 +158,6 @@ func (dev *Device) GetInfo() (map[string]interface{}, error) {
 			return nil, err
 		}
 
-		mac := hmac.New(sha256.New, dev.Key)
 		mac.Write(body)
 
 		if !hmac.Equal(mac.Sum(nil), macValue) {
@@ -312,8 +329,8 @@ func main() {
 		case "register":
 			bailIf(dev.Register())
 
-		case "getInfo":
-			info, err := dev.GetInfo()
+		case "heartbeat":
+			info, err := dev.Heartbeat()
 			bailIf(err)
 			log.Println(info)
 
