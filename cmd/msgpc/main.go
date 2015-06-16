@@ -35,6 +35,8 @@ type Device struct {
 
 	api     string
 	client_ msgp.DeviceClient
+
+	regdevApi string
 }
 
 var deviceNotRegistered = errors.New("device not registered")
@@ -87,8 +89,8 @@ func (dev *Device) GenerateRandomSensors(count int64) {
 	}
 }
 
-func (dev *Device) Register(api string) error {
-	req, err := http.NewRequest("POST", api+"/"+dev.Id, nil)
+func (dev *Device) Register() error {
+	req, err := http.NewRequest("POST", dev.regdevApi+"/"+dev.Id, nil)
 	if err != nil {
 		return err
 	}
@@ -105,8 +107,8 @@ func (dev *Device) Register(api string) error {
 	return nil
 }
 
-func (dev *Device) GetInfo(api string) (map[string]interface{}, error) {
-	resp, err := http.Get(api + "/" + dev.Id)
+func (dev *Device) GetInfo() (map[string]interface{}, error) {
+	resp, err := http.Get(dev.regdevApi + "/" + dev.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -291,12 +293,13 @@ func main() {
 			dev = new(Device)
 			bailIf(json.Unmarshal(data, dev))
 			dev.api = "ws://[::1]:8080/ws/device"
+			dev.regdevApi = "http://[::1]:8080/regdev/v1"
 
 		case "register":
-			bailIf(dev.Register("http://[::1]:8080/regdev/v1"))
+			bailIf(dev.Register())
 
 		case "getInfo":
-			info, err := dev.GetInfo("http://[::1]:8080/regdev/v1")
+			info, err := dev.GetInfo()
 			bailIf(err)
 			log.Println(info)
 
