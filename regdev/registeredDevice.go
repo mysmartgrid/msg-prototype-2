@@ -49,7 +49,10 @@ func (r *registeredDevice) LinkTo(uid string) error {
 }
 
 func (r *registeredDevice) Unlink() error {
-	return r.b.Delete(registeredDevice_user)
+	if err := r.b.Delete(registeredDevice_user); err != nil {
+		return err
+	}
+	return r.b.Delete(registeredDevice_network)
 }
 
 func (r *registeredDevice) GetNetworkConfig() DeviceConfigNetwork {
