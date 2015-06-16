@@ -96,8 +96,8 @@ func (s *DeviceServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.router == nil {
 		s.router = mux.NewRouter()
 
-		s.router.HandleFunc("/regdev/{device}", s.registerDevice).Methods("POST")
-		s.router.HandleFunc("/regdev/{device}", s.getDeviceInfo).Methods("GET")
+		s.router.HandleFunc("/regdev/v1/{device}", s.registerDevice).Methods("POST")
+		s.router.HandleFunc("/regdev/v1/{device}", s.getDeviceInfo).Methods("GET")
 	}
 
 	s.router.ServeHTTP(w, r)

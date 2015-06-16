@@ -293,10 +293,10 @@ func main() {
 			dev.api = "ws://[::1]:8080/ws/device"
 
 		case "register":
-			bailIf(dev.Register("http://[::1]:8080/regdev"))
+			bailIf(dev.Register("http://[::1]:8080/regdev/v1"))
 
 		case "getInfo":
-			info, err := dev.GetInfo("http://[::1]:8080/regdev")
+			info, err := dev.GetInfo("http://[::1]:8080/regdev/v1")
 			bailIf(err)
 			log.Println(info)
 
