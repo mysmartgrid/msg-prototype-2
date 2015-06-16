@@ -34,19 +34,24 @@ type Device struct {
 	Sensors map[string]string
 
 	api     string
-	client_ msgp.DeviceClient
+	client_ *msgp.DeviceClient
 
 	regdevApi string
 }
 
 var deviceNotRegistered = errors.New("device not registered")
 
-func (dev *Device) client() msgp.DeviceClient {
+func (dev *Device) client() *msgp.DeviceClient {
 	if dev.client_ == nil {
 		client, err := msgp.NewDeviceClient(dev.api+"/"+dev.User+"/"+dev.Id, dev.Key, &tlsConfig)
 		if err != nil {
 			log.Fatalf("Device::client: %v", err.Error())
 		}
+
+		client.RequestRealtimeUpdates = func(sensors []string) {
+			log.Printf("server requested realtime updates for %v", sensors)
+		}
+
 		dev.client_ = client
 	}
 

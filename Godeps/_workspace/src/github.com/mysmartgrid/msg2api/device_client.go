@@ -5,45 +5,85 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"github.com/gorilla/websocket"
 )
 
-type DeviceClient interface {
-	Close()
-
-	AddSensor(name string) error
-	Update(values map[string][]Measurement) error
-
-	Rename(name string) error
-	RenameSensor(id, name string) error
-	RemoveSensor(id string) error
+type unknownCommand struct {
+	cmd string
 }
 
-type deviceClient struct {
+func (b unknownCommand) Error() string {
+	return "received unknown command " + b.cmd
+}
+
+type DeviceClient struct {
 	*apiBase
+
+	RequestRealtimeUpdates func(sensors []string)
 }
 
-func (c *deviceClient) executeCommand(cmd *MessageOut) error {
+func (c *DeviceClient) waitForServer() (result *MessageIn, err error) {
+	result = new(MessageIn)
+	if err = c.socket.ReceiveJSON(&result); err != nil {
+		return
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	switch result.Command {
+	case "":
+		break
+
+	case "requestRealtimeUpdates":
+		if c.RequestRealtimeUpdates != nil {
+			var sensors DeviceCmdRequestRealtimeUpdatesArgs
+			if err = json.Unmarshal(result.Args, &sensors); err != nil {
+				return
+			}
+			c.RequestRealtimeUpdates(sensors)
+		}
+		return nil, nil
+
+	default:
+		return nil, unknownCommand{result.Command}
+	}
+
+	return result, nil
+}
+
+func (c *DeviceClient) executeCommand(cmd *MessageOut) error {
 	if err := c.socket.WriteJSON(cmd); err != nil {
 		return err
 	}
 
-	var result MessageIn
-	if err := c.socket.ReceiveJSON(&result); err != nil {
-		return err
+	for {
+		result, err := c.waitForServer()
+		if err != nil {
+			return err
+		}
+		if result != nil {
+			return nil
+		}
 	}
-	if result.Error == nil {
-		return nil
-	}
-	return result.Error
 }
 
-func (c *deviceClient) Close() {
+func (c *DeviceClient) RunOnce() error {
+	_, err := c.waitForServer()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *DeviceClient) Close() {
 	c.socket.Close(websocket.CloseGoingAway, "")
 }
 
-func (c *deviceClient) AddSensor(name string) error {
+func (c *DeviceClient) AddSensor(name string) error {
 	cmd := MessageOut{
 		Command: "addSensor",
 		Args: DeviceCmdAddSensorArgs{
@@ -54,7 +94,7 @@ func (c *deviceClient) AddSensor(name string) error {
 	return c.executeCommand(&cmd)
 }
 
-func (c *deviceClient) Update(values map[string][]Measurement) error {
+func (c *DeviceClient) Update(values map[string][]Measurement) error {
 	cmd := MessageOut{
 		Command: "update",
 		Args:    DeviceCmdUpdateArgs{values},
@@ -63,7 +103,7 @@ func (c *deviceClient) Update(values map[string][]Measurement) error {
 	return c.executeCommand(&cmd)
 }
 
-func (c *deviceClient) Rename(name string) error {
+func (c *DeviceClient) Rename(name string) error {
 	cmd := MessageOut{
 		Command: "updateMetadata",
 		Args: DeviceCmdUpdateMetadataArgs{
@@ -75,7 +115,7 @@ func (c *deviceClient) Rename(name string) error {
 	return c.executeCommand(&cmd)
 }
 
-func (c *deviceClient) RenameSensor(id, name string) error {
+func (c *DeviceClient) RenameSensor(id, name string) error {
 	cmd := MessageOut{
 		Command: "updateMetadata",
 		Args: DeviceCmdUpdateMetadataArgs{
@@ -88,7 +128,7 @@ func (c *deviceClient) RenameSensor(id, name string) error {
 	return c.executeCommand(&cmd)
 }
 
-func (c *deviceClient) RemoveSensor(id string) error {
+func (c *DeviceClient) RemoveSensor(id string) error {
 	cmd := MessageOut{
 		Command: "removeSensor",
 		Args:    DeviceCmdRemoveSensorArgs{
@@ -99,7 +139,7 @@ func (c *deviceClient) RemoveSensor(id string) error {
 	return c.executeCommand(&cmd)
 }
 
-func (c *deviceClient) authenticate(key []byte) error {
+func (c *DeviceClient) authenticate(key []byte) error {
 	msg, err := c.socket.Receive()
 	if err != nil {
 		return err
@@ -128,7 +168,7 @@ func (c *deviceClient) authenticate(key []byte) error {
 	return nil
 }
 
-func NewDeviceClient(url string, key []byte, tlsConfig *tls.Config) (DeviceClient, error) {
+func NewDeviceClient(url string, key []byte, tlsConfig *tls.Config) (*DeviceClient, error) {
 	dialer := websocket.Dialer{
 		TLSClientConfig: tlsConfig,
 		Subprotocols:    []string{deviceApiProtocolV1},
@@ -142,7 +182,9 @@ func NewDeviceClient(url string, key []byte, tlsConfig *tls.Config) (DeviceClien
 	if err != nil {
 		return nil, err
 	}
-	result := &deviceClient{wrap}
+	result := &DeviceClient{
+		apiBase: wrap,
+	}
 
 	if err := result.authenticate(key); err != nil {
 		return nil, err
