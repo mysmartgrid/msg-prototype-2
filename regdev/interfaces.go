@@ -1,6 +1,7 @@
 package regdev
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -43,6 +44,76 @@ type DeviceConfiguration struct {
 	Network  *DeviceConfigNetwork `json:"network,omitempty"`
 }
 
+type Heartbeat struct {
+	Time   time.Time
+	Memory struct {
+		Total    uint64
+		Cached   uint64
+		Buffered uint64
+		Free     uint64
+	}
+	Uptime   time.Duration
+	Resets   uint64
+	Type     string
+	Syslog   string
+	Firmware struct {
+		Version     string
+		ReleaseTime string
+		Build       string
+		Tag         string
+	}
+}
+
+type hbData struct {
+	Time   int64
+	Memory struct {
+		Total    uint64
+		Cached   uint64
+		Buffered uint64
+		Free     uint64
+	}
+	Uptime   uint64
+	Resets   uint64
+	Type     string
+	Syslog   string
+	Firmware struct {
+		Version     string
+		ReleaseTime string
+		Build       string
+		Tag         string
+	}
+}
+
+func (hb Heartbeat) MarshalJSON() ([]byte, error) {
+	data := hbData{
+		Time: hb.Time.Unix(),
+		Memory: hb.Memory,
+		Uptime: uint64(hb.Uptime.Seconds()),
+		Resets: hb.Resets,
+		Type: hb.Type,
+		Syslog: hb.Syslog,
+		Firmware: hb.Firmware,
+	}
+	return json.Marshal(data)
+}
+
+func (hb *Heartbeat) UnmarshalJSON(raw []byte) error {
+	var data hbData
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return err
+	}
+	*hb = Heartbeat{
+		Time: time.Unix(data.Time, 0),
+		Memory: data.Memory,
+		Uptime: time.Duration(data.Uptime) * time.Second,
+		Resets: data.Resets,
+		Type: data.Type,
+		Syslog: data.Syslog,
+		Firmware: data.Firmware,
+	}
+	return nil
+}
+
 type RegisteredDevice interface {
 	Id() string
 	Key() []byte
@@ -51,8 +122,8 @@ type RegisteredDevice interface {
 	LinkTo(uid string) error
 	Unlink() error
 
-	RegisterHeartbeat(at time.Time) error
-	GetHeartbeats() map[time.Time]bool
+	RegisterHeartbeat(hb Heartbeat) error
+	GetHeartbeats(maxCount uint64) []Heartbeat
 
 	GetNetworkConfig() DeviceConfigNetwork
 	SetNetworkConfig(conf *DeviceConfigNetwork) error

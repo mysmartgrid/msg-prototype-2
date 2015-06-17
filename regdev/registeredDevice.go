@@ -59,28 +59,39 @@ func (r *registeredDevice) Unlink() error {
 	return r.b.Delete(registeredDevice_network)
 }
 
-func (r *registeredDevice) RegisterHeartbeat(at time.Time) error {
-	hbKey := []byte(strconv.FormatInt(at.Unix(), 10))
+func (r *registeredDevice) RegisterHeartbeat(hb Heartbeat) error {
+	hbKey := []byte(strconv.FormatInt(hb.Time.Unix(), 10))
 
 	bucket := r.b.Bucket(registeredDevice_heartbeat)
-	bucket, err := bucket.CreateBucket(hbKey)
+	value, err := json.Marshal(hb)
 	if err != nil {
 		return err
 	}
-	return nil
+	return bucket.Put(hbKey, value)
 }
 
-func (r *registeredDevice) GetHeartbeats() map[time.Time]bool {
-	result := make(map[time.Time]bool)
-	r.b.Bucket(registeredDevice_heartbeat).ForEach(func(k, v []byte) error {
-		ts, err := strconv.ParseInt(string(k), 10, 64)
+func (r *registeredDevice) GetHeartbeats(maxCount uint64) (result []Heartbeat) {
+	if maxCount == 0 {
+		maxCount = 0xFFFFFFFFFFFFFFFF
+	}
+
+	cursor := r.b.Bucket(registeredDevice_heartbeat).Cursor()
+	key, value := cursor.Last()
+	maxCount--
+	for ; maxCount > 0 && key != nil; maxCount-- {
+		ts, err := strconv.ParseInt(string(key), 10, 64)
 		if err != nil {
 			panic(err)
 		}
-		result[time.Unix(ts, 0)] = true
-		return nil
-	})
-	return result
+		var hb Heartbeat
+		if err := json.Unmarshal(value, &hb); err != nil {
+			panic(err)
+		}
+		hb.Time = time.Unix(ts, 0)
+		result = append(result, hb)
+		key, value = cursor.Prev()
+	}
+	return
 }
 
 func (r *registeredDevice) GetNetworkConfig() DeviceConfigNetwork {

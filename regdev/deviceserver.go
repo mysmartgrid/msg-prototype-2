@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/gorilla/mux"
+	"io/ioutil"
 	"math"
 	"net/http"
 	"strconv"
@@ -85,14 +86,30 @@ func (s *DeviceServer) heartbeat(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "bad timestamp", 400)
 			return err
 		}
+
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return err
+		}
+
 		mac.Write(tsRaw)
+		mac.Write(body)
 		if !hmac.Equal(mac.Sum(nil), sig) {
 			http.Error(w, "bad request", 400)
 			return badHeartbeat
 		}
 		mac.Reset()
 
-		if err := dev.RegisterHeartbeat(ts); err != nil {
+		var hb Heartbeat
+		if err := json.Unmarshal(body, &hb); err != nil {
+			http.Error(w, err.Error(), 400)
+			return err
+		}
+
+		hb.Time = ts
+
+		if err := dev.RegisterHeartbeat(hb); err != nil {
 			http.Error(w, err.Error(), 500)
 			return err
 		}

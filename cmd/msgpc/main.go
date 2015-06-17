@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
@@ -19,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -113,19 +115,83 @@ func (dev *Device) Register() error {
 	return nil
 }
 
+func getMemInfo() map[string]uint64 {
+	data, err := ioutil.ReadFile("/proc/meminfo")
+	if err != nil {
+		panic(err)
+	}
+	lines := strings.Split(string(data), "\n")
+	result := make(map[string]uint64)
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		fields := strings.Split(line, ":")
+		key := fields[0]
+		value, err := strconv.ParseUint(strings.Fields(fields[1])[0], 10, 64)
+		if err != nil {
+			panic(err)
+		}
+
+		switch key {
+		case "MemTotal":
+			result["Total"] = value
+		case "MemFree":
+			result["Free"] = value
+		case "Cached":
+			result["Cached"] = value
+		case "Buffers":
+			result["Buffered"] = value
+		}
+	}
+
+	return result
+}
+
+func getUptime() uint64 {
+	data, err := ioutil.ReadFile("/proc/uptime")
+	if err != nil {
+		panic(err.Error())
+	}
+	uptime, err := strconv.ParseFloat(strings.Fields(string(data))[0], 64)
+	if err != nil {
+		panic(err)
+	}
+	return uint64(uptime)
+}
+
 func (dev *Device) Heartbeat() (map[string]interface{}, error) {
 	mac := hmac.New(sha256.New, dev.Key)
+	hbInfo := map[string]interface{}{
+		"Time":   time.Now().Unix(),
+		"Memory": getMemInfo(),
+		"Uptime": getUptime(),
+		"Resets": 0,
+		"Type":   "msgpc",
+		"Syslog": "",
+		"Firmware": map[string]string{
+			"Version":     "0.1",
+			"ReleaseTime": "not yet",
+			"Build":       "from git",
+			"Tag":         "<unknown>",
+		},
+	}
+	hbData, err := json.Marshal(hbInfo)
+	if err != nil {
+		return nil, err
+	}
 
 	hbUrl, _ := url.Parse(dev.regdevApi + "/" + dev.Id + "/status")
 	params := url.Values{
 		"ts": []string{strconv.FormatInt(time.Now().Unix(), 10)},
 	}
 	mac.Write([]byte(params["ts"][0]))
+	mac.Write(hbData)
 	params["sig"] = []string{hex.EncodeToString(mac.Sum(nil))}
 	hbUrl.RawQuery = params.Encode()
 	mac.Reset()
 
-	req, err := http.NewRequest("POST", hbUrl.String(), nil)
+	req, err := http.NewRequest("POST", hbUrl.String(), bytes.NewReader(hbData))
 	if err != nil {
 		return nil, err
 	}

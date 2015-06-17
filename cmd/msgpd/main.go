@@ -389,9 +389,9 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		<ul>
 			<li>{{configOf $link}}</li>
 		</ul>
-		{{range $ts, $_ := $link.GetHeartbeats}}
+		{{range $_, $hb := ($link.GetHeartbeats 0)}}
 		<ul>
-			<li>Heartbeat at {{$ts}}</li>
+			<li>Heartbeat at {{$hb}}</li>
 		</ul>
 		{{end}}
 	</li>
