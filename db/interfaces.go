@@ -3,7 +3,7 @@ package db
 import "time"
 
 type Tx interface {
-	AddUser(id string) (User, error)
+	AddUser(id, password string) (User, error)
 	User(id string) User
 	Users() map[string]User
 }
@@ -22,6 +22,7 @@ type User interface {
 	RemoveDevice(id string) error
 	Device(id string) Device
 	Devices() map[string]Device
+	HasPassword(pw string) bool
 
 	Id() string
 	dbId() uint64

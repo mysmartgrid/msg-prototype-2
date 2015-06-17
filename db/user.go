@@ -2,6 +2,7 @@ package db
 
 import (
 	"github.com/boltdb/bolt"
+	"golang.org/x/crypto/bcrypt"
 	"time"
 )
 
@@ -14,11 +15,24 @@ type user struct {
 var (
 	user_id      = []byte("dbId")
 	user_devices = []byte("devices")
+	user_pwHash  = []byte("pwhash")
 )
 
-func (u *user) init(dbId uint64) {
+func (u *user) init(dbId uint64, password string) error {
 	u.b.CreateBucketIfNotExists(user_devices)
 	u.b.Put(user_id, htoleu64(dbId))
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 0)
+	if err != nil {
+		return err
+	}
+	u.b.Put(user_pwHash, hash)
+	return nil
+}
+
+func (u *user) HasPassword(pw string) bool {
+	err := bcrypt.CompareHashAndPassword(u.b.Get(user_pwHash), []byte(pw))
+	return err == nil
 }
 
 func (u *user) AddDevice(id string, key []byte) (Device, error) {

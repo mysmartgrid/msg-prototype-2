@@ -286,10 +286,38 @@ func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
 
 func doLogin(w http.ResponseWriter, r *http.Request) {
 	session, _ := cookieStore.Get(r, "msgp-session")
-	session.Values["user"] = r.PostFormValue("user")
-	session.Values["wsToken"] = fmt.Sprintf("%x", sha256.Sum256([]byte(time.Now().String())))
-	session.Save(r, w)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+
+	user := r.PostFormValue("user")
+	password := r.PostFormValue("password")
+
+	var missing []string
+	if user == "" {
+		missing = append(missing, "user")
+	}
+	if password == "" {
+		missing = append(missing, "password")
+	}
+	if missing != nil {
+		type ctx struct {
+			Missing []string
+		}
+		templates.ExecuteTemplate(w, "user-login", ctx{missing})
+		return
+	}
+
+	db.View(func(tx msgpdb.Tx) error {
+		user := tx.User(user)
+		if user == nil || !user.HasPassword(password) {
+			http.Error(w, "bad username/password", 400)
+			return nil
+		}
+
+		session.Values["user"] = r.PostFormValue("user")
+		session.Values["wsToken"] = fmt.Sprintf("%x", sha256.Sum256([]byte(time.Now().String())))
+		session.Save(r, w)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return nil
+	})
 }
 
 func doLogout(w http.ResponseWriter, r *http.Request) {
@@ -300,28 +328,34 @@ func doLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func userRegister(w http.ResponseWriter, r *http.Request) {
-	name := r.FormValue("name")
+	name := r.FormValue("user")
+	password := r.FormValue("password")
 
-	type ctx struct {
+	var ctx struct {
 		Missing []string
 		Error   string
 	}
-
-	switch {
-	case name == "":
-		templates.ExecuteTemplate(w, "register", ctx{Missing: []string{"name"}})
-
-	default:
-		db.Update(func(tx msgpdb.Tx) error {
-			_, err := tx.AddUser(name)
-			if err != nil {
-				templates.ExecuteTemplate(w, "register", ctx{Error: err.Error()})
-				return err
-			}
-			templates.ExecuteTemplate(w, "register_done", nil)
-			return nil
-		})
+	if name == "" {
+		ctx.Missing = append(ctx.Missing, "user")
 	}
+	if password == "" {
+		ctx.Missing = append(ctx.Missing, "password")
+	}
+	if ctx.Missing != nil {
+		templates.ExecuteTemplate(w, "register", ctx)
+		return
+	}
+
+	db.Update(func(tx msgpdb.Tx) error {
+		_, err := tx.AddUser(name, password)
+		if err != nil {
+			ctx.Error = err.Error()
+			templates.ExecuteTemplate(w, "register", ctx)
+			return err
+		}
+		templates.ExecuteTemplate(w, "register_done", nil)
+		return nil
+	})
 }
 
 func adminHandler(w http.ResponseWriter, r *http.Request) {
@@ -405,9 +439,10 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 
 func adminAddUser(w http.ResponseWriter, r *http.Request) {
 	user := r.FormValue("user")
+	password := r.FormValue("password")
 
 	err := db.Update(func(tx msgpdb.Tx) error {
-		_, err := tx.AddUser(user)
+		_, err := tx.AddUser(user, password)
 		return err
 	})
 	if err != nil {

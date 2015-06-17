@@ -6,10 +6,24 @@
 		<div class="alert alert-danger">{{.Error}}</div>
 		{{end}}
 		<form action="/user/register" method="POST">
-			<p>
-				<label for="name" {{alertIfMissing "name" .Missing}}>Login ID:</label>
-				<input type="text" name="name" length="20" />
-			</p>
+			<table>
+				<tr>
+					<td>
+						<label for="user" {{alertIfMissing "user" .Missing}}>Username</label>
+					</td>
+					<td>
+						<input type="text" id="user" name="user" length="20" />
+					</td>
+				</tr>
+				<tr>
+					<td>
+						<label for="password" {{alertIfMissing "password" .Missing}}>Password</label>
+					</td>
+					<td>
+						<input type="password" id="password" name="password" length="20" />
+					</td>
+				</tr>
+			</table>
 			<input type="submit" value="Submit" />
 		</form>
 	</div>

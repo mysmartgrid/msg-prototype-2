@@ -10,7 +10,7 @@ type tx struct {
 	*bolt.Tx
 }
 
-func (tx *tx) AddUser(id string) (User, error) {
+func (tx *tx) AddUser(id, password string) (User, error) {
 	idBytes := []byte(id)
 	if len(idBytes) == 0 || len(idBytes) >= bolt.MaxKeySize {
 		return nil, InvalidId
@@ -27,7 +27,9 @@ func (tx *tx) AddUser(id string) (User, error) {
 	}
 
 	result := &user{tx, ub, id}
-	result.init(seq)
+	if err := result.init(seq, password); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
