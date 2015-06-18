@@ -16,6 +16,7 @@ var (
 	user_id      = []byte("dbId")
 	user_devices = []byte("devices")
 	user_pwHash  = []byte("pwhash")
+	user_isAdmin = []byte("isAdmin")
 )
 
 func (u *user) init(dbId uint64, password string) error {
@@ -93,6 +94,18 @@ func (d *user) Devices() map[string]Device {
 		return nil
 	})
 	return result
+}
+
+func (u *user) IsAdmin() bool {
+	return u.b.Get(user_isAdmin) != nil
+}
+
+func (u *user) SetAdmin(b bool) error {
+	if !b {
+		return u.b.Delete(user_isAdmin)
+	} else {
+		return u.b.Put(user_isAdmin, []byte{})
+	}
 }
 
 func (u *user) Id() string {

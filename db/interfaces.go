@@ -24,6 +24,9 @@ type User interface {
 	Devices() map[string]Device
 	HasPassword(pw string) bool
 
+	IsAdmin() bool
+	SetAdmin(b bool) error
+
 	Id() string
 	dbId() uint64
 

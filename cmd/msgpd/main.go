@@ -364,7 +364,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 <ul>
 {{range $name, $user := (.U.Users)}}
 	<li>
-		<div>{{$name}}</div>
+		<div>{{$name}} (is admin: {{$user.IsAdmin}})</div>
 		<ul>
 		{{range $name, $dev := $user.Devices}}
 			<li>
@@ -400,7 +400,20 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 <strong>done</strong>
 `
 
+	session := getSession(w, r)
+	userId, found := session.Values["user"]
+	if !found {
+		removeSessionAndNotifyUser(w, r, session)
+		return
+	}
+
 	db.View(func(utx msgpdb.Tx) error {
+		user := utx.User(userId.(string))
+		if user == nil || !user.IsAdmin() {
+			http.Error(w, "unauthorized", 401)
+			return nil
+		}
+
 		return devdb.View(func(dtx regdev.Tx) error {
 			t := template.New("")
 			t.Funcs(template.FuncMap{
@@ -448,6 +461,30 @@ func adminAddUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), 400)
 	}
+}
+
+func adminUser_Set(w http.ResponseWriter, r *http.Request) {
+	userId := mux.Vars(r)["user"]
+	db.Update(func(tx msgpdb.Tx) error {
+		user := tx.User(userId)
+		if user == nil {
+			http.Error(w, "not found", 404)
+			return errors.New("")
+		}
+
+		switch r.FormValue("isAdmin") {
+		case "":
+		case "true":
+			user.SetAdmin(true)
+		case "false":
+			user.SetAdmin(false)
+		default:
+			http.Error(w, "bad isAdmin", 400)
+			return errors.New("")
+		}
+
+		return nil
+	})
 }
 
 func adminUser_AddDev(w http.ResponseWriter, r *http.Request) {
@@ -681,9 +718,11 @@ func main() {
 	router.HandleFunc("/user/devices/network-config/{device}", userDevicesNetconf_get).Methods("GET")
 	router.HandleFunc("/user/devices/network-config/{device}", userDevicesNetconf_post).Methods("POST")
 
+	router.HandleFunc("/admin", defaultHeaders(adminHandler))
+
 	if *args.motherlode {
-		router.HandleFunc("/admin", defaultHeaders(adminHandler))
 		router.HandleFunc("/admin/add-user", adminAddUser).Methods("POST")
+		router.HandleFunc("/admin/user/{user}/props", adminUser_Set).Methods("POST")
 		router.HandleFunc("/admin/user/{user}/add-device", adminUser_AddDev).Methods("POST")
 		router.HandleFunc("/admin/device/{user}/{device}/add-sensor", adminDevice_AddSensor).Methods("POST")
 		router.HandleFunc("/admin/device/{user}/{device}/remove-sensor", adminDevice_RemoveSensor).Methods("POST")
