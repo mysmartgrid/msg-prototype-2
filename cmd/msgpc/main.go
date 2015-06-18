@@ -175,6 +175,12 @@ func (dev *Device) Heartbeat() (map[string]interface{}, error) {
 			"Build":       "from git",
 			"Tag":         "<unknown>",
 		},
+		"config": map[string]interface{}{
+			"lan": map[string]interface{}{
+				"enabled":  true,
+				"protocol": "dhcp",
+			},
+		},
 	}
 	hbData, err := json.Marshal(hbInfo)
 	if err != nil {

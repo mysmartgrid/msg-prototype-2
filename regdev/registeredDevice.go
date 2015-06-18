@@ -62,6 +62,13 @@ func (r *registeredDevice) Unlink() error {
 func (r *registeredDevice) RegisterHeartbeat(hb Heartbeat) error {
 	hbKey := []byte(strconv.FormatInt(hb.Time.Unix(), 10))
 
+	if hb.Config != nil {
+		if err := r.SetNetworkConfig(hb.Config); err != nil {
+			return err
+		}
+		hb.Config = nil
+	}
+
 	bucket := r.b.Bucket(registeredDevice_heartbeat)
 	value, err := json.Marshal(hb)
 	if err != nil {
@@ -127,7 +134,7 @@ func checkAndCleanProtocol(conf *DeviceIfaceIPConfig) bool {
 }
 
 func checkConfigLan(conf *DeviceConfigNetLan) bool {
-	if !conf.Enabled {
+	if conf == nil || !conf.Enabled {
 		return true
 	}
 
@@ -135,7 +142,7 @@ func checkConfigLan(conf *DeviceConfigNetLan) bool {
 }
 
 func checkConfigWifi(conf *DeviceConfigNetWifi) bool {
-	if !conf.Enabled {
+	if conf == nil || !conf.Enabled {
 		return true
 	}
 

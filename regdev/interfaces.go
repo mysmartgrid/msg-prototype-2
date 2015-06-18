@@ -62,6 +62,7 @@ type Heartbeat struct {
 		Build       string
 		Tag         string
 	}
+	Config *DeviceConfigNetwork
 }
 
 type hbData struct {
@@ -82,17 +83,19 @@ type hbData struct {
 		Build       string
 		Tag         string
 	}
+	Config *DeviceConfigNetwork
 }
 
 func (hb Heartbeat) MarshalJSON() ([]byte, error) {
 	data := hbData{
-		Time: hb.Time.Unix(),
-		Memory: hb.Memory,
-		Uptime: uint64(hb.Uptime.Seconds()),
-		Resets: hb.Resets,
-		Type: hb.Type,
-		Syslog: hb.Syslog,
+		Time:     hb.Time.Unix(),
+		Memory:   hb.Memory,
+		Uptime:   uint64(hb.Uptime.Seconds()),
+		Resets:   hb.Resets,
+		Type:     hb.Type,
+		Syslog:   hb.Syslog,
 		Firmware: hb.Firmware,
+		Config:   hb.Config,
 	}
 	return json.Marshal(data)
 }
@@ -103,13 +106,14 @@ func (hb *Heartbeat) UnmarshalJSON(raw []byte) error {
 		return err
 	}
 	*hb = Heartbeat{
-		Time: time.Unix(data.Time, 0),
-		Memory: data.Memory,
-		Uptime: time.Duration(data.Uptime) * time.Second,
-		Resets: data.Resets,
-		Type: data.Type,
-		Syslog: data.Syslog,
+		Time:     time.Unix(data.Time, 0),
+		Memory:   data.Memory,
+		Uptime:   time.Duration(data.Uptime) * time.Second,
+		Resets:   data.Resets,
+		Type:     data.Type,
+		Syslog:   data.Syslog,
 		Firmware: data.Firmware,
+		Config:   data.Config,
 	}
 	return nil
 }
