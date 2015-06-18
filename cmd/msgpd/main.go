@@ -450,8 +450,8 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func adminAddUser(w http.ResponseWriter, r *http.Request) {
-	user := r.FormValue("user")
+func adminUser_Add(w http.ResponseWriter, r *http.Request) {
+	user := mux.Vars(r)["user"]
 	password := r.FormValue("password")
 
 	err := db.Update(func(tx msgpdb.Tx) error {
@@ -485,57 +485,6 @@ func adminUser_Set(w http.ResponseWriter, r *http.Request) {
 
 		return nil
 	})
-}
-
-func adminUser_AddDev(w http.ResponseWriter, r *http.Request) {
-	user := mux.Vars(r)["user"]
-	device := r.FormValue("device")
-	key := r.FormValue("key")
-	rawKey, err := hex.DecodeString(key)
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-		return
-	}
-
-	err = db.Update(func(tx msgpdb.Tx) error {
-		user := tx.User(user)
-		_, err := user.AddDevice(device, rawKey)
-		return err
-	})
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-	}
-}
-
-func adminDevice_AddSensor(w http.ResponseWriter, r *http.Request) {
-	user := mux.Vars(r)["user"]
-	device := mux.Vars(r)["device"]
-	sensor := r.FormValue("sensor")
-
-	err := db.Update(func(tx msgpdb.Tx) error {
-		user := tx.User(user)
-		device := user.Device(device)
-		_, err := device.AddSensor(sensor)
-		return err
-	})
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-	}
-}
-
-func adminDevice_RemoveSensor(w http.ResponseWriter, r *http.Request) {
-	user := mux.Vars(r)["user"]
-	device := mux.Vars(r)["device"]
-	sensor := r.FormValue("sensor")
-
-	err := db.Update(func(tx msgpdb.Tx) error {
-		user := tx.User(user)
-		device := user.Device(device)
-		return device.RemoveSensor(sensor)
-	})
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-	}
 }
 
 func loggedInSwitch(in, out func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
@@ -721,11 +670,8 @@ func main() {
 	router.HandleFunc("/admin", defaultHeaders(adminHandler))
 
 	if *args.motherlode {
-		router.HandleFunc("/admin/add-user", adminAddUser).Methods("POST")
+		router.HandleFunc("/admin/user/{user}", adminUser_Add).Methods("PUT")
 		router.HandleFunc("/admin/user/{user}/props", adminUser_Set).Methods("POST")
-		router.HandleFunc("/admin/user/{user}/add-device", adminUser_AddDev).Methods("POST")
-		router.HandleFunc("/admin/device/{user}/{device}/add-sensor", adminDevice_AddSensor).Methods("POST")
-		router.HandleFunc("/admin/device/{user}/{device}/remove-sensor", adminDevice_RemoveSensor).Methods("POST")
 	}
 
 	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
