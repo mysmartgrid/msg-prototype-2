@@ -1,0 +1,13 @@
+listen = "[::1]:8080"
+
+assets-dir    = "./assets"
+templates-dir = "./templates"
+db-dir        = "./"
+
+motherlode = true
+
+[influx]
+user     = "msgp"
+password = "msgp"
+database = "msgp"
+address  = "localhost:8086"

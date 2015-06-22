@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	msgp "github.com/mysmartgrid/msg-prototype-2"
@@ -24,35 +25,36 @@ import (
 	"time"
 )
 
-type cmdlineArgs struct {
-	listen                                       *string
-	assets, templates                            *string
-	udbPath, devdbPath                           *string
-	influxAddr, influxDb, influxUser, influxPass *string
-	sslCert, sslKey                              *string
-	deviceProxyConfig                            *string
-	motherlode                                   *bool
+type influxConfig struct {
+	User     string `toml:"user"`
+	Password string `toml:"password"`
+	Address  string `toml:"address"`
+	Database string `toml:"database"`
+}
+
+type tlsConfig struct {
+	Cert string `toml:"certificate"`
+	Key  string `toml:"key"`
+}
+
+type serverConfig struct {
+	ListenAddr        string       `toml:"listen"`
+	AssetsDir         string       `toml:"assets-dir"`
+	TemplatesDir      string       `toml:"templates-dir"`
+	DbDir             string       `toml:"db-dir"`
+	Influx            influxConfig `toml:"influx"`
+	Tls               tlsConfig    `toml:"tls"`
+	DeviceProxyConfig string       `toml:"device-proxy-config"`
+	EnableAdminOps    bool         `toml:"motherlode"`
 }
 
 const (
 	sessionCookieVersion = 1
 )
 
-var args = cmdlineArgs{
-	listen:            flag.String("listen", ":8080", "listen address"),
-	assets:            flag.String("assets", "./assets", "assets path"),
-	templates:         flag.String("templates", "./templates", "template path"),
-	udbPath:           flag.String("userdb", "", "path to user database"),
-	devdbPath:         flag.String("devdb", "", "path to device database"),
-	influxAddr:        flag.String("influx-addr", "", "address of influxdb"),
-	influxDb:          flag.String("influx-db", "", "influxdb database name"),
-	influxUser:        flag.String("influx-user", "", "username for influxdb"),
-	influxPass:        flag.String("influx-pass", "", "password for influxdb"),
-	sslCert:           flag.String("ssl-cert", "", "ssl certificate file"),
-	sslKey:            flag.String("ssl-key", "", "ssl key file"),
-	motherlode:        flag.Bool("motherlode", false, ""),
-	deviceProxyConfig: flag.String("dev-proxy-conf", "", "device->msg proxy config"),
-}
+var configFile = flag.String("config", "", "configuration file")
+
+var config serverConfig
 
 var templates *template.Template
 var cookieStore = sessions.NewCookieStore([]byte("test-key"))
@@ -62,7 +64,6 @@ var proxyConf struct {
 	DeviceKeys map[string]string
 }
 var oldApiPostClient *http.Client
-
 var db msgpdb.Db
 var devdb regdev.Db
 var h = hub.New()
@@ -72,12 +73,24 @@ var apiCtx msgp.WsApiContext
 func init() {
 	flag.Parse()
 
-	if *args.deviceProxyConfig != "" {
-		fcontents, err := ioutil.ReadFile(*args.deviceProxyConfig)
+	if *configFile == "" {
+		log.Fatal("missing -config")
+	}
+
+	configData, err := ioutil.ReadFile(*configFile)
+	if err != nil {
+		log.Fatalf("could not read config file: %v", err.Error())
+	}
+	if err := toml.Unmarshal(configData, &config); err != nil {
+		log.Fatalf("could not load config file: %v", err.Error())
+	}
+
+	if config.DeviceProxyConfig != "" {
+		configData, err := ioutil.ReadFile(config.DeviceProxyConfig)
 		if err != nil {
 			log.Fatalf("could not read device key map: %v", err.Error())
 		}
-		if err := json.Unmarshal(fcontents, &proxyConf); err != nil {
+		if err := json.Unmarshal(configData, &proxyConf); err != nil {
 			log.Fatalf("could not load device key map: %v", err.Error())
 		}
 		oldApiPostClient = &http.Client{
@@ -101,34 +114,36 @@ func init() {
 		}
 	}
 
-	switch fi, err := os.Stat(*args.assets); true {
-	case err != nil:
-		log.Fatal("bad -assets: ", err)
-		os.Exit(1)
-
-	case !fi.IsDir():
-		log.Fatal("-assets is not a directory")
-		os.Exit(1)
-	}
-
-	bailIfMissing := func(value *string, flag string) {
+	orDefault := func(value *string, def string) {
 		if *value == "" {
-			log.Fatalf("%v missing", flag)
+			*value = def
 		}
 	}
 
-	bailIfMissing(args.udbPath, "-userdb")
-	bailIfMissing(args.devdbPath, "-devdb")
-	bailIfMissing(args.influxAddr, "-influx-addr")
-	bailIfMissing(args.influxDb, "-influx-db")
-	bailIfMissing(args.influxUser, "-influx-user")
-	bailIfMissing(args.influxPass, "-influx-pass")
+	orDefault(&config.ListenAddr, "localhost:8080")
+	orDefault(&config.AssetsDir, "./assets")
+	orDefault(&config.TemplatesDir, "./templates")
+	orDefault(&config.DbDir, ".")
 
-	if *args.sslCert != "" {
-		bailIfMissing(args.sslKey, "-ssl-key")
+	if config.Influx.User == "" || config.Influx.Address == "" || config.Influx.Database == "" {
+		log.Fatal("influxdb config incomplete")
 	}
-	if *args.sslKey != "" {
-		bailIfMissing(args.sslCert, "-ssl-cert")
+
+	switch fi, err := os.Stat(config.AssetsDir); true {
+	case err != nil:
+		log.Fatalf("bad assets-dir: %v", err.Error())
+		os.Exit(1)
+
+	case !fi.IsDir():
+		log.Fatal("assets-dir is not a directory")
+		os.Exit(1)
+	}
+
+	if config.Tls.Key != "" && config.Tls.Cert == "" {
+		log.Fatal("tls cert missing")
+	}
+	if config.Tls.Cert != "" && config.Tls.Key == "" {
+		log.Fatal("tls key missing")
 	}
 
 	templates = template.New("")
@@ -164,17 +179,18 @@ func init() {
 		},
 	})
 
-	_, err := templates.ParseGlob(path.Join(*args.templates, "*.html"))
+	_, err = templates.ParseGlob(path.Join(config.TemplatesDir, "*.html"))
 	if err != nil {
 		log.Fatal("error parsing templates: ", err)
 	}
 
-	db, err = msgpdb.OpenDb(*args.udbPath, *args.influxAddr, *args.influxDb, *args.influxUser, *args.influxPass)
+	db, err = msgpdb.OpenDb(config.DbDir+"/users.db", config.Influx.Address, config.Influx.Database,
+		config.Influx.User, config.Influx.Password)
 	if err != nil {
 		log.Fatal("error opening user db: ", err)
 	}
 
-	devdb, err = regdev.Open(*args.devdbPath)
+	devdb, err = regdev.Open(config.DbDir + "/devices.db")
 	if err != nil {
 		log.Fatal("error opening device db: ", err)
 	}
@@ -668,7 +684,7 @@ func main() {
 
 	router.HandleFunc("/admin", defaultHeaders(adminHandler))
 
-	if *args.motherlode {
+	if config.EnableAdminOps {
 		router.HandleFunc("/admin/user/{user}", adminUser_Add).Methods("PUT")
 		router.HandleFunc("/admin/user/{user}/props", adminUser_Set).Methods("POST")
 	}
@@ -676,20 +692,20 @@ func main() {
 	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
 	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
 	router.PathPrefix("/regdev").Handler(&server)
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir(*args.assets)))
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir(config.AssetsDir)))
 
 	http.Handle("/", router)
 
-	log.Print("Listening on ", *args.listen)
-	if *args.sslCert != "" {
-		log.Printf("Using SSL cert and key %v, %v", *args.sslCert, *args.sslKey)
+	log.Print("Listening on ", config.ListenAddr)
+	if config.Tls.Cert != "" {
+		log.Printf("Using SSL cert and key %v, %v", config.Tls.Cert, config.Tls.Key)
 
-		if err := http.ListenAndServeTLS(*args.listen, *args.sslCert, *args.sslKey, nil); err != nil {
-			log.Fatal("failed: ", err)
+		if err := http.ListenAndServeTLS(config.ListenAddr, config.Tls.Cert, config.Tls.Key, nil); err != nil {
+			log.Fatalf("failed: %v", err.Error())
 		}
 	} else {
-		if err := http.ListenAndServe(*args.listen, nil); err != nil {
-			log.Fatal("failed: ", err)
+		if err := http.ListenAndServe(config.ListenAddr, nil); err != nil {
+			log.Fatalf("failed: %v", err.Error())
 		}
 	}
 }
