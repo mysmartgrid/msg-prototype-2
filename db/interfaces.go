@@ -44,7 +44,7 @@ type Device interface {
 	Key() []byte
 
 	Name() string
-	SetName(string)
+	SetName(string) error
 }
 
 type Sensor interface {
@@ -52,7 +52,7 @@ type Sensor interface {
 	dbId() uint64
 
 	Name() string
-	SetName(string)
+	SetName(string) error
 
 	Port() int32
 	SetPort(port int32) error

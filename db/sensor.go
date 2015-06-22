@@ -33,8 +33,8 @@ func (s *sensor) Name() string {
 	return string(s.b.Get(sensor_name))
 }
 
-func (s *sensor) SetName(name string) {
-	s.b.Put(sensor_name, []byte(name))
+func (s *sensor) SetName(name string) error {
+	return s.b.Put(sensor_name, []byte(name))
 }
 
 func (s *sensor) Port() int32 {

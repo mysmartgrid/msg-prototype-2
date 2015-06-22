@@ -92,6 +92,6 @@ func (d *device) Name() string {
 	return string(d.b.Get(device_name))
 }
 
-func (d *device) SetName(name string) {
-	d.b.Put(device_name, []byte(name))
+func (d *device) SetName(name string) error {
+	return d.b.Put(device_name, []byte(name))
 }
