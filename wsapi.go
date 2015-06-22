@@ -293,12 +293,26 @@ func (api *WsDevApi) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api
 			device.SetName(metadata.Name)
 		}
 
-		for sid, sname := range metadata.Sensors {
+		for sid, sd := range metadata.Sensors {
 			dbs := device.Sensor(sid)
 			if dbs == nil {
 				return &msg2api.Error{Code: "no sensor", Extra: "sid"}
 			}
-			dbs.SetName(sname)
+			if sd.Name != nil {
+				if err := dbs.SetName(*sd.Name); err != nil {
+					return &msg2api.Error{Code: "failed", Extra: err.Error()}
+				}
+			}
+			if sd.Unit != nil {
+				if err := dbs.SetUnit(*sd.Unit); err != nil {
+					return &msg2api.Error{Code: "failed", Extra: err.Error()}
+				}
+			}
+			if sd.Port != nil {
+				if err := dbs.SetPort(*sd.Port); err != nil {
+					return &msg2api.Error{Code: "failed", Extra: err.Error()}
+				}
+			}
 		}
 
 		api.ctx.Hub.Publish(api.User, msg2api.UserEventMetadataArgs{
@@ -387,10 +401,17 @@ func (api *WsUserApi) doGetValues(since time.Time, withMetadata bool) error {
 			for did, dev := range user.Devices() {
 				meta[did] = msg2api.DeviceMetadata{
 					Name:    dev.Name(),
-					Sensors: make(map[string]string),
+					Sensors: make(map[string]msg2api.SensorMetadata),
 				}
 				for sid, sensor := range dev.Sensors() {
-					meta[dev.Id()].Sensors[sid] = sensor.Name()
+					name := sensor.Name()
+					unit := sensor.Unit()
+					port := sensor.Port()
+					meta[dev.Id()].Sensors[sid] = msg2api.SensorMetadata{
+						Name: &name,
+						Unit: &unit,
+						Port: &port,
+					}
 				}
 			}
 			if err := api.server.SendMetadata(msg2api.UserEventMetadataArgs{meta}); err != nil {

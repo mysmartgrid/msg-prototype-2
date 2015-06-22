@@ -166,7 +166,9 @@ angular.module("msgp", [])
 				var sens = dev.sensors[sid];
 				var msens = mdev.getSensor(sid);
 
-				msens.name = sens;
+				msens.name = sens.name;
+				msens.unit = sens.unit;
+				msens.port = sens.port;
 			});
 		});
 
@@ -210,7 +212,7 @@ angular.module("msgp", [])
 			var graphData = [[new Date(), null]];
 			var valueMissingInterval = undefined;
 
-			var g = new Dygraph(element.children("div.sensor-graph").get(0), graphData, {
+			var g = new Dygraph(element.find("div.sensor-graph").get(0), graphData, {
 				labels: ["Time", "Value"],
 				connectSeparatedPoints: true
 			});

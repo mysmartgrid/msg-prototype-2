@@ -47,10 +47,16 @@ type UserEventMetadataArgs struct {
 	Devices map[string]DeviceMetadata `json:"devices"`
 }
 
+type SensorMetadata struct {
+	Name *string `json:"name,omitempty"`
+	Unit *string `json:"unit,omitempty"`
+	Port *int32  `json:"port,omitempty"`
+}
+
 type DeviceMetadata struct {
-	Name           string             `json:"name,omitempty"`
-	Sensors        map[string]string  `json:"sensors,omitempty"`
-	DeletedSensors map[string]*string `json:"deletedSensors,omitempty"`
+	Name           string                    `json:"name,omitempty"`
+	Sensors        map[string]SensorMetadata `json:"sensors,omitempty"`
+	DeletedSensors map[string]*string        `json:"deletedSensors,omitempty"`
 }
 
 type Error struct {

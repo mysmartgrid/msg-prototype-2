@@ -279,7 +279,7 @@ func (dev *Device) RegisterSensors() error {
 
 func (dev *Device) UpdateSensors() error {
 	for id, name := range dev.Sensors {
-		if err := dev.client().RenameSensor(id, name); err != nil {
+		if err := dev.client().UpdateSensor(id, msgp.SensorMetadata{Name: &name}); err != nil {
 			return err
 		}
 	}
@@ -305,7 +305,8 @@ func (dev *Device) SendUpdates(interval time.Duration, count int64) error {
 
 func (dev *Device) RenameSensors() error {
 	for id, name := range dev.Sensors {
-		if err := dev.client().RenameSensor(id, fmt.Sprintf("%v (%v)", name, rand.Int31n(1000))); err != nil {
+		name := fmt.Sprintf("%v (%v)", name, rand.Int31n(1000))
+		if err := dev.client().UpdateSensor(id, msgp.SensorMetadata{Name: &name}); err != nil {
 			return err
 		}
 	}

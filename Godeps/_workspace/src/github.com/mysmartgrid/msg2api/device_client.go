@@ -115,12 +115,12 @@ func (c *DeviceClient) Rename(name string) error {
 	return c.executeCommand(&cmd)
 }
 
-func (c *DeviceClient) RenameSensor(id, name string) error {
+func (c *DeviceClient) UpdateSensor(id string, md SensorMetadata) error {
 	cmd := MessageOut{
 		Command: "updateMetadata",
 		Args: DeviceCmdUpdateMetadataArgs{
-			Sensors: map[string]string{
-				id: name,
+			Sensors: map[string]SensorMetadata{
+				id: md,
 			},
 		},
 	}
