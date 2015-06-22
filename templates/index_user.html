@@ -8,7 +8,7 @@
 			</div>
 
 			<div data-ng-repeat="device in devices" style="width: 100%">
-				<h2>{{"{{device.name}}"}}</h2>
+				<h2>%%device.name%%</h2>
 				<div style="width: 100%"
 					data-ng-repeat="sensor in device.sensors"
 					data-sensor-graph=""

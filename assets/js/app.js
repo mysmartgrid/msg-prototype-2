@@ -1,6 +1,10 @@
 "use strict";
 
 angular.module("msgp", [])
+.config(function($interpolateProvider) {
+	$interpolateProvider.startSymbol("%%");
+	$interpolateProvider.endSymbol("%%");
+})
 .factory("WSUserClient", ["$rootScope", function($rootScope) {
 	if (!window["WebSocket"])
 		throw "websocket support required";
@@ -199,9 +203,7 @@ angular.module("msgp", [])
 			api: "=?"
 		},
 		restrict: "A",
-		template:
-			'<h3>{{title}}</h3>' +
-			'<div style="width: 100%" class="sensor-graph"></div>',
+		templateUrl: "/html/sensor-graph.html",
 		link: function(scope, element, attrs) {
 			var maxAgeMs = undefined;
 			var assumeMissingAfterMs = undefined;
