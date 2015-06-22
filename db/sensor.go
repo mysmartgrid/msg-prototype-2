@@ -12,6 +12,8 @@ type sensor struct {
 var (
 	sensor_name = []byte("name")
 	sensor_id   = []byte("dbId")
+	sensor_port = []byte("port")
+	sensor_unit = []byte("unit")
 )
 
 func (s *sensor) init(name string, dbId uint64) {
@@ -33,4 +35,32 @@ func (s *sensor) Name() string {
 
 func (s *sensor) SetName(name string) {
 	s.b.Put(sensor_name, []byte(name))
+}
+
+func (s *sensor) Port() int32 {
+	if val := s.b.Get(sensor_port); val != nil {
+		return int32(letohu64(val))
+	}
+	return -1
+}
+
+func (s *sensor) SetPort(port int32) error {
+	if port < 0 {
+		return s.b.Delete(sensor_port)
+	}
+	return s.b.Put(sensor_port, htoleu64(uint64(port)))
+}
+
+func (s *sensor) Unit() string {
+	if val := s.b.Get(sensor_unit); val != nil {
+		return string(val)
+	}
+	return ""
+}
+
+func (s *sensor) SetUnit(unit string) error {
+	if unit == "" {
+		return s.b.Delete(sensor_unit)
+	}
+	return s.b.Put(sensor_unit, []byte(unit))
 }

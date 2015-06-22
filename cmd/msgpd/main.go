@@ -386,7 +386,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 				<div>{{$dev.Id}}({{$dev.Name}}) key 0x{{$dev.Key | printf "%x"}}</div>
 				<ul>
 				{{range $name, $sens := $dev.Sensors}}
-					<li>{{$sens.Id}}({{$sens.Name}})</li>
+					<li>{{$sens.Id}} (name: {{$sens.Name}}) (port: {{$sens.Port}}) (unit: {{$sens.Unit}})</li>
 				{{end}}
 				</ul>
 			</li>

@@ -53,6 +53,12 @@ type Sensor interface {
 
 	Name() string
 	SetName(string)
+
+	Port() int32
+	SetPort(port int32) error
+
+	Unit() string
+	SetUnit(unit string) error
 }
 
 type Value struct {
