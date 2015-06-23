@@ -28,13 +28,19 @@ var useSSL bool
 var tlsConfig tls.Config
 var dev *Device
 
+type Sensor struct {
+	Name string
+	Unit string
+	Port int32
+}
+
 type Device struct {
 	Id  string
 	Key []byte
 
 	User string
 
-	Sensors map[string]string
+	Sensors map[string]Sensor
 
 	api     string
 	client_ *msgp.DeviceClient
@@ -77,7 +83,7 @@ func newRandomDevice() *Device {
 
 func (dev *Device) GenerateRandomSensors(count int64) {
 	if dev.Sensors == nil {
-		dev.Sensors = make(map[string]string)
+		dev.Sensors = make(map[string]Sensor)
 	}
 
 	for count > 0 {
@@ -92,7 +98,11 @@ func (dev *Device) GenerateRandomSensors(count int64) {
 			continue
 		}
 
-		dev.Sensors[id] = fmt.Sprintf("Sensor %v", count)
+		dev.Sensors[id] = Sensor{
+			Name: fmt.Sprintf("Sensor %v", count),
+			Unit: []string{"U1", "U2"}[rand.Int31n(2)],
+			Port: int32(len(dev.Sensors)),
+		}
 		count--
 	}
 }
@@ -268,8 +278,16 @@ func (dev *Device) Heartbeat() (map[string]interface{}, error) {
 }
 
 func (dev *Device) RegisterSensors() error {
-	for id, _ := range dev.Sensors {
+	for id, sens := range dev.Sensors {
 		if err := dev.client().AddSensor(id); err != nil {
+			return err
+		}
+		md := msgp.SensorMetadata{
+			Name: &sens.Name,
+			Unit: &sens.Unit,
+			Port: &sens.Port,
+		}
+		if err := dev.client().UpdateSensor(id, md); err != nil {
 			return err
 		}
 	}
@@ -278,8 +296,13 @@ func (dev *Device) RegisterSensors() error {
 }
 
 func (dev *Device) UpdateSensors() error {
-	for id, name := range dev.Sensors {
-		if err := dev.client().UpdateSensor(id, msgp.SensorMetadata{Name: &name}); err != nil {
+	for id, sens := range dev.Sensors {
+		md := msgp.SensorMetadata{
+			Name: &sens.Name,
+			Unit: &sens.Unit,
+			Port: &sens.Port,
+		}
+		if err := dev.client().UpdateSensor(id, md); err != nil {
 			return err
 		}
 	}
@@ -304,8 +327,8 @@ func (dev *Device) SendUpdates(interval time.Duration, count int64) error {
 }
 
 func (dev *Device) RenameSensors() error {
-	for id, name := range dev.Sensors {
-		name := fmt.Sprintf("%v (%v)", name, rand.Int31n(1000))
+	for id, sens := range dev.Sensors {
+		name := fmt.Sprintf("%v (%v)", sens.Name, rand.Int31n(1000))
 		if err := dev.client().UpdateSensor(id, msgp.SensorMetadata{Name: &name}); err != nil {
 			return err
 		}
