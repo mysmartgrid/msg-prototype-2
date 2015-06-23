@@ -103,186 +103,130 @@ angular.module("msgp", [])
 
 	return socket;
 }])
-.controller("GraphPage", ["$scope", "$interval", "WSUserClient", "wsurl", function($scope, $interval, wsclient, wsurl) {
-	$scope.devices = {};
-
-	var getDevice = function(id) {
-		if (!(id in $scope.devices)) {
-			var dev = $scope.devices[id] = {
-				sensors: {},
-				id: id
-			};
-
-			dev.getSensor = function(id) {
-				if (!(id in dev.sensors)) {
-					var sens = dev.sensors[id] = {
-						id: id
-					};
-
-					sens.update = function(data) {
-						if (sens.graph !== undefined) {
-							sens.graph.update(data);
-						}
-					};
-				}
-				return dev.sensors[id];
-			};
-
-			dev.removeSensor = function(id) {
-				if (!(id in dev.sensors))
-					throw "no sensor " + id;
-
-				delete dev.sensors[id];
-			};
-		}
-		return $scope.devices[id];
-	};
-
-	var requestRealtimeUpdates = function() {
-		var sensors = {};
-
-		Object.getOwnPropertyNames($scope.devices).forEach(function(dev) {
-			dev = $scope.devices[dev];
-			sensors[dev.id] = Object.getOwnPropertyNames(dev.sensors);
-		});
-
-		wsclient.requestRealtimeUpdates(sensors);
-		window.setTimeout(requestRealtimeUpdates, 30000);
-	};
-
-	wsclient.onMetadata = function(md) {
-		Object.getOwnPropertyNames(md.devices).forEach(function(did) {
-			var dev = md.devices[did];
-			var mdev = getDevice(did);
-
-			if ("name" in dev)
-				mdev.name = dev.name;
-
-			Object.getOwnPropertyNames(dev.deletedSensors || {}).forEach(function(sid) {
-				mdev.removeSensor(sid);
-			});
-
-			Object.getOwnPropertyNames(dev.sensors || {}).forEach(function(sid) {
-				var sens = dev.sensors[sid];
-				var msens = mdev.getSensor(sid);
-
-				msens.name = sens.name;
-				msens.unit = sens.unit;
-				msens.port = sens.port;
-			});
-		});
-
-		requestRealtimeUpdates();
-	};
-	wsclient.onUpdate = function(data) {
-		Object.getOwnPropertyNames(data).forEach(function(did) {
-			Object.getOwnPropertyNames(data[did]).forEach(function(sid) {
-				getDevice(did).getSensor(sid).update(data[did][sid]);
-			});
-		});
-	};
-	wsclient.onOpen = function(err) {
-		if (err)
-			return;
-
-		wsclient.requestValues(new Date() - 120 * 1000, true);
-	};
-	wsclient.onClose = wsclient.onError = function(e) {
-		if (e.wasClean)
-			return;
-
-		$scope.wsConnectionFailed = true;
-	};
-
-	wsclient.connect(wsurl);
-}])
-.directive("sensorGraph", ["$interval", function($interval) {
+.directive("sensorCollectionGraph", ["$interval", function($interval) {
 	return {
+		require: "^graphView",
+		restrict: "A",
+		templateUrl: "html/sensor-collection-graph.html",
 		scope: {
-			title: "=",
+			unit: "=",
+			sensors: "=",
 			maxAgeMs: "=",
 			assumeMissingAfterMs: "=",
-			api: "=?"
 		},
-		restrict: "A",
-		templateUrl: "/html/sensor-graph.html",
-		link: function(scope, element, attrs) {
-			var maxAgeMs = undefined;
-			var assumeMissingAfterMs = undefined;
-			var graphData = [[new Date(), null]];
-			var valueMissingInterval = undefined;
-
-			var g = new Dygraph(element.find("div.sensor-graph").get(0), graphData, {
-				labels: ["Time", "Value"],
+		link: function(scope, element, attrs, graphView) {
+			var graph = new Dygraph(element.find(".sensor-graph").get(0), [[new Date()]], {
+				labels: ["Time"],
 				connectSeparatedPoints: true
 			});
 
-			var api = scope.api = {};
+			var maxAgeMs = undefined;
+			var assumeMissingAfterMs = undefined;
+			var columns = ["Time"];
+			var data = [[new Date()]];
+			var sensorToIndexMap = {
+				".time": 0
+			};
+			var lastUpdateOf = {};
+
+			var valueMissingTimeouts = {};
+			var valueMissing = function(sensorID) {
+				scope.mergeDataset({
+					sensorID: [[+new Date(), NaN]]
+				});
+			};
+			var restartValueMissingTimeout = function(sensorID) {
+				if (sensorID in valueMissingTimeouts)
+					$interval.cancel(valueMissingTimeouts[sensorID]);
+				if (assumeMissingAfterMs !== undefined)
+					valueMissingTimeouts[sensorID] = $interval(valueMissing, assumeMissingAfterMs, 1, true, sensorID);
+			};
 
 			var clampToMaxAge = function() {
 				if (maxAgeMs === undefined)
 					return;
 
 				var now = new Date();
-				while (graphData.length > 0 && (now - graphData[0][0]) > maxAgeMs) {
-					graphData.shift();
-				}
+				while (data.length > 0 && (now - data[0][0]) > maxAgeMs)
+					data.shift();
 
-				graphData.unshift([new Date(new Date() - maxAgeMs), NaN]);
+				data.unshift([new Date(new Date() - maxAgeMs)]);
+				while (data[0].length < columns.length)
+					data[0].push(NaN);
 			};
 
-			var mergeGraphData = function(data) {
+			scope.sensorColor = function(sensor) {
+				return graph.getColors()[sensorToIndexMap[sensor.key] - 1];
+			};
+
+			scope.mergeDataset = function(set, omitUpdate) {
 				var needsSorting = false;
 
-				while (graphData.length > 0 && isNaN(graphData[graphData.length - 1][1]))
-					graphData.pop();
+				data.pop();
 
-				for (var i = 0; i < data.length; i++) {
-					var at = new Date(Math.floor(data[i][0]));
-
-					if (graphData.length > 0) {
-						needsSorting |= graphData[graphData.length - 1][0] - at > 0;
+				Object.getOwnPropertyNames(set).forEach(function(sensor) {
+					for (var i = 0; i < set[sensor].length; i++) {
+						var item = set[sensor][i];
+						var at = new Date(Math.floor(item[0]));
+						if (data.length > 0 && at < data[data.length - 1][0])
+							needsSorting = true;
+						var line = [at];
+						while (line.length < columns.length)
+							line.push(null);
+						if (sensor in lastUpdateOf && at - lastUpdateOf[sensor] >= assumeMissingAfterMs) {
+							var sep = [at];
+							while (sep.length < line.length)
+								sep.push(null);
+							sep[sensorToIndexMap[sensor]] = NaN;
+							data.push(sep);
+						}
+						lastUpdateOf[sensor] = at;
+						line[sensorToIndexMap[sensor]] = item[1];
+						data.push(line);
 					}
-
-					if (!needsSorting &&
-							assumeMissingAfterMs !== undefined &&
-							graphData.length > 0 &&
-							at - graphData[graphData.length - 1][0] >= assumeMissingAfterMs) {
-						graphData.push([new Date(at - assumeMissingAfterMs / 2), NaN]);
-					}
-					graphData.push([at, data[i][1]]);
-				}
-
+					restartValueMissingTimeout(sensor);
+				});
 				if (needsSorting) {
-					graphData = graphData.filter(function(a) { return !isNaN(a[1]); });
-					graphData.sort(function(a, b) { return a[0] - b[0]; });
-					var data = graphData;
-					graphData = [];
-					mergeGraphData(data);
+					data.sort(function(a, b) { return a[0] - b[0]; });
+					lastUpdateOf = {};
+
+					var ids = Object.getOwnPropertyNames(sensorToIndexMap);
+					ids.shift();
+
+					var wholeSet = data;
+					data = [[]];
+
+					for (var i = 0; i < wholeSet.length; i++) {
+						var line = wholeSet[i];
+						for (var j = 0; j < ids.length; j++) {
+							var sensor = ids[j];
+							var val = line[sensorToIndexMap[sensor]];
+							if (typeof val == "number" && !isNaN(val)) {
+								var obj = {};
+								obj[sensor] = [[line[0], val]];
+								scope.mergeDataset(obj, true);
+							}
+						}
+					}
+					graph.updateOptions({
+						file: data
+					});
+					return;
 				}
-			};
-
-			var restartValueMissingTimeout;
-
-			api.update = function(data) {
-				graphData.pop();
-
-				mergeGraphData(data);
 				clampToMaxAge();
 
-				graphData.push([new Date(), NaN]);
+				data.push([new Date()]);
+				while (data[data.length - 1].length < columns.length)
+					data[data.length - 1].push(NaN);
 
-				g.updateOptions({
-					file: graphData
-				});
-				restartValueMissingTimeout();
+				if (!omitUpdate) {
+					graph.updateOptions({
+						file: data
+					});
+				}
 			};
 
-			var valuesMissing = function() {
-				api.update([[+new Date(), NaN]]);
-			};
-
-			scope.$watch(attrs.maxAgeMs, function (val) {
+			scope.$watch(attrs.maxAgeMs, function(val) {
 				maxAgeMs = val === undefined ? undefined : +val;
 			});
 
@@ -291,16 +235,171 @@ angular.module("msgp", [])
 				restartValueMissingTimeout();
 			});
 
-			restartValueMissingTimeout = function() {
-				if (valueMissingInterval !== undefined) {
-					$interval.cancel(valueMissingInterval);
+			scope.$watch(attrs.sensors, function(val) {
+				Object.getOwnPropertyNames(sensorToIndexMap).forEach(function(id) {
+					if (sensorToIndexMap[id] == 0 || id in val)
+						return;
+
+					var idx = sensorToIndexMap[id];
+					columns.splice(idx, 1);
+					for (var i = 0; i < data.length; i++) {
+						data[i].splice(idx, 1);
+					}
+					delete sensorToIndexMap[id];
+					Object.getOwnPropertyNames(sensorToIndexMap).forEach(function(id) {
+						if (sensorToIndexMap[id] >= idx)
+							sensorToIndexMap[id] -= 1;
+					});
+
+					graph.updateOptions({
+						labels: columns,
+						file: data
+					});
+				});
+				Object.getOwnPropertyNames(val).forEach(function(id) {
+					if (id in sensorToIndexMap)
+						return;
+
+					var idx = Object.getOwnPropertyNames(sensorToIndexMap).length;
+					sensorToIndexMap[id] = idx;
+					columns.push(val[id].name);
+
+					for (var i = 0; i < data.length; i++) {
+						data[i].push(null);
+					}
+
+					graph.updateOptions({
+						labels: columns,
+						file: data
+					});
+				});
+			});
+
+			graphView.registerGraph(scope.unit, scope);
+		}
+	};
+}])
+.directive("graphView", ["$interval", "WSUserClient", function($interval, wsclient) {
+	return {
+		restrict: "A",
+		templateUrl: "html/graph-view.html",
+		scope: {
+			title: "@"
+		},
+		controller: function($scope) {
+			var graphInstances = $scope[".graphInstances"] = {};
+
+			this.registerGraph = function(unit, graph) {
+				graphInstances[unit] = graph;
+			};
+		},
+		link: function(scope, element, attrs) {
+			scope.sensors = {};
+			scope.sensorsByUnit = {};
+			var graphInstances = scope[".graphInstances"];
+
+			var sensorKey = function(devID, sensorID) {
+				return [devID.length, devID, sensorID.length, sensorID].join();
+			};
+
+			var addGraph = function(unit) {
+				scope.sensorsByUnit[unit] = unit;
+			};
+			var removeGraph = function(unit) {
+				delete scope.sensorsByUnit[unit];
+				if (graphInstances[unit] !== undefined) {
+					graphInstances[unit].destroy();
+					delete graphInstances[unit];
 				}
-				if (assumeMissingAfterMs !== undefined) {
-					valueMissingInterval = $interval(valuesMissing, assumeMissingAfterMs);
-				}
+			};
+			var getGraph = function(unit) {
+				return graphInstances[unit];
+			};
+
+			var requestRealtimeUpdates = function() {
+				var sensors = {};
+
+				Object.getOwnPropertyNames(scope.sensors).forEach(function(id) {
+					var sens = scope.sensors[id];
+					sensors[sens[".deviceID"]] = sensors[sens[".deviceID"]] || [];
+					sensors[sens[".deviceID"]].push(sens[".sensorID"]);
+				});
+
+				wsclient.requestRealtimeUpdates(sensors);
+				$interval(requestRealtimeUpdates, 30 * 1000, 1, true);
+			};
+
+			wsclient.onMetadata = function(md) {
+				Object.getOwnPropertyNames(md.devices).forEach(function(devID) {
+					var mdev = md.devices[devID];
+
+					Object.getOwnPropertyNames(mdev.deletedSensors || {}).forEach(function(sensorID) {
+						var key = sensorKey(devID, sensorID);
+						var unit = scope.sensors[key].unit || "";
+
+						delete scope.sensorsByUnit[unit][key];
+						delete scope.sensors[key];
+					});
+
+					Object.getOwnPropertyNames(mdev.sensors || {}).forEach(function(sensorID) {
+						var msens = mdev.sensors[sensorID];
+						var key = sensorKey(devID, sensorID);
+
+						if (!(key in scope.sensors)) {
+							scope.sensors[key] = {};
+						}
+
+						var sens = scope.sensors[key];
+						sens.name = msens.name || sens.name || "";
+						sens.unit = msens.unit || sens.unit || "";
+						sens.port = msens.port || sens.port || -1;
+
+						sens[".deviceID"] = devID;
+						sens[".sensorID"] = sensorID;
+						sens.id = sensorID;
+						sens.key = key;
+
+						scope.sensorsByUnit[sens.unit] = scope.sensorsByUnit[sens.unit] || {};
+						scope.sensorsByUnit[sens.unit][key] = sens;
+					});
+				});
+
+				requestRealtimeUpdates();
+			};
+			wsclient.onUpdate = function(data) {
+				var updatesByUnit = {};
+
+				Object.getOwnPropertyNames(data).forEach(function(devID) {
+					Object.getOwnPropertyNames(data[devID]).forEach(function(sensorID) {
+						var key = sensorKey(devID, sensorID);
+						var unit = scope.sensors[key].unit;
+
+						updatesByUnit[unit] = updatesByUnit[unit] || {};
+						updatesByUnit[unit][key] = data[devID][sensorID];
+					});
+				});
+
+				Object.getOwnPropertyNames(updatesByUnit).forEach(function(unit) {
+					getGraph(unit).mergeDataset(updatesByUnit[unit]);
+				});
+			};
+			wsclient.onOpen = function(err) {
+				if (err)
+					return;
+
+				wsclient.requestValues(new Date() - 120 * 1000, true);
+			};
+			wsclient.onClose = wsclient.onError = function(e) {
+				if (e.wasClean)
+					return;
+
+				scope.wsConnectionFailed = true;
 			};
 		}
 	};
+}])
+.controller("GraphPage", ["WSUserClient", "wsurl", function(wsclient, wsurl) {
+	wsclient.connect(wsurl);
 }])
 .controller("DeviceEditNetwork", ["$scope", "$http", function($scope, $http) {
 	$scope.lan = {};

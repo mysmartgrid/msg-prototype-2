@@ -1,0 +1,16 @@
+<div style="width: 100%" class="sensor-graph">
+</div>
+<table>
+	<tr>
+		<th>Color</th>
+		<th>Id</th>
+		<th>Name</th>
+		<th>Port<th>
+	</tr>
+	<tr data-ng-repeat="sens in sensors">
+		<td style="color: %%sensorColor(sens)%%">&#x25a0;</td>
+		<td>%%sens.id%%</td>
+		<td>%%sens.name%%</td>
+		<td>%%sens.port%%</td>
+	</tr>
+</table>
