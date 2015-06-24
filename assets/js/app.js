@@ -155,9 +155,7 @@ angular.module("msgp", [])
 					data[0].push(NaN);
 			};
 
-			scope.sensorColor = function(sensor) {
-				return graph.getColors()[sensorToIndexMap[sensor.key] - 1];
-			};
+			scope.sensorColor = {};
 
 			scope.mergeDataset = function(set, omitUpdate) {
 				var needsSorting = false;
@@ -235,7 +233,7 @@ angular.module("msgp", [])
 				restartValueMissingTimeout();
 			});
 
-			scope.$watch(attrs.sensors, function(val) {
+			scope.$watchCollection(attrs.sensors, function(val) {
 				Object.getOwnPropertyNames(sensorToIndexMap).forEach(function(id) {
 					if (sensorToIndexMap[id] == 0 || id in val)
 						return;
@@ -272,6 +270,10 @@ angular.module("msgp", [])
 						labels: columns,
 						file: data
 					});
+				});
+
+				Object.getOwnPropertyNames(sensorToIndexMap).forEach(function(key) {
+					scope.sensorColor[key] = graph.getColors()[sensorToIndexMap[key] - 1];
 				});
 			});
 
