@@ -101,6 +101,14 @@ angular.module("msgp", [])
 		socketData.ws.send(JSON.stringify(cmd));
 	};
 
+	Object.defineProperties(socket, {
+		isOpen: {
+			get: function() {
+				return socketData.ws && socketData.ws.onmessage !== undefined;
+			}
+		}
+	});
+
 	return socket;
 }])
 .directive("sensorCollectionGraph", ["$interval", function($interval) {
@@ -385,18 +393,21 @@ angular.module("msgp", [])
 					getGraph(unit).mergeDataset(updatesByUnit[unit]);
 				});
 			};
-			wsclient.onOpen = function(err) {
-				if (err)
-					return;
-
-				wsclient.requestValues(new Date() - 120 * 1000, true);
-			};
 			wsclient.onClose = wsclient.onError = function(e) {
 				if (e.wasClean)
 					return;
 
 				scope.wsConnectionFailed = true;
 			};
+
+			wsclient.onOpen = function(err) {
+				if (err)
+					return;
+
+				wsclient.requestValues(new Date() - 120 * 1000, true);
+			};
+			if (wsclient.isOpen)
+				wsclient.onOpen();
 		}
 	};
 }])
