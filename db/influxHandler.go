@@ -4,13 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/influxdb/influxdb/client"
+	"regexp"
 	"strings"
 	"time"
 )
 
 var badSeriesName = errors.New("bad series name")
 
-const seriesNameTemplate = "data-u%d-d%d-s%d"
+const seriesNameTemplate = "sensor_data.u%d.d%d.s%d"
 
 func seriesName(user, device, sensor uint64) string {
 	return fmt.Sprintf(seriesNameTemplate, user, device, sensor)
@@ -64,9 +65,9 @@ func (h *influxHandler) saveValuesAndClear(valueMap map[bufferKey][]Value) error
 func (h *influxHandler) loadValues(since time.Time, keys []bufferKey) (map[bufferKey][]Value, error) {
 	series := make([]string, 0, len(keys))
 	for _, key := range keys {
-		series = append(series, seriesName(key.user, key.device, key.sensor))
+		series = append(series, regexp.QuoteMeta(seriesName(key.user, key.device, key.sensor)))
 	}
-	query := fmt.Sprintf("select time, value from /%v/ where time > %vms", strings.Join(series, "|"), influxTime(since))
+	query := fmt.Sprintf("select time, value from /^(%v)$/ where time > %vms", strings.Join(series, "|"), influxTime(since))
 
 	data, err := h.client.Query(query, client.Millisecond)
 	if err != nil {
