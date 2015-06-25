@@ -104,7 +104,7 @@ angular.module("msgp", [])
 	Object.defineProperties(socket, {
 		isOpen: {
 			get: function() {
-				return socketData.ws && socketData.ws.onmessage !== undefined;
+				return socketData.ws && socketData.ws.onmessage == onmessage;
 			}
 		}
 	});
