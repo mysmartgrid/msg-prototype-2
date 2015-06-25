@@ -24,6 +24,8 @@ type DeviceCmdUpdateArgs struct {
 
 type DeviceCmdAddSensorArgs struct {
 	Name string `json:"name"`
+	Unit string `json:"unit"`
+	Port int32  `json:"port"`
 }
 
 type DeviceCmdRemoveSensorArgs DeviceCmdAddSensorArgs

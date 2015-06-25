@@ -279,13 +279,11 @@ func (dev *Device) Heartbeat() (map[string]interface{}, error) {
 
 func (dev *Device) RegisterSensors() error {
 	for id, sens := range dev.Sensors {
-		if err := dev.client().AddSensor(id); err != nil {
+		if err := dev.client().AddSensor(id, sens.Unit, sens.Port); err != nil {
 			return err
 		}
 		md := msgp.SensorMetadata{
 			Name: &sens.Name,
-			Unit: &sens.Unit,
-			Port: &sens.Port,
 		}
 		if err := dev.client().UpdateSensor(id, md); err != nil {
 			return err
@@ -299,8 +297,6 @@ func (dev *Device) UpdateSensors() error {
 	for id, sens := range dev.Sensors {
 		md := msgp.SensorMetadata{
 			Name: &sens.Name,
-			Unit: &sens.Unit,
-			Port: &sens.Port,
 		}
 		if err := dev.client().UpdateSensor(id, md); err != nil {
 			return err
@@ -398,8 +394,10 @@ func main() {
 			tlsConfig.InsecureSkipVerify = true
 			http.DefaultTransport.(*http.Transport).TLSClientConfig = &tlsConfig
 
-		case "new-random":
+		case "newRandom":
 			dev = newRandomDevice()
+			dev.regdevApi = "http://[::1]:8080/regdev/v1"
+			bailIf(dev.Register())
 
 		case "print":
 			data, err := json.MarshalIndent(dev, "", "  ")
@@ -421,9 +419,6 @@ func main() {
 			bailIf(json.Unmarshal(data, dev))
 			dev.api = "ws://[::1]:8080/ws/device"
 			dev.regdevApi = "http://[::1]:8080/regdev/v1"
-
-		case "register":
-			bailIf(dev.Register())
 
 		case "heartbeat":
 			info, err := dev.Heartbeat()

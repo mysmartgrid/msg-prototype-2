@@ -259,12 +259,25 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 	return nil
 }
 
-func (api *WsDevApi) doAddSensor(name string) *msg2api.Error {
+func (api *WsDevApi) doAddSensor(name, unit string, port int32) *msg2api.Error {
 	return api.updateDevice(func(tx db.Tx, user db.User, device db.Device) *msg2api.Error {
-		_, err := device.AddSensor(name)
+		_, err := device.AddSensor(name, unit, port)
 		if err != nil {
 			return &msg2api.Error{Code: "operation failed", Extra: err.Error()}
 		}
+		api.ctx.Hub.Publish(api.User, msg2api.UserEventMetadataArgs{
+			Devices: map[string]msg2api.DeviceMetadata{
+				api.Device: msg2api.DeviceMetadata{
+					Sensors: map[string]msg2api.SensorMetadata{
+						name: msg2api.SensorMetadata{
+							Name: &name,
+							Unit: &unit,
+							Port: &port,
+						},
+					},
+				},
+			},
+		})
 		return nil
 	})
 }
@@ -304,14 +317,10 @@ func (api *WsDevApi) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api
 				}
 			}
 			if sd.Unit != nil {
-				if err := dbs.SetUnit(*sd.Unit); err != nil {
-					return &msg2api.Error{Code: "failed", Extra: err.Error()}
-				}
+				return &msg2api.Error{Code: "failed", Extra: "unit may not be changed"}
 			}
 			if sd.Port != nil {
-				if err := dbs.SetPort(*sd.Port); err != nil {
-					return &msg2api.Error{Code: "failed", Extra: err.Error()}
-				}
+				return &msg2api.Error{Code: "failed", Extra: "port may not be changed"}
 			}
 		}
 

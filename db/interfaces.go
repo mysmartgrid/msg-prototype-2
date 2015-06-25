@@ -34,7 +34,7 @@ type User interface {
 }
 
 type Device interface {
-	AddSensor(id string) (Sensor, error)
+	AddSensor(id, unit string, port int32) (Sensor, error)
 	Sensor(id string) Sensor
 	Sensors() map[string]Sensor
 	RemoveSensor(id string) error
@@ -55,10 +55,7 @@ type Sensor interface {
 	SetName(string) error
 
 	Port() int32
-	SetPort(port int32) error
-
 	Unit() string
-	SetUnit(unit string) error
 }
 
 type Value struct {

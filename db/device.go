@@ -24,7 +24,7 @@ func (d *device) init(key []byte, name string, dbId uint64) {
 	d.b.Put(device_id, htoleu64(dbId))
 }
 
-func (d *device) AddSensor(id string) (Sensor, error) {
+func (d *device) AddSensor(id, unit string, port int32) (Sensor, error) {
 	idBytes := []byte(id)
 	if len(idBytes) == 0 || len(idBytes) >= bolt.MaxKeySize {
 		return nil, InvalidId
@@ -41,9 +41,9 @@ func (d *device) AddSensor(id string) (Sensor, error) {
 	}
 
 	result := &sensor{sb, id}
-	result.init(id, seq)
+	result.init(id, seq, unit, port)
 
-	d.user.tx.db.bufferAdd <- bufferKey{d.user.dbId(), d.dbId(), result.dbId()}
+	d.user.tx.db.bufferAdd <- bufferKey{d.user.dbId(), d.dbId(), result.dbId(), result.Unit()}
 
 	return result, nil
 }

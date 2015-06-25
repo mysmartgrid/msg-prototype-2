@@ -61,7 +61,7 @@ func (tx *tx) loadReadings(since time.Time, user User, sensors map[Device][]Sens
 		smap[device] = make(map[uint64]Sensor)
 		for _, sensor := range sensors {
 			smap[device][sensor.dbId()] = sensor
-			keys = append(keys, bufferKey{user.dbId(), device.dbId(), sensor.dbId()})
+			keys = append(keys, bufferKey{user.dbId(), device.dbId(), sensor.dbId(), sensor.Unit()})
 		}
 	}
 
@@ -85,6 +85,6 @@ func (tx *tx) loadReadings(since time.Time, user User, sensors map[Device][]Sens
 }
 
 func (tx *tx) removeSeriesFor(user, device, sensor uint64) error {
-	tx.db.bufferKill <- bufferKey{user, device, sensor}
+	tx.db.bufferKill <- bufferKey{user, device, sensor, ""}
 	return tx.db.influx.removeSeriesFor(user, device, sensor)
 }

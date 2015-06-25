@@ -83,11 +83,13 @@ func (c *DeviceClient) Close() {
 	c.socket.Close(websocket.CloseGoingAway, "")
 }
 
-func (c *DeviceClient) AddSensor(name string) error {
+func (c *DeviceClient) AddSensor(name, unit string, port int32) error {
 	cmd := MessageOut{
 		Command: "addSensor",
 		Args: DeviceCmdAddSensorArgs{
 			Name: name,
+			Unit: unit,
+			Port: port,
 		},
 	}
 

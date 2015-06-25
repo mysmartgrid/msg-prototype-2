@@ -16,7 +16,7 @@ type DeviceServer struct {
 	*apiBase
 
 	Update         func(values map[string][]Measurement) *Error
-	AddSensor      func(name string) *Error
+	AddSensor      func(name, unit string, port int32) *Error
 	RemoveSensor   func(name string) *Error
 	UpdateMetadata func(metadata *DeviceMetadata) *Error
 }
@@ -124,7 +124,7 @@ func (d *DeviceServer) doAddSensor(msg *MessageIn) *Error {
 		return operationFailed("not supported")
 	}
 
-	return d.AddSensor(args.Name)
+	return d.AddSensor(args.Name, args.Unit, args.Port)
 }
 
 func (d *DeviceServer) doRemoveSensor(msg *MessageIn) *Error {
