@@ -144,10 +144,15 @@ angular.module("msgp", [])
 				});
 			};
 			var restartValueMissingTimeout = function(sensorID) {
-				if (sensorID in valueMissingTimeouts)
-					$interval.cancel(valueMissingTimeouts[sensorID]);
-				if (assumeMissingAfterMs !== undefined)
-					valueMissingTimeouts[sensorID] = $interval(valueMissing, assumeMissingAfterMs, 1, true, sensorID);
+				if (sensorID !== undefined) {
+					if (sensorID in valueMissingTimeouts)
+						$interval.cancel(valueMissingTimeouts[sensorID]);
+
+					if (assumeMissingAfterMs !== undefined)
+						valueMissingTimeouts[sensorID] = $interval(valueMissing, assumeMissingAfterMs, 1, true, sensorID);
+				} else {
+					Object.getOwnPropertyNames(valueMissingTimeouts).forEach(restartValueMissingTimeout);
+				}
 			};
 
 			var clampToMaxAge = function() {
@@ -326,7 +331,12 @@ angular.module("msgp", [])
 				return graphInstances[unit];
 			};
 
+			var realtimeUpdateTimeout;
 			var requestRealtimeUpdates = function() {
+				if (realtimeUpdateTimeout !== undefined) {
+					$interval.cancel(realtimeUpdateTimeout);
+				}
+
 				var sensors = {};
 
 				Object.getOwnPropertyNames(scope.sensors).forEach(function(id) {
@@ -336,7 +346,7 @@ angular.module("msgp", [])
 				});
 
 				wsclient.requestRealtimeUpdates(sensors);
-				$interval(requestRealtimeUpdates, 30 * 1000, 1, true);
+				realtimeUpdateTimeout = $interval(requestRealtimeUpdates, 30 * 1000, 1, true);
 			};
 
 			wsclient.onMetadata = function(md) {

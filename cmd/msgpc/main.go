@@ -335,7 +335,15 @@ func (dev *Device) RenameSensors() error {
 
 func (dev *Device) ReplaceSensors() error {
 	for id, _ := range dev.Sensors {
-		if err := dev.client().RemoveSensor(id); err != nil {
+		err := dev.client().RemoveSensor(id)
+		switch e := err.(type) {
+		case *msgp.Error:
+			if e.Code != "operation failed" || e.Extra != "id invalid" {
+				return err
+			}
+
+		case nil:
+		default:
 			return err
 		}
 	}

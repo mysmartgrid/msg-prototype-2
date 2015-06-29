@@ -85,6 +85,8 @@ type WsDevApi struct {
 	ctx    *WsApiContext
 	server *msg2api.DeviceServer
 
+	lastRealtimeUpdateRequest time.Time
+
 	User, Device string
 	Writer       http.ResponseWriter
 	Request      *http.Request
@@ -130,7 +132,10 @@ func (api *WsDevApi) Run() error {
 }
 
 func (api *WsDevApi) RequestRealtimeUpdates(req msg2api.DeviceCmdRequestRealtimeUpdatesArgs) {
-	api.server.RequestRealtimeUpdates(req)
+	if time.Now().Sub(api.lastRealtimeUpdateRequest) >= 25 * time.Second {
+		api.server.RequestRealtimeUpdates(req)
+		api.lastRealtimeUpdateRequest = time.Now()
+	}
 }
 
 func (api *WsDevApi) Close() {
