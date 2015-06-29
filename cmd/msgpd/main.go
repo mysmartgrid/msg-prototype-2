@@ -691,7 +691,7 @@ func main() {
 
 	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
 	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
-	router.PathPrefix("/regdev").Handler(&server)
+	server.RegisterRoutes(router.PathPrefix("/regdev").Subrouter())
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir(config.AssetsDir)))
 
 	http.Handle("/", router)

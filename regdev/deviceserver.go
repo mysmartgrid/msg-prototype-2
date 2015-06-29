@@ -19,8 +19,6 @@ import (
 
 type DeviceServer struct {
 	Db Db
-
-	router *mux.Router
 }
 
 var badHeartbeat = errors.New("invalid heartbeat")
@@ -155,13 +153,7 @@ func (s *DeviceServer) heartbeat(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *DeviceServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if s.router == nil {
-		s.router = mux.NewRouter()
-
-		s.router.HandleFunc("/regdev/v1/{device}", s.registerDevice).Methods("POST")
-		s.router.HandleFunc("/regdev/v1/{device}/status", s.heartbeat).Methods("POST")
-	}
-
-	s.router.ServeHTTP(w, r)
+func (s *DeviceServer) RegisterRoutes(r *mux.Router) {
+	r.HandleFunc("/v1/{device}", s.registerDevice).Methods("POST")
+	r.HandleFunc("/v1/{device}/status", s.heartbeat).Methods("POST")
 }
