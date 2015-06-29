@@ -1,132 +1,16 @@
 {{define "user-devices"}}
 {{template "head" "user-devices:logged-in"}}
-<div class="container">
-	<div class="row">
-	{{if .Devices | len}}
-		Your devices:
-		<ul>
-		{{range $id, $dev := .Devices}}
-			<li>
-				<form action="/user/devices/remove/{{$id}}" method="POST">
-					<div>
-						{{$id}}: {{$dev.Name}}
-						<input type="submit" value="Remove" />
-					</div>
-					<div data-ng-app="msgp">
-						<div data-ng-controller="DeviceEditNetwork" data-conf-url="/user/devices/network-config/{{$id}}"
-								class="msgp-edit-device-netconf">
-							<div ng-show="!editing && !loadingSettings">
-								<a href="#" data-ng-click="startEdit($event)">edit network settings</a>
-							</div>
-							<div ng-show="loadingSettings" class="ng-hide">
-								Loading settings...
-							</div>
-							<div ng-show="loadingSettingsError" class="ng-hide">
-								Error loading settings
-							</div>
-							<div ng-show="savingSettingsError" class="ng-hide">
-								Error saving settings
-							</div>
-							<div ng-show="editing" class="ng-hide">
-								<div>
-									<div>
-										<label>
-											<input type="checkbox" data-ng-model="lan.enabled" />
-											LAN enabled
-										</label>
-									</div>
-									<table class="ng-hide" data-ng-show="lan.enabled">
-										<tr>
-											<td>Protocol</td>
-											<td>
-												<select data-ng-model="lan.protocol">
-													<option value="dhcp">DHCP</option>
-													<option value="static">Static</option>
-												</select>
-											</td>
-										</tr>
-										<tr class="ng-hide" data-ng-show="lan.protocol == &quot;static&quot;">
-											<td>IP</td>
-											<td><input type="text" data-ng-model="lan.ip"/></td>
-										</tr>
-										<tr class="ng-hide" data-ng-show="lan.protocol == &quot;static&quot;">
-											<td>Netmask</td>
-											<td><input type="text" data-ng-model="lan.netmask"/></td>
-										</tr>
-										<tr class="ng-hide" data-ng-show="lan.protocol == &quot;static&quot;">
-											<td>Gateway</td>
-											<td><input type="text" data-ng-model="lan.gateway"/></td>
-										</tr>
-										<tr class="ng-hide" data-ng-show="lan.protocol == &quot;static&quot;">
-											<td>Nameserver</td>
-											<td><input type="text" data-ng-model="lan.nameserver"/></td>
-										</tr>
-									</table>
-								</div>
-								<div>
-									<label>
-										<input type="checkbox" data-ng-model="wifi.enabled" />
-										Wifi enabled
-									</label>
-									<table class="ng-hide" data-ng-show="wifi.enabled">
-										<tr>
-											<td>SSID</td>
-											<td><input type="text" data-ng-model="wifi.essid" /></td>
-										</tr>
-										<tr>
-											<td>Encryption</td>
-											<td>
-												<select data-ng-model="wifi.enc">
-													<option value="open">None</option>
-													<option value="wpa">WPA-PSK</option>
-													<option value="wpa2">WPA2-PSK</option>
-												</select>
-											</td>
-										</tr>
-										<tr class="ng-hide" data-ng-show="(wifi.enc || &quot;open&quot;) != &quot;open&quot;">
-											<td>Password</td>
-											<td><input type="text" data-ng-model="wifi.psk" /></td>
-										</tr>
-										<tr>
-											<td>Protocol</td>
-											<td>
-												<select data-ng-model="wifi.protocol">
-													<option value="dhcp">DHCP</option>
-													<option value="static">Static</option>
-												</select>
-											</td>
-										</tr>
-										<tr class="ng-hide" data-ng-show="wifi.protocol == &quot;static&quot;">
-											<td>IP</td>
-											<td><input type="text" data-ng-model="wifi.ip"/></td>
-										</tr>
-										<tr class="ng-hide" data-ng-show="wifi.protocol == &quot;static&quot;">
-											<td>Netmask</td>
-											<td><input type="text" data-ng-model="wifi.netmask"/></td>
-										</tr>
-										<tr class="ng-hide" data-ng-show="wifi.protocol == &quot;static&quot;">
-											<td>Gateway</td>
-											<td><input type="text" data-ng-model="wifi.gateway"/></td>
-										</tr>
-										<tr class="ng-hide" data-ng-show="wifi.protocol == &quot;static&quot;">
-											<td>Nameserver</td>
-											<td><input type="text" data-ng-model="wifi.nameserver"/></td>
-										</tr>
-									</table>
-								</div>
-								<div>
-									<input type="button" value="Save" data-ng-click="save($event)" />
-								</div>
-							</div>
-						</div>
-					</div>
-				</form>
-			</li>
-		{{end}}
-		</ul>
-	{{else}}
-		You don't have any devices in your account.
-	{{end}}
+<div class="container" data-ng-app="msgp">
+	<script>
+		angular.module("msgp").value("devices", {{.}});
+	</script>
+	<div class="row" data-ng-controller="DeviceListController">
+		<p class="ng-hide" data-ng-show="equals(devices, {})">
+			You don't have any devices in your account.
+		</p>
+		<div data-device-list="" class="ng-hide" data-ng-show="!equals(devices, {})"
+			data-devices="devices">
+		</div>
 		<p><a href="/user/devices/add">Add device</a></p>
 	</div>
 </div>

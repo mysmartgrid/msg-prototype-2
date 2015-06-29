@@ -115,7 +115,7 @@ angular.module("msgp", [])
 	return {
 		require: "^graphView",
 		restrict: "A",
-		templateUrl: "html/sensor-collection-graph.html",
+		templateUrl: "/html/sensor-collection-graph.html",
 		scope: {
 			unit: "=",
 			sensors: "=",
@@ -297,7 +297,7 @@ angular.module("msgp", [])
 .directive("graphView", ["$interval", "WSUserClient", function($interval, wsclient) {
 	return {
 		restrict: "A",
-		templateUrl: "html/graph-view.html",
+		templateUrl: "/html/graph-view.html",
 		scope: {
 			title: "@"
 		},
@@ -421,43 +421,106 @@ angular.module("msgp", [])
 		}
 	};
 }])
+.directive("deviceEditor", [function() {
+	return {
+		restrict: "A",
+		templateUrl: "/html/device-editor.html",
+		scope: {
+			device: "=",
+			save: "&",
+			cancel: "&"
+		},
+		link: function(scope, element, attrs) {
+			scope.savePressed = function() {
+				scope.save();
+			};
+
+			scope.cancelPressed = function() {
+				scope.cancel();
+			};
+		}
+	};
+}])
+.directive("deviceList", ["$http", "$interval", function($http, $interval) {
+	return {
+		restrict: "A",
+		templateUrl: "/html/device-list.html",
+		scope: {
+			devices: "="
+		},
+		link: function(scope, element, attrs) {
+			scope.showSpinner = false;
+
+			scope.deviceEditorSave = function(id) {
+				$http.post(scope.editedDeviceURL, scope.editedDeviceProps)
+					.success(function(data, status, headers, config) {
+						scope.devices[scope.editedDeviceId].name = scope.editedDeviceProps.name;
+						scope.devices[scope.editedDeviceId].lan = scope.editedDeviceProps.lan;
+						scope.devices[scope.editedDeviceId].wifi = scope.editedDeviceProps.wifi;
+						scope.editedDeviceId = undefined;
+						scope.errorSavingSettings = null;
+					})
+					.error(function(data, status, headers, config) {
+						scope.errorSavingSettings = data;
+					});
+			};
+			scope.deviceEditorCancel = function(id) {
+				scope.editedDeviceId = undefined;
+			};
+
+			var flash = function(element) {
+				element.removeClass("ng-hide");
+				$interval(function() {
+					element.addClass("ng-hide");
+				}, 3000, 1);
+			};
+
+			scope.edit = function(e) {
+				var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
+				var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-netconf-url");
+
+				scope.showSpinner = true;
+				$http.get(url)
+					.success(function(data, status, headers, config) {
+						scope.showSpinner = false;
+						scope.errorLoadingSettings = null;
+						scope.errorSavingSettings = null;
+
+						scope.editedDeviceId = id;
+						scope.editedDeviceURL = url;
+						scope.editedDeviceProps = {
+							name: scope.devices[id].name,
+							lan: data.lan || {},
+							wifi: data.wifi || {}
+						};
+					})
+					.error(function(data, status, headers, config) {
+						scope.showSpinner = false;
+						scope.errorLoadingSettings = data;
+					});
+			};
+
+			scope.remove = function(e) {
+				var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-remove-url");
+				var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
+				scope.showSpinner = true;
+				$http.post(url)
+					.success(function(data, status, headers, config) {
+						scope.showSpinner = false;
+						delete scope.devices[id];
+						flash($(e.target).parents(".device-list-").first().find(".device-deleted-"));
+					})
+					.error(function(data, status, headers, config) {
+						scope.showSpinner = false;
+						scope.error = data;
+					});
+			};
+		}
+	};
+}])
 .controller("GraphPage", ["WSUserClient", "wsurl", function(wsclient, wsurl) {
 	wsclient.connect(wsurl);
 }])
-.controller("DeviceEditNetwork", ["$scope", "$http", function($scope, $http) {
-	$scope.lan = {};
-	$scope.wifi = {};
-
-	$scope.startEdit = function(e) {
-		$scope.loadingSettings = true;
-		var url = $(e.target).parents(".msgp-edit-device-netconf").attr("data-conf-url");
-
-		$http.get(url)
-			.success(function(data, status, headers, config) {
-				$scope.loadingSettings = false;
-				$scope.lan = data.lan || {};
-				$scope.wifi = data.wifi || {};
-				$scope.editing = true;
-			})
-			.error(function(data, status, headers, config) {
-				$scope.loadingSettings = false;
-				$scope.loadingSettingsError = true;
-				console.log(data);
-			});
-	};
-
-	$scope.save = function(e) {
-		var url = $(e.target).parents(".msgp-edit-device-netconf").attr("data-conf-url");
-
-		$http.post(url, {lan: $scope.lan, wifi: $scope.wifi})
-			.success(function(data, status, headers, config) {
-				$scope.editing = false;
-				$scope.savingSettingsError = false;
-			})
-			.error(function(data, status, headers, config) {
-				$scope.editing = false;
-				$scope.savingSettingsError = true;
-				console.log(data);
-			});
-	};
+.controller("DeviceListController", ["$scope", "$http", "devices", function($scope, $http, devices) {
+	$scope.devices = devices;
 }]);

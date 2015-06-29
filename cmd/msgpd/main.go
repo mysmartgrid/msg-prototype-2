@@ -522,7 +522,24 @@ func userDevices(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 
-		templates.ExecuteTemplate(w, "user-devices", u)
+		devs := make(map[string]interface{})
+		for id, dev := range u.Devices() {
+			sensors := make(map[string]interface{})
+			for id, sens := range dev.Sensors() {
+				sensors[id] = map[string]interface{}{
+					"id": id,
+					"name": sens.Name(),
+					"port": sens.Port(),
+					"unit": sens.Unit(),
+				}
+			}
+			devs[id] = map[string]interface{}{
+				"name": dev.Name(),
+				"sensors": sensors,
+			}
+		}
+
+		templates.ExecuteTemplate(w, "user-devices", devs)
 		return nil
 	})
 }
@@ -595,13 +612,12 @@ func userDevicesRemove(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), 500)
 				return errors.New("")
 			}
-			http.Redirect(w, r, "/user/devices", 303)
 			return nil
 		})
 	})
 }
 
-func userDevicesNetconf_get(w http.ResponseWriter, r *http.Request) {
+func userDevicesConf_get(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	devId := mux.Vars(r)["device"]
 	db.View(func(utx msgpdb.Tx) error {
@@ -611,12 +627,22 @@ func userDevicesNetconf_get(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "not authorized", 401)
 				return errors.New("")
 			}
-			dev := dtx.Device(devId)
+			dev := user.Device(devId)
 			if dev == nil {
 				http.Error(w, "no such device", 404)
 				return errors.New("")
 			}
-			conf := dev.GetNetworkConfig()
+			rdev := dtx.Device(devId)
+			if rdev == nil {
+				http.Error(w, "no such device", 404)
+				return errors.New("")
+			}
+			netconf := rdev.GetNetworkConfig()
+			conf := map[string]interface{}{
+				"lan": netconf.LAN,
+				"wifi": netconf.Wifi,
+				"name": dev.Name(),
+			}
 			data, err := json.Marshal(conf)
 			if err != nil {
 				http.Error(w, "server error", 500)
@@ -628,7 +654,7 @@ func userDevicesNetconf_get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func userDevicesNetconf_post(w http.ResponseWriter, r *http.Request) {
+func userDevicesConf_post(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	devId := mux.Vars(r)["device"]
 	db.Update(func(utx msgpdb.Tx) error {
@@ -638,13 +664,21 @@ func userDevicesNetconf_post(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "not authorized", 401)
 				return errors.New("")
 			}
-			dev := dtx.Device(devId)
+			dev := user.Device(devId)
 			if dev == nil {
+				http.Error(w, "no such device", 404)
+				return errors.New("")
+			}
+			rdev := dtx.Device(devId)
+			if rdev == nil {
 				http.Error(w, "no such device", 404)
 				return errors.New("")
 			}
 
 			var conf regdev.DeviceConfigNetwork
+			var name struct {
+				Name string `json:"name"`
+			}
 
 			data, err := ioutil.ReadAll(r.Body)
 			if err != nil {
@@ -656,9 +690,17 @@ func userDevicesNetconf_post(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "bad request", 400)
 				return err
 			}
-
-			if err := dev.SetNetworkConfig(&conf); err != nil {
+			if err := json.Unmarshal(data, &name); err != nil {
 				http.Error(w, "bad request", 400)
+				return err
+			}
+
+			if err := dev.SetName(name.Name); err != nil {
+				http.Error(w, "bad config", 400)
+				return err
+			}
+			if err := rdev.SetNetworkConfig(&conf); err != nil {
+				http.Error(w, "bad network config", 400)
 				return err
 			}
 			return nil
@@ -679,8 +721,8 @@ func main() {
 	router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
 	router.HandleFunc("/user/devices/add", defaultHeaders(userDevicesAdd)).Methods("GET", "POST")
 	router.HandleFunc("/user/devices/remove/{device}", userDevicesRemove).Methods("POST")
-	router.HandleFunc("/user/devices/network-config/{device}", userDevicesNetconf_get).Methods("GET")
-	router.HandleFunc("/user/devices/network-config/{device}", userDevicesNetconf_post).Methods("POST")
+	router.HandleFunc("/user/devices/config/{device}", userDevicesConf_get).Methods("GET")
+	router.HandleFunc("/user/devices/config/{device}", userDevicesConf_post).Methods("POST")
 
 	router.HandleFunc("/admin", defaultHeaders(adminHandler))
 

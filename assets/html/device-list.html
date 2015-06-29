@@ -1,0 +1,61 @@
+<div class="device-list-">
+	<div class="ng-hide modal-spinner-overlay" data-ng-show="showSpinner">
+	</div>
+	<div class="ng-hide alert alert-danger" data-ng-show="error">%%error%%</div>
+	<div class="ng-hide alert alert-danger" data-ng-show="errorLoadingSettings">Error loading settings: %%error%%</div>
+	<div class="ng-hide alert alert-success device-deleted-">
+		Device removed
+	</div>
+	<div class="ng-hide modal-background-filler" data-ng-show="editedDeviceId">
+	</div>
+	<div style="position: absolute; left: 10%; top: 10%; right: 10%" class="ng-hide" data-ng-show="editedDeviceId">
+		<div class="ng-hide alert alert-danger" data-ng-show="errorSavingSettings">Error saving settings: %%error%%</div>
+		<div data-device-editor="" data-device="editedDeviceProps"
+			class="well ng-hide" data-ng-show="editedDeviceId" data-save="deviceEditorSave(editedDeviceId)"
+			data-cancel="deviceEditorCancel(editedDeviceId)">
+		</div>
+	</div>
+	<table class="table">
+		<thead>
+			<tr>
+				<th>ID</th>
+				<th>Name</th>
+				<th></th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr data-ng-repeat-start="(dev, props) in devices"
+				data-device-id="%%dev%%"
+				data-device-netconf-url="/user/devices/config/%%dev%%"
+				data-device-remove-url="/user/devices/remove/%%dev%%">
+				<td>%%dev%%</td>
+				<td>%%props.name%%</td>
+				<td><a class="btn btn-primary" data-ng-click="edit($event)"><span class="glyphicon glyphicon-pencil" /></a></td>
+				<td><a class="btn btn-danger" data-ng-click="remove($event)"><span class="glyphicon glyphicon-remove" /></a></td>
+			</tr>
+			<tr data-ng-repeat-end="">
+				<td colspan="4" style="padding-left: 10%">
+					<table class="table table-condensed">
+						<thead>
+							<tr>
+								<th>Sensor ID</th>
+								<th>Name</th>
+								<th>Unit</th>
+								<th>Port</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr data-ng-repeat="(id, props) in props.sensors">
+								<td>%%id%%</td>
+								<td>%%props.name%%</td>
+								<td>%%props.unit%%</td>
+								<td>%%props.port <= 0 ? "" : props.port%%</td>
+							</tr>
+						</tbody>
+					</table>
+				</td>
+			</tr>
+		</tbody>
+	</table>
+</div>
