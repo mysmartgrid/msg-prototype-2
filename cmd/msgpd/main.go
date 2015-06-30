@@ -15,6 +15,7 @@ import (
 	msgpdb "github.com/mysmartgrid/msg-prototype-2/db"
 	"github.com/mysmartgrid/msg-prototype-2/hub"
 	"github.com/mysmartgrid/msg-prototype-2/regdev"
+	"github.com/mysmartgrid/msg2api"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -708,6 +709,63 @@ func userDevicesConf_post(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func userSensorProps_post(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+	devId := mux.Vars(r)["device"]
+	sensId := mux.Vars(r)["sensor"]
+	db.Update(func(utx msgpdb.Tx) error {
+		user := utx.User(session.Values["user"].(string))
+		if user == nil {
+			http.Error(w, "not authorized", 401)
+			return errors.New("")
+		}
+		dev := user.Device(devId)
+		if dev == nil {
+			http.Error(w, "no such device", 404)
+			return errors.New("")
+		}
+		sens := dev.Sensor(sensId)
+		if sens == nil {
+			http.Error(w, "no such sensor", 404)
+			return errors.New("")
+		}
+
+		data, err:= ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "server error", 500)
+			return err
+		}
+
+		var conf struct {
+			Name string
+		}
+
+		if err := json.Unmarshal(data, &conf); err != nil {
+			http.Error(w, "bad request", 400)
+			return err
+		}
+
+		if err := sens.SetName(conf.Name); err != nil {
+			http.Error(w, "bad request", 400)
+			return err
+		}
+
+		apiCtx.Hub.Publish(user.Id(), msg2api.UserEventMetadataArgs{
+			Devices: map[string]msg2api.DeviceMetadata{
+				devId: msg2api.DeviceMetadata{
+					Sensors: map[string]msg2api.SensorMetadata{
+						sensId: msg2api.SensorMetadata{
+							Name: &conf.Name,
+						},
+					},
+				},
+			},
+		})
+
+		return nil
+	})
+}
+
 func main() {
 	router := mux.NewRouter()
 	server := regdev.DeviceServer{Db: devdb}
@@ -723,6 +781,7 @@ func main() {
 	router.HandleFunc("/user/devices/remove/{device}", userDevicesRemove).Methods("POST")
 	router.HandleFunc("/user/devices/config/{device}", userDevicesConf_get).Methods("GET")
 	router.HandleFunc("/user/devices/config/{device}", userDevicesConf_post).Methods("POST")
+	router.HandleFunc("/user/sensor/{device}/{sensor}/props", userSensorProps_post).Methods("POST")
 
 	router.HandleFunc("/admin", defaultHeaders(adminHandler))
 

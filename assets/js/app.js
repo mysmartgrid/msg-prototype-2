@@ -475,7 +475,7 @@ angular.module("msgp", [])
 				}, 3000, 1);
 			};
 
-			scope.edit = function(e) {
+			scope.editDev = function(e) {
 				var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
 				var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-netconf-url");
 
@@ -514,6 +514,42 @@ angular.module("msgp", [])
 						scope.showSpinner = false;
 						scope.error = data;
 					});
+			};
+
+			scope.editSensor = function(e) {
+				var devId = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
+				var sensId = $(e.target).parents("tr[data-sensor-id]").first().attr("data-sensor-id");
+				var url = $(e.target).parents("tr[data-sensor-conf-url]").first().attr("data-sensor-conf-url");
+
+				scope.errorSavingSensor = null;
+				scope.editedSensor = {
+					name: scope.devices[devId].sensors[sensId].name,
+					confUrl: url,
+					devId: devId,
+					sensId: sensId,
+				};
+			};
+
+			scope.saveSensor = function() {
+				var props = {
+					name: scope.editedSensor.name
+				};
+
+				scope.showSpinner = true;
+				$http.post(scope.editedSensor.confUrl, props)
+					.success(function(data, status, headers, config) {
+						scope.showSpinner = false;
+						scope.devices[scope.editedSensor.devId].sensors[scope.editedSensor.sensId].name = props.name;
+						scope.editedSensor = null;
+					})
+					.error(function(data, status, headers, config) {
+						scope.showSpinner = false;
+						scope.errorSavingSensor = data;
+					});
+			};
+
+			scope.cancelSensor = function() {
+				scope.editedSensor = null;
 			};
 		}
 	};
