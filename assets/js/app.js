@@ -426,18 +426,9 @@ angular.module("msgp", [])
 		restrict: "A",
 		templateUrl: "/html/device-editor.html",
 		scope: {
-			device: "=",
-			save: "&",
-			cancel: "&"
+			device: "="
 		},
 		link: function(scope, element, attrs) {
-			scope.savePressed = function() {
-				scope.save();
-			};
-
-			scope.cancelPressed = function() {
-				scope.cancel();
-			};
 		}
 	};
 }])
@@ -451,7 +442,7 @@ angular.module("msgp", [])
 		link: function(scope, element, attrs) {
 			scope.showSpinner = false;
 
-			scope.deviceEditorSave = function(id) {
+			scope.deviceEditorSave = function() {
 				$http.post(scope.editedDeviceURL, scope.editedDeviceProps)
 					.success(function(data, status, headers, config) {
 						scope.devices[scope.editedDeviceId].name = scope.editedDeviceProps.name;
@@ -459,13 +450,11 @@ angular.module("msgp", [])
 						scope.devices[scope.editedDeviceId].wifi = scope.editedDeviceProps.wifi;
 						scope.editedDeviceId = undefined;
 						scope.errorSavingSettings = null;
+						$("#deviceEditDialog").modal('hide');
 					})
 					.error(function(data, status, headers, config) {
 						scope.errorSavingSettings = data;
 					});
-			};
-			scope.deviceEditorCancel = function(id) {
-				scope.editedDeviceId = undefined;
 			};
 
 			var flash = function(element) {
@@ -493,6 +482,7 @@ angular.module("msgp", [])
 							lan: data.lan || {},
 							wifi: data.wifi || {}
 						};
+						$("#deviceEditDialog").modal('show');
 					})
 					.error(function(data, status, headers, config) {
 						scope.showSpinner = false;
@@ -528,6 +518,7 @@ angular.module("msgp", [])
 					devId: devId,
 					sensId: sensId,
 				};
+				$("#sensorEditDialog").modal('show');
 			};
 
 			scope.saveSensor = function() {
@@ -541,15 +532,12 @@ angular.module("msgp", [])
 						scope.showSpinner = false;
 						scope.devices[scope.editedSensor.devId].sensors[scope.editedSensor.sensId].name = props.name;
 						scope.editedSensor = null;
+						$("#sensorEditDialog").modal('hide');
 					})
 					.error(function(data, status, headers, config) {
 						scope.showSpinner = false;
 						scope.errorSavingSensor = data;
 					});
-			};
-
-			scope.cancelSensor = function() {
-				scope.editedSensor = null;
 			};
 		}
 	};
