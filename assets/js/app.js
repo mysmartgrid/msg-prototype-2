@@ -441,6 +441,7 @@ angular.module("msgp", [])
 		},
 		link: function(scope, element, attrs) {
 			scope.showSpinner = false;
+			scope.encodeURIComponent = encodeURIComponent;
 
 			scope.deviceEditorSave = function() {
 				$http.post(scope.editedDeviceURL, scope.editedDeviceProps)
@@ -551,11 +552,9 @@ angular.module("msgp", [])
 
 	$scope.addDevice = function(e) {
 		var url = $(e.target).attr("data-add-device-prefix");
-		console.log(url);
-
 		$scope.errorAddingDevice = null;
 
-		$http.post(url + encodeURI($scope.addDeviceId))
+		$http.post(url + encodeURIComponent($scope.addDeviceId))
 			.success(function(data, status, headers, config) {
 				$scope.devices[$scope.addDeviceId] = data;
 				$scope.addDeviceId = null;
