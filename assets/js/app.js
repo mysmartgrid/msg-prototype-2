@@ -494,7 +494,7 @@ angular.module("msgp", [])
 				var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-remove-url");
 				var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
 				scope.showSpinner = true;
-				$http.post(url)
+				$http.delete(url)
 					.success(function(data, status, headers, config) {
 						scope.showSpinner = false;
 						delete scope.devices[id];

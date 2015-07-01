@@ -63,8 +63,8 @@
 		<tbody>
 			<tr data-ng-repeat-start="(dev, props) in devices"
 				data-device-id="%%dev%%"
-				data-device-netconf-url="/api/user/v1/devices/config/%%dev%%"
-				data-device-remove-url="/api/user/v1/devices/remove/%%dev%%">
+				data-device-netconf-url="/api/user/v1/devices/%%dev%%/config"
+				data-device-remove-url="/api/user/v1/devices/%%dev%%">
 				<td>%%dev%%</td>
 				<td>%%props.name%%</td>
 				<td>

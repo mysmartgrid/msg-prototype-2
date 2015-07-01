@@ -772,9 +772,9 @@ func main() {
 	router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
 	router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
 	router.HandleFunc("/api/user/v1/devices/{device}", userDevicesAdd).Methods("POST")
-	router.HandleFunc("/api/user/v1/devices/remove/{device}", userDevicesRemove).Methods("POST")
-	router.HandleFunc("/api/user/v1/devices/config/{device}", userDevicesConf_get).Methods("GET")
-	router.HandleFunc("/api/user/v1/devices/config/{device}", userDevicesConf_post).Methods("POST")
+	router.HandleFunc("/api/user/v1/devices/{device}", userDevicesRemove).Methods("DELETE")
+	router.HandleFunc("/api/user/v1/devices/{device}/config", userDevicesConf_get).Methods("GET")
+	router.HandleFunc("/api/user/v1/devices/{device}/config", userDevicesConf_post).Methods("POST")
 	router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", userSensorProps_post).Methods("POST")
 
 	router.HandleFunc("/admin", defaultHeaders(adminHandler))
