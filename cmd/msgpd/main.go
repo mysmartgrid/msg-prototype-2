@@ -778,10 +778,10 @@ func main() {
 	router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
 	router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
 	router.HandleFunc("/user/devices/add", defaultHeaders(userDevicesAdd)).Methods("GET", "POST")
-	router.HandleFunc("/user/devices/remove/{device}", userDevicesRemove).Methods("POST")
-	router.HandleFunc("/user/devices/config/{device}", userDevicesConf_get).Methods("GET")
-	router.HandleFunc("/user/devices/config/{device}", userDevicesConf_post).Methods("POST")
-	router.HandleFunc("/user/sensor/{device}/{sensor}/props", userSensorProps_post).Methods("POST")
+	router.HandleFunc("/api/user/v1/devices/remove/{device}", userDevicesRemove).Methods("POST")
+	router.HandleFunc("/api/user/v1/devices/config/{device}", userDevicesConf_get).Methods("GET")
+	router.HandleFunc("/api/user/v1/devices/config/{device}", userDevicesConf_post).Methods("POST")
+	router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", userSensorProps_post).Methods("POST")
 
 	router.HandleFunc("/admin", defaultHeaders(adminHandler))
 
@@ -792,7 +792,7 @@ func main() {
 
 	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
 	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
-	server.RegisterRoutes(router.PathPrefix("/regdev").Subrouter())
+	server.RegisterRoutes(router.PathPrefix("/api/regdev").Subrouter())
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir(config.AssetsDir)))
 
 	http.Handle("/", router)

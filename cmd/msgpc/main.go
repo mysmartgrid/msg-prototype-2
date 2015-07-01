@@ -404,7 +404,7 @@ func main() {
 
 		case "newRandom":
 			dev = newRandomDevice()
-			dev.regdevApi = "http://[::1]:8080/regdev/v1"
+			dev.regdevApi = "http://[::1]:8080/api/regdev/v1"
 			bailIf(dev.Register())
 
 		case "print":
@@ -426,7 +426,7 @@ func main() {
 			dev = new(Device)
 			bailIf(json.Unmarshal(data, dev))
 			dev.api = "ws://[::1]:8080/ws/device"
-			dev.regdevApi = "http://[::1]:8080/regdev/v1"
+			dev.regdevApi = "http://[::1]:8080/api/regdev/v1"
 
 		case "heartbeat":
 			info, err := dev.Heartbeat()

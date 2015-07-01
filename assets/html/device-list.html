@@ -63,8 +63,8 @@
 		<tbody>
 			<tr data-ng-repeat-start="(dev, props) in devices"
 				data-device-id="%%dev%%"
-				data-device-netconf-url="/user/devices/config/%%dev%%"
-				data-device-remove-url="/user/devices/remove/%%dev%%">
+				data-device-netconf-url="/api/user/v1/devices/config/%%dev%%"
+				data-device-remove-url="/api/user/v1/devices/remove/%%dev%%">
 				<td>%%dev%%</td>
 				<td>%%props.name%%</td>
 				<td>
@@ -93,7 +93,7 @@
 						<tbody>
 							<tr data-ng-repeat="(id, props) in props.sensors"
 								data-sensor-id="%%id%%"
-								data-sensor-conf-url="/user/sensor/%%dev%%/%%id%%/props">
+								data-sensor-conf-url="/api/user/v1/sensor/%%dev%%/%%id%%/props">
 								<td>%%id%%</td>
 								<td>%%props.name%%</td>
 								<td>%%props.unit%%</td>
