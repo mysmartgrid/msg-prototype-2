@@ -542,9 +542,27 @@ angular.module("msgp", [])
 		}
 	};
 }])
-.controller("GraphPage", ["WSUserClient", "wsurl", function(wsclient, wsurl) {
+.controller("GraphPage", ["WSUserClient", "wsurl", "$http", function(wsclient, wsurl, $http) {
 	wsclient.connect(wsurl);
 }])
 .controller("DeviceListController", ["$scope", "$http", "devices", function($scope, $http, devices) {
 	$scope.devices = devices;
+	$scope.addDeviceId = "";
+
+	$scope.addDevice = function(e) {
+		var url = $(e.target).attr("data-add-device-prefix");
+		console.log(url);
+
+		$scope.errorAddingDevice = null;
+
+		$http.post(url + encodeURI($scope.addDeviceId))
+			.success(function(data, status, headers, config) {
+				$scope.devices[$scope.addDeviceId] = data;
+				$scope.addDeviceId = null;
+				$("#addDeviceDialog").modal('hide');
+			})
+			.error(function(data, status, headers, config) {
+				$scope.errorAddingDevice = data;
+			});
+	};
 }]);

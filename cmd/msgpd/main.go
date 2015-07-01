@@ -546,22 +546,9 @@ func userDevices(w http.ResponseWriter, r *http.Request) {
 }
 
 func userDevicesAdd(w http.ResponseWriter, r *http.Request) {
-	type context struct {
-		Missing []string
-	}
-
 	session := getSession(w, r)
-	if r.Method == "GET" {
-		templates.ExecuteTemplate(w, "user-devices-add", context{})
-		return
-	}
 
-	devId := r.FormValue("device")
-
-	if devId == "" {
-		templates.ExecuteTemplate(w, "user-devices-add", context{[]string{"device"}})
-		return
-	}
+	devId := mux.Vars(r)["device"]
 
 	db.Update(func(utx msgpdb.Tx) error {
 		return devdb.Update(func(dtx regdev.Tx) error {
@@ -584,7 +571,14 @@ func userDevicesAdd(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), 500)
 				return errors.New("")
 			}
-			http.Redirect(w, r, "/user/devices", 303)
+
+			data := map[string]interface{}{
+				devId: map[string]interface{}{
+					"name": user.Device(devId).Name(),
+				},
+			}
+			raw, _ := json.Marshal(data)
+			w.Write(raw)
 			return nil
 		})
 	})
@@ -777,7 +771,7 @@ func main() {
 	router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
 	router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
 	router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
-	router.HandleFunc("/user/devices/add", defaultHeaders(userDevicesAdd)).Methods("GET", "POST")
+	router.HandleFunc("/api/user/v1/devices/{device}", userDevicesAdd).Methods("POST")
 	router.HandleFunc("/api/user/v1/devices/remove/{device}", userDevicesRemove).Methods("POST")
 	router.HandleFunc("/api/user/v1/devices/config/{device}", userDevicesConf_get).Methods("GET")
 	router.HandleFunc("/api/user/v1/devices/config/{device}", userDevicesConf_post).Methods("POST")
