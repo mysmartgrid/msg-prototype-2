@@ -132,7 +132,7 @@ func (api *WsDevApi) Run() error {
 }
 
 func (api *WsDevApi) RequestRealtimeUpdates(req msg2api.DeviceCmdRequestRealtimeUpdatesArgs) {
-	if time.Now().Sub(api.lastRealtimeUpdateRequest) >= 25 * time.Second {
+	if time.Now().Sub(api.lastRealtimeUpdateRequest) >= 25*time.Second {
 		api.server.RequestRealtimeUpdates(req)
 		api.lastRealtimeUpdateRequest = time.Now()
 	}

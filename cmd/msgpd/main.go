@@ -528,14 +528,14 @@ func userDevices(w http.ResponseWriter, r *http.Request) {
 			sensors := make(map[string]interface{})
 			for id, sens := range dev.Sensors() {
 				sensors[id] = map[string]interface{}{
-					"id": id,
+					"id":   id,
 					"name": sens.Name(),
 					"port": sens.Port(),
 					"unit": sens.Unit(),
 				}
 			}
 			devs[id] = map[string]interface{}{
-				"name": dev.Name(),
+				"name":    dev.Name(),
 				"sensors": sensors,
 			}
 		}
@@ -545,32 +545,75 @@ func userDevices(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func userDevicesAdd(w http.ResponseWriter, r *http.Request) {
-	session := getSession(w, r)
+type apiError struct {
+	Code int
+	Msg  string
+}
 
+func apiBlock(fn func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			switch err := recover().(type) {
+			case nil:
+				return
+			case *apiError:
+				http.Error(w, err.Msg, err.Code)
+			default:
+				panic(err)
+			}
+		}()
+
+		fn(w, r)
+	}
+}
+
+func apiAbort(code int, msg string) {
+	panic(&apiError{code, msg})
+}
+
+func apiAbortIf(code int, err error) {
+	if err != nil {
+		apiAbort(code, err.Error())
+	}
+}
+
+func api_Session_User(tx msgpdb.Tx, s *sessions.Session) msgpdb.User {
+	user := tx.User(s.Values["user"].(string))
+	if user == nil {
+		apiAbort(401, "not authorized")
+	}
+	return user
+}
+
+func api_Device(tx regdev.Tx, devId string) regdev.RegisteredDevice {
+	dev := tx.Device(devId)
+	if dev == nil {
+		apiAbort(404, "no such device")
+	}
+	return dev
+}
+
+func api_User_Device(user msgpdb.User, devId string) msgpdb.Device {
+	dev := user.Device(devId)
+	if dev == nil {
+		apiAbort(404, "no such device")
+	}
+	return dev
+}
+
+func api_User_Devices_Add(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
 	devId := mux.Vars(r)["device"]
 
 	db.Update(func(utx msgpdb.Tx) error {
 		return devdb.Update(func(dtx regdev.Tx) error {
-			user := utx.User(session.Values["user"].(string))
-			if user == nil {
-				http.Error(w, "not authorized", 401)
-				return errors.New("")
-			}
-			dev := dtx.Device(devId)
-			if dev == nil {
-				http.Error(w, "no such device", 404)
-				return errors.New("")
-			}
-			if err := dev.LinkTo(user.Id()); err != nil {
-				http.Error(w, err.Error(), 400)
-				return errors.New("")
-			}
+			user := api_Session_User(utx, session)
+			dev := api_Device(dtx, devId)
+
+			apiAbortIf(400, dev.LinkTo(user.Id()))
+
 			_, err := user.AddDevice(dev.Id(), dev.Key())
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return errors.New("")
-			}
+			apiAbortIf(500, err)
 
 			data := map[string]interface{}{
 				devId: map[string]interface{}{
@@ -584,91 +627,53 @@ func userDevicesAdd(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func userDevicesRemove(w http.ResponseWriter, r *http.Request) {
+func api_User_Devices_Remove(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	devId := mux.Vars(r)["device"]
+
 	db.Update(func(utx msgpdb.Tx) error {
 		return devdb.Update(func(dtx regdev.Tx) error {
-			user := utx.User(session.Values["user"].(string))
-			if user == nil {
-				http.Error(w, "not authorized", 401)
-				return errors.New("")
-			}
-			dev := dtx.Device(devId)
-			if dev == nil {
-				http.Error(w, "no such device", 404)
-				return errors.New("")
-			}
-			if err := dev.Unlink(); err != nil {
-				http.Error(w, err.Error(), 500)
-				return errors.New("")
-			}
-			if err := user.RemoveDevice(devId); err != nil {
-				http.Error(w, err.Error(), 500)
-				return errors.New("")
-			}
+			user := api_Session_User(utx, session)
+			dev := api_Device(dtx, devId)
+
+			apiAbortIf(500, dev.Unlink())
+			apiAbortIf(500, user.RemoveDevice(devId))
 			return nil
 		})
 	})
 }
 
-func userDevicesConf_get(w http.ResponseWriter, r *http.Request) {
+func api_User_Device_Config_Get(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	devId := mux.Vars(r)["device"]
 	db.View(func(utx msgpdb.Tx) error {
 		return devdb.View(func(dtx regdev.Tx) error {
-			user := utx.User(session.Values["user"].(string))
-			if user == nil {
-				http.Error(w, "not authorized", 401)
-				return errors.New("")
-			}
-			dev := user.Device(devId)
-			if dev == nil {
-				http.Error(w, "no such device", 404)
-				return errors.New("")
-			}
-			rdev := dtx.Device(devId)
-			if rdev == nil {
-				http.Error(w, "no such device", 404)
-				return errors.New("")
-			}
+			user := api_Session_User(utx, session)
+			rdev := api_Device(dtx, devId)
+			dev := api_User_Device(user, devId)
+
 			netconf := rdev.GetNetworkConfig()
 			conf := map[string]interface{}{
-				"lan": netconf.LAN,
+				"lan":  netconf.LAN,
 				"wifi": netconf.Wifi,
 				"name": dev.Name(),
 			}
 			data, err := json.Marshal(conf)
-			if err != nil {
-				http.Error(w, "server error", 500)
-				return err
-			}
+			apiAbortIf(500, err)
 			w.Write(data)
 			return nil
 		})
 	})
 }
 
-func userDevicesConf_post(w http.ResponseWriter, r *http.Request) {
+func api_User_Device_Config_Set(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	devId := mux.Vars(r)["device"]
 	db.Update(func(utx msgpdb.Tx) error {
 		return devdb.Update(func(dtx regdev.Tx) error {
-			user := utx.User(session.Values["user"].(string))
-			if user == nil {
-				http.Error(w, "not authorized", 401)
-				return errors.New("")
-			}
-			dev := user.Device(devId)
-			if dev == nil {
-				http.Error(w, "no such device", 404)
-				return errors.New("")
-			}
-			rdev := dtx.Device(devId)
-			if rdev == nil {
-				http.Error(w, "no such device", 404)
-				return errors.New("")
-			}
+			user := api_Session_User(utx, session)
+			rdev := api_Device(dtx, devId)
+			dev := api_User_Device(user, devId)
 
 			var conf regdev.DeviceConfigNetwork
 			var name struct {
@@ -676,73 +681,40 @@ func userDevicesConf_post(w http.ResponseWriter, r *http.Request) {
 			}
 
 			data, err := ioutil.ReadAll(r.Body)
-			if err != nil {
-				http.Error(w, "server error", 500)
-				return err
-			}
+			apiAbortIf(500, err)
 
-			if err := json.Unmarshal(data, &conf); err != nil {
-				http.Error(w, "bad request", 400)
-				return err
-			}
-			if err := json.Unmarshal(data, &name); err != nil {
-				http.Error(w, "bad request", 400)
-				return err
-			}
+			apiAbortIf(400, json.Unmarshal(data, &conf))
+			apiAbortIf(400, json.Unmarshal(data, &name))
 
-			if err := dev.SetName(name.Name); err != nil {
-				http.Error(w, "bad config", 400)
-				return err
-			}
-			if err := rdev.SetNetworkConfig(&conf); err != nil {
-				http.Error(w, "bad network config", 400)
-				return err
-			}
+			apiAbortIf(400, dev.SetName(name.Name))
+			apiAbortIf(400, rdev.SetNetworkConfig(&conf))
 			return nil
 		})
 	})
 }
 
-func userSensorProps_post(w http.ResponseWriter, r *http.Request) {
+func api_User_Device_Sensor_Props_Set(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	devId := mux.Vars(r)["device"]
 	sensId := mux.Vars(r)["sensor"]
 	db.Update(func(utx msgpdb.Tx) error {
-		user := utx.User(session.Values["user"].(string))
-		if user == nil {
-			http.Error(w, "not authorized", 401)
-			return errors.New("")
-		}
-		dev := user.Device(devId)
-		if dev == nil {
-			http.Error(w, "no such device", 404)
-			return errors.New("")
-		}
+		user := api_Session_User(utx, session)
+		dev := api_User_Device(user, devId)
+
 		sens := dev.Sensor(sensId)
 		if sens == nil {
-			http.Error(w, "no such sensor", 404)
-			return errors.New("")
+			apiAbort(404, "no such sensor")
 		}
 
-		data, err:= ioutil.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, "server error", 500)
-			return err
-		}
+		data, err := ioutil.ReadAll(r.Body)
+		apiAbortIf(500, err)
 
 		var conf struct {
 			Name string
 		}
 
-		if err := json.Unmarshal(data, &conf); err != nil {
-			http.Error(w, "bad request", 400)
-			return err
-		}
-
-		if err := sens.SetName(conf.Name); err != nil {
-			http.Error(w, "bad request", 400)
-			return err
-		}
+		apiAbortIf(500, json.Unmarshal(data, &conf))
+		apiAbortIf(500, sens.SetName(conf.Name))
 
 		apiCtx.Hub.Publish(user.Id(), msg2api.UserEventMetadataArgs{
 			Devices: map[string]msg2api.DeviceMetadata{
@@ -771,11 +743,11 @@ func main() {
 	router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
 	router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
 	router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
-	router.HandleFunc("/api/user/v1/devices/{device}", userDevicesAdd).Methods("POST")
-	router.HandleFunc("/api/user/v1/devices/{device}", userDevicesRemove).Methods("DELETE")
-	router.HandleFunc("/api/user/v1/devices/{device}/config", userDevicesConf_get).Methods("GET")
-	router.HandleFunc("/api/user/v1/devices/{device}/config", userDevicesConf_post).Methods("POST")
-	router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", userSensorProps_post).Methods("POST")
+	router.HandleFunc("/api/user/v1/devices/{device}", apiBlock(api_User_Devices_Add)).Methods("POST")
+	router.HandleFunc("/api/user/v1/devices/{device}", apiBlock(api_User_Devices_Remove)).Methods("DELETE")
+	router.HandleFunc("/api/user/v1/devices/{device}/config", apiBlock(api_User_Device_Config_Get)).Methods("GET")
+	router.HandleFunc("/api/user/v1/devices/{device}/config", apiBlock(api_User_Device_Config_Set)).Methods("POST")
+	router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(api_User_Device_Sensor_Props_Set)).Methods("POST")
 
 	router.HandleFunc("/admin", defaultHeaders(adminHandler))
 
