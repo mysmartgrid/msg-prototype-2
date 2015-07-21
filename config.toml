@@ -6,8 +6,9 @@ db-dir        = "./"
 
 motherlode = true
 
-[influx]
+[postgres]
 user     = "msgp"
 password = "msgp"
 database = "msgp"
-address  = "localhost:8086"
+address  = "localhost"
+port     = "5432"

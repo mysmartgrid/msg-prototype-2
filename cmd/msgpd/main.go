@@ -26,10 +26,11 @@ import (
 	"time"
 )
 
-type influxConfig struct {
+type postgresConfig struct {
 	User     string `toml:"user"`
 	Password string `toml:"password"`
 	Address  string `toml:"address"`
+	Port     string `toml:"port"`
 	Database string `toml:"database"`
 }
 
@@ -39,14 +40,14 @@ type tlsConfig struct {
 }
 
 type serverConfig struct {
-	ListenAddr        string       `toml:"listen"`
-	AssetsDir         string       `toml:"assets-dir"`
-	TemplatesDir      string       `toml:"templates-dir"`
-	DbDir             string       `toml:"db-dir"`
-	Influx            influxConfig `toml:"influx"`
-	Tls               tlsConfig    `toml:"tls"`
-	DeviceProxyConfig string       `toml:"device-proxy-config"`
-	EnableAdminOps    bool         `toml:"motherlode"`
+	ListenAddr        string         `toml:"listen"`
+	AssetsDir         string         `toml:"assets-dir"`
+	TemplatesDir      string         `toml:"templates-dir"`
+	DbDir             string         `toml:"db-dir"`
+	Postgres          postgresConfig `toml:"postgres"`
+	Tls               tlsConfig      `toml:"tls"`
+	DeviceProxyConfig string         `toml:"device-proxy-config"`
+	EnableAdminOps    bool           `toml:"motherlode"`
 }
 
 const (
@@ -126,8 +127,8 @@ func init() {
 	orDefault(&config.TemplatesDir, "./templates")
 	orDefault(&config.DbDir, ".")
 
-	if config.Influx.User == "" || config.Influx.Address == "" || config.Influx.Database == "" {
-		log.Fatal("influxdb config incomplete")
+	if config.Postgres.User == "" || config.Postgres.Address == "" || config.Postgres.Database == "" {
+		log.Fatal("postgres config incomplete")
 	}
 
 	switch fi, err := os.Stat(config.AssetsDir); true {
@@ -185,8 +186,8 @@ func init() {
 		log.Fatal("error parsing templates: ", err)
 	}
 
-	db, err = msgpdb.OpenDb(config.DbDir+"/users.db", config.Influx.Address, config.Influx.Database,
-		config.Influx.User, config.Influx.Password)
+	db, err = msgpdb.OpenDb(config.DbDir+"/users.db", config.Postgres.Address, config.Postgres.Port, config.Postgres.Database,
+		config.Postgres.User, config.Postgres.Password)
 	if err != nil {
 		log.Fatal("error opening user db: ", err)
 	}

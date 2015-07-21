@@ -65,7 +65,7 @@ func (tx *tx) loadReadings(since time.Time, user User, sensors map[Device][]Sens
 		}
 	}
 
-	queryResult, err := tx.db.influx.loadValues(since, keys)
+	queryResult, err := tx.db.sqldb.loadValues(since, keys)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,8 @@ func (tx *tx) loadReadings(since time.Time, user User, sensors map[Device][]Sens
 	return result, nil
 }
 
+//TODO race condition
 func (tx *tx) removeSeriesFor(user, device, sensor uint64) error {
 	tx.db.bufferKill <- bufferKey{user, device, sensor, ""}
-	return tx.db.influx.removeSeriesFor(user, device, sensor)
+	return tx.db.sqldb.removeSeriesFor(user, device, sensor)
 }

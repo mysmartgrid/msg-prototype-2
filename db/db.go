@@ -1,9 +1,10 @@
 package db
 
 import (
+	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/boltdb/bolt"
-	"github.com/influxdb/influxdb/client"
 	"log"
 	"time"
 )
@@ -22,7 +23,7 @@ var (
 type db struct {
 	store *bolt.DB
 
-	influx influxHandler
+	sqldb sqlHandler
 
 	bufferedValues     map[bufferKey][]Value
 	bufferedValueCount uint32
@@ -47,7 +48,7 @@ func (db *db) flushBuffer() {
 		return
 	}
 
-	err := db.influx.saveValuesAndClear(db.bufferedValues)
+	err := db.sqldb.saveValuesAndClear(db.bufferedValues)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -92,7 +93,7 @@ func (d *db) manageBuffer() {
 	}
 }
 
-func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (Db, error) {
+func OpenDb(path, sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
 	store, err := bolt.Open(path, 0600, nil)
 	if err != nil {
 		return nil, err
@@ -103,20 +104,22 @@ func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (Db, erro
 		return nil
 	})
 
-	cfg := client.ClientConfig{
-		Host:     influxAddr,
-		Username: influxUser,
-		Password: influxPass,
-		Database: influxDb,
-	}
-	influxC, err := client.New(&cfg)
+	cfg := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
+		sqlUser,
+		sqlPass,
+		sqlDb,
+		sqlAddr,
+		sqlPort,
+	)
+
+	postgres, err := sql.Open("postgres", cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	result := &db{
 		store:          store,
-		influx:         influxHandler{influxC},
+		sqldb:          sqlHandler{postgres},
 		bufferedValues: make(map[bufferKey][]Value),
 		bufferInput:    make(chan bufferValue),
 		bufferKill:     make(chan bufferKey),
