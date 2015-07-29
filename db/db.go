@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/boltdb/bolt"
 	"log"
 	"time"
 )
@@ -16,30 +15,21 @@ const (
 var (
 	InvalidId = errors.New("id invalid")
 	IdExists  = errors.New("id exists")
-
-	db_users = []byte("users")
 )
 
 type db struct {
-	store *bolt.DB
-
 	sqldb sqlHandler
 
-	bufferedValues     map[bufferKey][]Value
+	bufferedValues     map[uint64][]Value
 	bufferedValueCount uint32
 
 	bufferInput chan bufferValue
-	bufferAdd   chan bufferKey
-	bufferKill  chan bufferKey
-}
-
-type bufferKey struct {
-	user, device, sensor uint64
-	unit                 string
+	bufferAdd   chan uint64
+	bufferKill  chan uint64
 }
 
 type bufferValue struct {
-	key   bufferKey
+	key   uint64
 	value Value
 }
 
@@ -93,17 +83,7 @@ func (d *db) manageBuffer() {
 	}
 }
 
-func OpenDb(path, sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
-	store, err := bolt.Open(path, 0600, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	store.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists(db_users)
-		return nil
-	})
-
+func OpenDb(sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
 	cfg := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
 		sqlUser,
 		sqlPass,
@@ -118,12 +98,11 @@ func OpenDb(path, sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) 
 	}
 
 	result := &db{
-		store:          store,
 		sqldb:          sqlHandler{postgres},
-		bufferedValues: make(map[bufferKey][]Value),
+		bufferedValues: make(map[uint64][]Value),
 		bufferInput:    make(chan bufferValue),
-		bufferKill:     make(chan bufferKey),
-		bufferAdd:      make(chan bufferKey),
+		bufferKill:     make(chan uint64),
+		bufferAdd:      make(chan uint64),
 	}
 
 	go result.manageBuffer()
@@ -132,7 +111,7 @@ func OpenDb(path, sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) 
 		for _, user := range tx.Users() {
 			for _, dev := range user.Devices() {
 				for _, sensor := range dev.Sensors() {
-					result.bufferAdd <- bufferKey{user.dbId(), dev.dbId(), sensor.dbId(), sensor.Unit()}
+					result.bufferAdd <- sensor.DbId()
 				}
 			}
 		}
@@ -144,22 +123,55 @@ func OpenDb(path, sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) 
 
 func (d *db) Close() {
 	close(d.bufferInput)
-	d.store.Close()
+	d.sqldb.db.Close()
 }
 
 func (d *db) View(fn func(Tx) error) error {
-	return d.store.View(func(btx *bolt.Tx) error {
-		return fn(&tx{d, btx})
-	})
+	t, err := d.sqldb.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			t.Rollback()
+		}
+	}()
+
+	err = fn(&tx{d, t})
+
+	if err != nil {
+		_ = t.Rollback()
+		return err
+	}
+	if err := t.Rollback(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d *db) Update(fn func(Tx) error) error {
-	return d.store.Update(func(btx *bolt.Tx) error {
-		return fn(&tx{d, btx})
-	})
+	t, err := d.sqldb.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			t.Rollback()
+		}
+	}()
+
+	err = fn(&tx{d, t})
+
+	if err != nil {
+		_ = t.Rollback()
+		return err
+	}
+	return t.Commit()
 }
 
-func (d *db) AddReading(user User, device Device, sensor Sensor, time time.Time, value float64) error {
-	d.bufferInput <- bufferValue{bufferKey{user.dbId(), device.dbId(), sensor.dbId(), sensor.Unit()}, Value{time, value}}
+func (d *db) AddReading(sensor Sensor, time time.Time, value float64) error {
+	d.bufferInput <- bufferValue{sensor.DbId(), Value{time, value}}
 	return nil
 }

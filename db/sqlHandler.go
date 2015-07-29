@@ -2,43 +2,27 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 	"github.com/lib/pq"
 	"time"
 )
-
-func seriesID(key bufferKey) string {
-	return fmt.Sprintf(`%d.%d.%d`, key.user, key.device, key.sensor)
-}
 
 type sqlHandler struct {
 	db *sql.DB
 }
 
-func (h *sqlHandler) saveValuesAndClear(valueMap map[bufferKey][]Value) error {
+func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]Value) error {
 	tx, err := h.db.Begin()
 	if err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare(pq.CopyIn("measure_raw", "SensorID", "Timestamp", "Value"))
+	stmt, err := tx.Prepare(pq.CopyIn("measure_raw", "sensor", "timestamp", "value"))
 	if err != nil {
 		return err
 	}
 
-	for key, values := range valueMap {
-		//TODO Not here
-		_, err := h.db.Exec(
-			`INSERT INTO "sensors" SELECT $1
-				WHERE NOT EXISTS (
-					SELECT * FROM "sensors" WHERE "SensorID" = $2
-				)`,
-			seriesID(key), seriesID(key))
-		if err != nil {
-			return err
-		}
-
+	for seq, values := range valueMap {
 		for _, value := range values {
-			_, err := stmt.Exec(seriesID(key), value.Time, value.Value)
+			_, err := stmt.Exec(seq, value.Time, value.Value)
 			if err != nil {
 				return err
 			}
@@ -66,12 +50,12 @@ func (h *sqlHandler) saveValuesAndClear(valueMap map[bufferKey][]Value) error {
 	return nil
 }
 
-func (h *sqlHandler) loadValuesIn(since, until time.Time, keys []bufferKey) (map[bufferKey][]Value, error) {
-	result := make(map[bufferKey][]Value)
+func (h *sqlHandler) loadValuesIn(since, until time.Time, sensor_seqs []uint64) (map[uint64][]Value, error) {
+	result := make(map[uint64][]Value)
 
-	for _, key := range keys {
-		rows, err := h.db.Query(`SELECT "Timestamp", "Value" FROM "measure_raw" WHERE "SensorID" = $1 AND "Timestamp" BETWEEN $2 AND $3`,
-			seriesID(key), since, until)
+	for _, seq := range sensor_seqs {
+		rows, err := h.db.Query(`SELECT "timestamp", "value" FROM "measure_raw" WHERE "sensor" = $1 AND "timestamp" BETWEEN $2 AND $3`,
+			seq, since, until)
 		if err != nil {
 			return nil, err
 		}
@@ -95,19 +79,12 @@ func (h *sqlHandler) loadValuesIn(since, until time.Time, keys []bufferKey) (map
 			return nil, err
 		}
 
-		result[key] = values
+		result[seq] = values
 	}
 
 	return result, nil
 }
 
-func (h *sqlHandler) loadValues(since time.Time, keys []bufferKey) (map[bufferKey][]Value, error) {
-	return h.loadValuesIn(since, time.Now(), keys)
-}
-
-func (h *sqlHandler) removeSeriesFor(user, device, sensor uint64) error {
-	sensorid := fmt.Sprintf(`%d.%d.%d`, user, device, sensor)
-	_, err := h.db.Exec(`DELETE FROM "sensors" WHERE "SensorID" = $1`, sensorid)
-
-	return err
+func (h *sqlHandler) loadValues(since time.Time, sensor_seqs []uint64) (map[uint64][]Value, error) {
+	return h.loadValuesIn(since, time.Now(), sensor_seqs)
 }

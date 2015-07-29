@@ -186,7 +186,7 @@ func init() {
 		log.Fatal("error parsing templates: ", err)
 	}
 
-	db, err = msgpdb.OpenDb(config.DbDir+"/users.db", config.Postgres.Address, config.Postgres.Port, config.Postgres.Database,
+	db, err = msgpdb.OpenDb(config.Postgres.Address, config.Postgres.Port, config.Postgres.Database,
 		config.Postgres.User, config.Postgres.Password)
 	if err != nil {
 		log.Fatal("error opening user db: ", err)

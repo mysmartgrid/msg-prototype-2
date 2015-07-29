@@ -1,54 +1,47 @@
 package db
 
-import (
-	"github.com/boltdb/bolt"
-)
-
 type sensor struct {
-	b  *bolt.Bucket
-	id string
-}
-
-var (
-	sensor_name = []byte("name")
-	sensor_id   = []byte("dbId")
-	sensor_port = []byte("port")
-	sensor_unit = []byte("unit")
-)
-
-func (s *sensor) init(name string, dbId uint64, unit string, port int32) {
-	s.b.Put(sensor_name, []byte(name))
-	s.b.Put(sensor_id, htoleu64(dbId))
-	s.b.Put(sensor_unit, []byte(unit))
-	s.b.Put(sensor_port, htoleu64(uint64(port)))
+	device *device
+	id     string
+	seq    uint64
 }
 
 func (s *sensor) Id() string {
 	return s.id
 }
 
-func (s *sensor) dbId() uint64 {
-	return letohu64(s.b.Get(sensor_id))
+func (s *sensor) DbId() uint64 {
+	return s.seq
 }
 
 func (s *sensor) Name() string {
-	return string(s.b.Get(sensor_name))
+	var name string
+	err := s.device.user.tx.QueryRow(`SELECT name FROM sensors WHERE sensor_seq = $1`, s.seq).Scan(&name)
+	if err != nil {
+		return ""
+	}
+	return name
 }
 
 func (s *sensor) SetName(name string) error {
-	return s.b.Put(sensor_name, []byte(name))
+	_, err := s.device.user.tx.Exec(`UPDATE sensors SET name = $1 WHERE sensor_seq = $2`, name, s.seq)
+	return err
 }
 
 func (s *sensor) Port() int32 {
-	if val := s.b.Get(sensor_port); val != nil {
-		return int32(letohu64(val))
+	var port int32
+	err := s.device.user.tx.QueryRow(`SELECT port FROM sensors WHERE sensor_seq = $1`, s.seq).Scan(&port)
+	if err != nil {
+		return -1
 	}
-	return -1
+	return port
 }
 
 func (s *sensor) Unit() string {
-	if val := s.b.Get(sensor_unit); val != nil {
-		return string(val)
+	var unit string
+	err := s.device.user.tx.QueryRow(`SELECT unit FROM sensors WHERE sensor_seq = $1`, s.seq).Scan(&unit)
+	if err != nil {
+		return ""
 	}
-	return ""
+	return unit
 }

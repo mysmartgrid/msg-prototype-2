@@ -250,7 +250,7 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 
 			s := device.Sensor(sensor)
 			for _, value := range values {
-				err := api.ctx.Db.AddReading(user, device, s, value.Time, value.Value)
+				err := api.ctx.Db.AddReading(s, value.Time, value.Value)
 				if err != nil {
 					return &msg2api.Error{Code: "could not add readings"}
 				}

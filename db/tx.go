@@ -1,67 +1,76 @@
 package db
 
 import (
-	"github.com/boltdb/bolt"
+	"database/sql"
 	"time"
 )
 
 type tx struct {
 	db *db
-	*bolt.Tx
+	*sql.Tx
 }
 
 func (tx *tx) AddUser(id, password string) (User, error) {
-	idBytes := []byte(id)
-	if len(idBytes) == 0 || len(idBytes) >= bolt.MaxKeySize {
-		return nil, InvalidId
-	}
-
-	b := tx.Bucket(db_users)
-	ub, err := b.CreateBucket(idBytes)
-	if err != nil {
+	if tx.User(id) != nil {
 		return nil, IdExists
 	}
-	seq, err := b.NextSequence()
+
+	_, err := tx.Exec(`INSERT INTO users(user_id, is_admin) VALUES($1, false)`, id)
 	if err != nil {
 		return nil, err
 	}
 
-	result := &user{tx, ub, id}
-	if err := result.init(seq, password); err != nil {
+	result := &user{tx, id}
+
+	if err := result.init(password); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 
 func (tx *tx) User(id string) User {
-	b := tx.Bucket(db_users)
-	ub := b.Bucket([]byte(id))
-	if ub != nil {
-		return &user{tx, ub, id}
+	var user_id string
+	err := tx.QueryRow(`SELECT user_id FROM users WHERE user_id = $1`, id).Scan(&user_id)
+	if err != nil {
+		return nil
 	}
-	return nil
+
+	result := &user{tx, id}
+
+	return result
 }
 
 func (tx *tx) Users() map[string]User {
-	result := make(map[string]User)
-	b := tx.Bucket(db_users)
-	b.ForEach(func(k, v []byte) error {
-		result[string(k)] = &user{tx, b.Bucket(k), string(k)}
+	rows, err := tx.Query(`SELECT user_id FROM users`)
+	if err != nil {
 		return nil
-	})
+	}
+
+	result := make(map[string]User)
+
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		err = rows.Scan(&id)
+		if err != nil {
+			return nil
+		}
+
+		result[id] = &user{tx, id}
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil
+	}
+
 	return result
 }
 
 func (tx *tx) loadReadings(since time.Time, user User, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
-	keys := make([]bufferKey, 0)
-	dmap := make(map[uint64]Device)
-	smap := make(map[Device]map[uint64]Sensor)
-	for device, sensors := range sensors {
-		dmap[device.dbId()] = device
-		smap[device] = make(map[uint64]Sensor)
+	keys := make([]uint64, 0)
+	for _, sensors := range sensors {
 		for _, sensor := range sensors {
-			smap[device][sensor.dbId()] = sensor
-			keys = append(keys, bufferKey{user.dbId(), device.dbId(), sensor.dbId(), sensor.Unit()})
+			keys = append(keys, sensor.DbId())
 		}
 	}
 
@@ -71,21 +80,12 @@ func (tx *tx) loadReadings(since time.Time, user User, sensors map[Device][]Sens
 	}
 
 	result := make(map[Device]map[Sensor][]Value)
-	for key, values := range queryResult {
-		dev := dmap[key.device]
-		sensor := smap[dev][key.sensor]
-
-		if result[dev] == nil {
-			result[dev] = make(map[Sensor][]Value)
+	for device, sensors := range sensors {
+		result[device] = make(map[Sensor][]Value)
+		for _, sensor := range sensors {
+			result[device][sensor] = queryResult[sensor.DbId()]
 		}
-		result[dev][sensor] = values
 	}
 
 	return result, nil
-}
-
-//TODO race condition
-func (tx *tx) removeSeriesFor(user, device, sensor uint64) error {
-	tx.db.bufferKill <- bufferKey{user, device, sensor, ""}
-	return tx.db.sqldb.removeSeriesFor(user, device, sensor)
 }
