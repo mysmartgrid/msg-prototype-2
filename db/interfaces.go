@@ -15,6 +15,8 @@ type Db interface {
 	View(func(Tx) error) error
 
 	AddReading(sensor Sensor, time time.Time, value float64) error
+
+	RunBenchmark(usr_cnt, dev_cnt, sns_cnt int, duration time.Duration)
 }
 
 type User interface {

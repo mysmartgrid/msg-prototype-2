@@ -12,3 +12,11 @@ password = "msgp"
 database = "msgp"
 address  = "localhost"
 port     = "5432"
+
+[benchmark]
+# Caution: Benchmark empties database!
+do-benchmark = false
+users        = 10
+devices      = 100
+sensors      = 50
+duration     = 600 # in minutes

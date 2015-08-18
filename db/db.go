@@ -107,16 +107,23 @@ func OpenDb(sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
 
 	go result.manageBuffer()
 
-	result.View(func(tx Tx) error {
-		for _, user := range tx.Users() {
-			for _, dev := range user.Devices() {
-				for _, sensor := range dev.Sensors() {
-					result.bufferAdd <- sensor.DbId()
-				}
-			}
+	rows, err := result.sqldb.db.Query(`SELECT sensor_seq FROM sensors`)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+	for rows.Next() {
+		var seq uint64
+		err = rows.Scan(&seq)
+		if err != nil {
+			return nil, err
 		}
-		return nil
-	})
+		result.bufferAdd <- seq
+	}
+	if err != nil {
+		return nil, err
+	}
 
 	return result, nil
 }
