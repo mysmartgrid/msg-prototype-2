@@ -432,7 +432,8 @@ func (api *WsUserApi) doGetValues(since time.Time, withMetadata bool) error {
 				return err
 			}
 		}
-		readings, err := user.LoadReadings(since, sensors)
+
+		readings, err := user.LoadReadings(since, time.Now(), db.TimeResMinute, sensors)
 		if err != nil {
 			return err
 		}

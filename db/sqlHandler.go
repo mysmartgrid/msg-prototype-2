@@ -2,6 +2,8 @@ package db
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"github.com/lib/pq"
 	"time"
 )
@@ -50,12 +52,33 @@ func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]Value) error {
 	return nil
 }
 
-func (h *sqlHandler) loadValuesIn(since, until time.Time, sensor_seqs []uint64) (map[uint64][]Value, error) {
+func (h *sqlHandler) loadValues(since, until time.Time, res TimeRes, sensor_seqs []uint64) (map[uint64][]Value, error) {
 	result := make(map[uint64][]Value)
+	var tableName string
+
+	switch res {
+	// case TimeResSecond:
+	// 	tableName = "measure_abg_1s"
+	case TimeResMinute:
+		tableName = "measure_avg_1m"
+	case TimeResHour:
+		tableName = "measure_avg_1h"
+	case TimeResDay:
+		tableName = "measure_avg_1d"
+	case TimeResWeek:
+		tableName = "measure_avg_1w"
+	case TimeResMonth:
+		tableName = "measure_avg_1mo"
+	case TimeResYear:
+		tableName = "measure_avg_1y"
+	default:
+		return result, errors.New("Time resolution not supported.")
+	}
+
+	valueQuery := fmt.Sprintf(`SELECT "timestamp", "sum", "count" FROM "%v" WHERE "sensor" = $1 AND "timestamp" BETWEEN $2 AND $3`, tableName)
 
 	for _, seq := range sensor_seqs {
-		rows, err := h.db.Query(`SELECT "timestamp", "value" FROM "measure_raw" WHERE "sensor" = $1 AND "timestamp" BETWEEN $2 AND $3`,
-			seq, since, until)
+		rows, err := h.db.Query(valueQuery, seq, since, until)
 		if err != nil {
 			return nil, err
 		}
@@ -63,14 +86,15 @@ func (h *sqlHandler) loadValuesIn(since, until time.Time, sensor_seqs []uint64) 
 		var values []Value
 		for rows.Next() {
 			var timestamp time.Time
-			var value float64
+			var sum float64
+			var count int64
 
-			err = rows.Scan(&timestamp, &value)
+			err = rows.Scan(&timestamp, &sum, &count)
 			if err != nil {
 				return nil, err
 			}
 
-			values = append(values, Value{timestamp, value})
+			values = append(values, Value{timestamp, sum / float64(count)})
 		}
 
 		rows.Close()
@@ -83,8 +107,4 @@ func (h *sqlHandler) loadValuesIn(since, until time.Time, sensor_seqs []uint64) 
 	}
 
 	return result, nil
-}
-
-func (h *sqlHandler) loadValues(since time.Time, sensor_seqs []uint64) (map[uint64][]Value, error) {
-	return h.loadValuesIn(since, time.Now(), sensor_seqs)
 }

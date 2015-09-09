@@ -2,6 +2,19 @@ package db
 
 import "time"
 
+type TimeRes int
+
+const (
+	TimeResAuto TimeRes = iota
+	// TimeResSecond
+	TimeResMinute
+	TimeResHour
+	TimeResDay
+	TimeResWeek
+	TimeResMonth
+	TimeResYear
+)
+
 type Tx interface {
 	AddUser(id, password string) (User, error)
 	User(id string) User
@@ -31,7 +44,7 @@ type User interface {
 
 	Id() string
 
-	LoadReadings(since time.Time, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error)
+	LoadReadings(since, until time.Time, res TimeRes, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error)
 }
 
 type Device interface {

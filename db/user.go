@@ -107,6 +107,6 @@ func (u *user) Id() string {
 	return u.id
 }
 
-func (u *user) LoadReadings(since time.Time, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
-	return u.tx.loadReadings(since, u, sensors)
+func (u *user) LoadReadings(since, until time.Time, res TimeRes, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
+	return u.tx.loadReadings(since, until, u, res, sensors)
 }

@@ -66,7 +66,7 @@ func (tx *tx) Users() map[string]User {
 	return result
 }
 
-func (tx *tx) loadReadings(since time.Time, user User, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
+func (tx *tx) loadReadings(since, until time.Time, user User, res TimeRes, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
 	keys := make([]uint64, 0)
 	for _, sensors := range sensors {
 		for _, sensor := range sensors {
@@ -74,7 +74,7 @@ func (tx *tx) loadReadings(since time.Time, user User, sensors map[Device][]Sens
 		}
 	}
 
-	queryResult, err := tx.db.sqldb.loadValues(since, keys)
+	queryResult, err := tx.db.sqldb.loadValues(since, until, res, keys)
 	if err != nil {
 		return nil, err
 	}
