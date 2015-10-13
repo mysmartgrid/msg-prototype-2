@@ -88,6 +88,42 @@ func (u *user) Devices() map[string]Device {
 	return result
 }
 
+func (u *user) Groups() map[string]Group {
+	rows, err := u.tx.Query(`SELECT group_id FROM user_groups WHERE user_id = $1`, u.id)
+	if err != nil {
+		return nil
+	}
+
+	result := make(map[string]Group)
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		err = rows.Scan(&id)
+		if err != nil {
+			return nil
+		}
+
+		result[id] = &group{u.tx, id}
+
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil
+	}
+
+	return result
+}
+
+func (u *user) IsGroupAdmin(group_id string) bool {
+	var is_admin bool
+	err := u.tx.QueryRow(`SELECT is_admin FROM user_groups WHERE user_id = $1 AND group_id = $2`, u.id, group_id).Scan(&is_admin)
+	if err == nil {
+		return is_admin
+	} else {
+		return false
+	}
+}
+
 func (u *user) IsAdmin() bool {
 	var is_admin bool
 	err := u.tx.QueryRow(`SELECT is_admin FROM users WHERE user_id = $1`, u.id).Scan(&is_admin)

@@ -28,6 +28,32 @@ func (s *sensor) SetName(name string) error {
 	return err
 }
 
+func (s *sensor) Groups() map[string]Group {
+	rows, err := s.device.user.tx.Query(`SELECT group_id FROM sensor_groups WHERE sensor_seq = $1`, s.seq)
+	if err != nil {
+		return nil
+	}
+
+	result := make(map[string]Group)
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		err = rows.Scan(&id)
+		if err != nil {
+			return nil
+		}
+
+		result[id] = &group{s.device.user.tx, id}
+
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil
+	}
+
+	return result
+}
+
 func (s *sensor) Port() int32 {
 	var port int32
 	err := s.device.user.tx.QueryRow(`SELECT port FROM sensors WHERE sensor_seq = $1`, s.seq).Scan(&port)
