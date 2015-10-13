@@ -162,7 +162,7 @@ func (d *db) PeriodicRate(interval time.Duration, done, hold chan bool) {
 		default:
 			elapsed := time.Since(start)
 			var count int64
-			d.sqldb.db.QueryRow(`SELECT COUNT(*) FROM measure_raw`).Scan(&count)
+			d.sqldb.db.QueryRow(`SELECT COUNT(sensor) FROM measure_raw`).Scan(&count)
 			log.Printf("Current Rate: %.2f v/s", float64(count)/elapsed.Seconds())
 		}
 		time.Sleep(interval)
@@ -205,7 +205,7 @@ func (d *db) RunBenchmark(usr_cnt, dev_cnt, sns_cnt int, duration time.Duration)
 	d.benchAddUsers(usr_cnt)
 	d.benchAddDevices(dev_cnt)
 	sensors := d.benchAddSensors(sns_cnt)
-	rate := d.benchAddReadings(sensors, duration, time.Microsecond*1)
+	rate := d.benchAddReadings(sensors, duration, time.Second*1)
 
 	log.Printf("==== Result ====")
 	log.Printf("Simulated %d users having %d devices having %d sensors", usr_cnt, dev_cnt, sns_cnt)
