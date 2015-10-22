@@ -215,15 +215,10 @@ var Store;
             this._sensorLabels[deviceId][sensorId] = label;
         };
         SensorValueStore.prototype.addValue = function (deviceId, sensorId, timestamp, value) {
-            var _this = this;
             var seriesIndex = this._getSensorIndex(deviceId, sensorId);
             if (seriesIndex === -1) {
                 throw new Error("No such sensor");
             }
-            // Remove all timeout entries invalidated by this entry
-            this._series[seriesIndex].data = this._series[seriesIndex].data.filter(function (point) {
-                return !(point[1] === null && Math.abs(timestamp - point[0]) < _this._timeout);
-            });
             // Find position for inserting
             var data = this._series[seriesIndex].data;
             var pos = data.findIndex(function (point) {
@@ -234,6 +229,14 @@ var Store;
             }
             // Insert
             data.splice(pos, 0, [timestamp, value]);
+            //Check if we need to remove a timeout in the past
+            if (pos > 0 && data[pos - 1][1] === null && timestamp - data[pos - 1][0] < this._timeout) {
+                data.splice(pos - 1, 1);
+            }
+            //Check if we need to remove a timeout in the future
+            if (pos < data.length - 1 && data[pos + 1][1] === null && data[pos + 1][0] - timestamp < this._timeout) {
+                data.splice(pos + 1, 1);
+            }
             //Check if a null in the past is needed
             if (pos > 0 && data[pos - 1][1] !== null && timestamp - data[pos - 1][0] >= this._timeout) {
                 data.splice(pos, 0, [timestamp - 1, null]);
@@ -329,7 +332,8 @@ var Directives;
             };
             this.graphNode = element.find(".sensor-graph").get(0);
             this.redrawGraph();
-            this.$interval(function () { return _this.redrawGraph(); }, 100);
+            var delay = this.$scope.maxAgeMs / $(this.graphNode).width();
+            this.$interval(function () { return _this.redrawGraph(); }, 1000 / 60);
         };
         SensorCollectionGraphController.prototype.redrawGraph = function () {
             var time = (new Date()).getTime();
@@ -630,13 +634,3 @@ angular.module("msgp", [])
             });
         };
     }]);
-"use strict";
-var Store;
-(function (Store) {
-    var SensorStore = (function () {
-        function SensorStore() {
-        }
-        return SensorStore;
-    })();
-    Store.SensorStore = SensorStore;
-})(Store || (Store = {}));
