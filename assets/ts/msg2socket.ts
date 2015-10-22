@@ -85,7 +85,7 @@ module Msg2Socket {
 
 		private _callHandlers<U>(handlers : ((p : U) => void)[], param : U) {
 			for(var i in handlers) {
-				if (this.$rootScope.$$phase == "apply") {
+				if (this.$rootScope.$$phase === "apply" || this.$rootScope.$$phase === "$digest") {
 					handlers[i](param);
 				} else {
 					this.$rootScope.$apply(function(scope : angular.IScope) : any {
@@ -151,8 +151,6 @@ module Msg2Socket {
 
 		private _onMessage(msg : MessageEvent) : void {
 			var data = JSON.parse(msg.data);
-
-			console.log(data.cmd);
 
             switch (data.cmd) {
             case "update":

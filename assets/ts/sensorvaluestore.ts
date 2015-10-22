@@ -5,66 +5,73 @@
 "use strict";
 
 module Store {
-	function tsToDate(ts : number) : Date {
-		return new Date(ts);
+	export interface TimeSeries {
+		line? : { color : string },
+		data : [number, number][]
 	}
 
-	function dateToTs(date : Date) : number {
-		return date.getTime();
-	}
-
-	interface Sensor {
-		deviceId : string;
-		sensorId : string;
-		label : string;
-	}
+	const ColorScheme : string[] = ['#00A8F0', '#C0D800', '#CB4B4B', '#4DA74D', '#9440ED'];
 
 	export class SensorValueStore {
-		private _data : any[][];
-		private _sensors : Sensor[];
+		private _series : TimeSeries[];
+		private _sensorMap: {[device : string] : {[sensor : string] : number}};
+		private _sensorLabels: {[device : string] : {[sensor : string] : string}};
+
 		private _interval : number;
 		private _timeout : number;
 
-		private _firstEntry() : any[] {
-			return this._data[0];
-		}
-
-		private _lastEntry() : any[] {
-			return this._data[this._data.length - 1];
-		}
-
+		private _colorIndex : number;
 
 		constructor() {
-			this._data = [];
-			this._sensors = [];
-
-			this._data.push([new Date()]);
-			this._data.push([new Date()]);
+			this._series = [];
+			this._sensorMap = {};
+			this._sensorLabels = {};
 
 			this._timeout = 2.5 * 60 * 1000;
 			this._interval = 5 * 60 * 1000;
+
+			this._colorIndex = 0;
 		};
+
+		private _pickColor() : string {
+			var color : string = ColorScheme[this._colorIndex];
+			this._colorIndex = (this._colorIndex + 1) % ColorScheme.length;
+			return color;
+		}
+
+
+		private _getSensorIndex(deviceId : string, sensorId : string) : number {
+			if(this._sensorMap[deviceId] !== undefined && this._sensorMap[deviceId][sensorId] !== undefined) {
+				return this._sensorMap[deviceId][sensorId];
+			}
+
+			return -1;
+		}
 
 		public setInterval(interval : number) : void {
 			this._interval = interval;
-			this._clampData();
 		}
 
 		public setTimeout(timeout : number) : void {
 			this._timeout = timeout;
-			this._compactData();
 		}
 
-		private _clampData() : void {
-			var now = new Date();
-			var oldest = tsToDate(dateToTs(now) - this._interval);
+		public clampData() : void {
+			var oldest : number = (new Date()).getTime() - this._interval;
 
-			this._firstEntry()[0] = oldest;
-			this._lastEntry()[0] = now;
-
-
-			this._data = this._data.filter(function(entry: any[]) : boolean {
-				return entry[0] >= oldest && entry[0] <= now;
+			this._series.forEach((series : TimeSeries) : void => {
+				series.data = series.data.filter((point : [number, number]) : boolean => {
+					return point[0] >= oldest;
+				});
+				
+				if(series.data.length > 0) {
+					if(series.data[0][1] === null) {
+						series.data.splice(0,1);
+					}
+					if(series.data[series.data.length - 1][1] === null) {
+						series.data.splice(series.data.length - 1,1);
+					}
+				}
 			});
 		}
 
@@ -73,198 +80,114 @@ module Store {
 				throw new Error("Sensor has been added already");
 			}
 
-			var sensor : Sensor = {
-				deviceId : deviceId,
-				sensorId : sensorId,
-				label : label
-			};
+			var index : number = this._series.length;
 
-			this._sensors.push(sensor);
-
-			this._firstEntry().push(NaN);
-			this._lastEntry().push(NaN);
-			for(var i = 1; i < this._data.length - 1; i++) {
-					this._data[i].push(null);
+			if(this._sensorMap[deviceId] === undefined) {
+				this._sensorMap[deviceId] = {};
+				this._sensorLabels[deviceId] = {};
 			}
+
+			this._sensorMap[deviceId][sensorId] = index;
+			this._sensorLabels[deviceId][sensorId] = label;
+
+			this._series.push({
+				line: {
+					color : this._pickColor(),
+				},
+				data: []
+			})
 		}
 
-		public setSensorLabel(deviceId : string, sensorId : string, label : string) : void {
-			var index = this._getSensorIndex(deviceId, sensorId);
+		public hasSensor(device : string, sensor : string) : boolean {
+			return this._getSensorIndex(device, sensor) !== -1;
+		}
+
+		public removeSensor(deviceId : string, sensorId : string) {
+			var index : number = this._getSensorIndex(deviceId, sensorId);
 
 			if(index === -1) {
 				throw new Error("No such sensor");
 			}
 
-			this._sensors[index - 1].label = label;
+			this._series.splice(index,1);
+			delete this._sensorMap[deviceId][sensorId];
+			delete this._sensorLabels[deviceId][sensorId];
 		}
 
-		public getSensorByIndex(index : number) : [string, string] {
-			if(index < 0 || index >= this._sensors.length) {
-				throw new Error("Sensor index out of range");
+		public setLabel(deviceId : string, sensorId : string, label : string) {
+
+			if(!this.hasSensor(deviceId, sensorId)) {
+				throw new Error("No such sensor");
 			}
 
-			return [this._sensors[index].deviceId, this._sensors[index].sensorId];
+			this._sensorLabels[deviceId][sensorId] = label;
 		}
 
-		private _getSensorIndex(deviceId : string, sensorId : string) : number {
-			var index = this._sensors.findIndex(function(sensor : Sensor) : boolean {
-				return sensor.deviceId === deviceId && sensor.sensorId === sensorId;
+		public addValue(deviceId : string, sensorId : string, timestamp : number, value : number) : void {
+			var seriesIndex : number = this._getSensorIndex(deviceId, sensorId);
+			if(seriesIndex === -1) {
+				throw new Error("No such sensor");
+			}
+
+			// Remove all timeout entries invalidated by this entry
+			this._series[seriesIndex].data = this._series[seriesIndex].data.filter((point : [number, number]) : boolean => {
+				return !(point[1] === null && Math.abs(timestamp - point[0]) < this._timeout);
 			});
 
-			if(index >= 0) {
-				return index + 1;
-			}
 
-			return -1;
-		}
-
-		public hasSensor(device : string, sensor : string) : boolean {
-			return this._getSensorIndex(device, sensor) !== -1
-		}
-
-		private _makeEntry(device : string, sensor : string, timestamp : number, value : number) : any[] {
-			var sensorIndex = this._getSensorIndex(device, sensor);
-
-			if(sensorIndex === -1) {
-				throw new Error("Sensor " + device + "." + sensor + "does not exist");
-			}
-
-			var entry = new Array<any>(this._sensors.length + 1);
-
-			entry[0] = tsToDate(timestamp);
-			entry.fill(null,1);
-			entry[sensorIndex] = value;
-
-			return entry;
-		}
-
-		public addValues(update : Msg2Socket.UpdateData) : void {
-			this._clampData();
-
-			var oldestTs = dateToTs(this._firstEntry()[0]);
-			var newestTs = dateToTs(this._lastEntry()[0]);
-
-			for(var deviceID in update) {
-				for(var sensorID in update[deviceID]) {
-					if(this.hasSensor(deviceID, sensorID)) {
-						var sensorIndex = this._getSensorIndex(deviceID, sensorID);
-						for(var i = 0; i < update[deviceID][sensorID].length; i++) {
-							var tuple : [number, number] = update[deviceID][sensorID][i];
-							//We do not accept data beyond our terminators
-							if(tuple[0] > oldestTs && tuple[0] < newestTs) {
-								this._data.push(this._makeEntry(deviceID, sensorID, tuple[0], tuple[1]));
-							}
-						}
-					}
-				}
-			}
-
-			this._data.sort(function(a : any[], b : any[]) : number {
-				if(a[0] < b[0]) {
-					return -1;
-				}
-				else if(a[0] > b[0]) {
-					return 1;
-				}
-				return 0;
+			// Find position for inserting
+			var data = this._series[seriesIndex].data;
+			var pos = data.findIndex((point : [number, number]) : boolean => {
+				return point[0] > timestamp;
 			});
-
-			this._compactData();
-		}
-
-		private _makeNaNEntry(timestamp: number, index : number) : any[] {
-			var nanEntry = new Array(this._sensors.length + 1);
-			nanEntry[0] = tsToDate(timestamp);
-			nanEntry.fill(null,1);
-			nanEntry[index] = NaN;
-			return nanEntry;
-		}
-
-		private _compactData() : void {
-			//First pass: Drop all old NaN entries and merge entries with same timestamp
-			var entryIndex = 1;
-			while(entryIndex < this._data.length - 1) {
-				//Drop NaNs
-				for(var valueIndex = 1; valueIndex <= this._sensors.length; valueIndex++) {
-					if(isNaN(this._data[entryIndex][valueIndex])) {
-						this._data[entryIndex][valueIndex] = null;
-					}
-				}
-
-
-				//Remove all entries only containing null values
-				var allNull = this._data[entryIndex].every((value : any, index : number) => {
-					return index < 1 || value === null;
-				});
-				if(allNull) {
-					this._data.splice(entryIndex,1);
-				}
-
-
-				//Merge entries with same timestamp
-				if(entryIndex > 1 && dateToTs(this._data[entryIndex][0]) === dateToTs(this._data[entryIndex-1][0])) {
-					var entry = this._data[entryIndex];
-					var prevEntry = this._data[entryIndex-1];
-
-					var mergeAble = entry.every((value : any, index : number) => {
-						// index > 1: we don't care about the dates
-						// value === null: we don't care about nulls in the current set
-						// value !== null && prevEntry[index] === null: there is null in the previous entry, for the not-null value
-						return index < 1 || value === null || value !== null && prevEntry[index] === null;
-					});
-
-					if(mergeAble) {
-						for(var valueIndex = 1; valueIndex <= this._sensors.length; valueIndex++) {
-							if(prevEntry[valueIndex] === null && entry[valueIndex] !== null) {
-								prevEntry[valueIndex] = entry[valueIndex];
-							}
-						}
-						this._data.splice(entryIndex, 1);
-						entryIndex--;
-					}
-				}
-
-				entryIndex++;
+			if(pos === -1) {
+				pos = data.length;
 			}
 
+			// Insert
+			data.splice(pos, 0, [timestamp, value]);
 
-			//Second pass: Reinsert NaNs if gap is big enough
-			var timedout = new Array<boolean>(this._sensors.length);
-			timedout.fill(false, 0);
-			var lastUpdate = new Array<number>(this._sensors.length);
-			lastUpdate.fill(dateToTs(this._firstEntry()[0]), 0);
-			entryIndex = 1;
-			while(entryIndex < this._data.length - 1) {
-				var entry = this._data[entryIndex];
-				var timestamp = dateToTs(entry[0]);
-				for(var valueIndex = 1; valueIndex <= this._sensors.length; valueIndex++) {
-					if(timestamp - lastUpdate[valueIndex - 1] > this._timeout && !timedout[valueIndex - 1]) {
-						this._data.splice(entryIndex, 0, this._makeNaNEntry(timestamp, valueIndex));
-						entryIndex++;
+			//Check if a null in the past is needed
+			if(pos > 0 && data[pos - 1][1] !== null && timestamp - data[pos - 1][0] >= this._timeout) {
+				data.splice(pos, 0, [timestamp - 1, null]);
+			}
 
-						timedout[valueIndex - 1] = true;
-					}
-
-					if(entry[valueIndex] !== null) {
-						lastUpdate[valueIndex - 1] = timestamp;
-						timedout[valueIndex - 1] = false;
-					}
-				}
-				entryIndex++;
+			//Check if a null in the future is needed
+			if(pos < data.length - 1 && data[pos + 1][1] !== null && data[pos + 1][0] - timestamp >= this._timeout) {
+				data.splice(pos + 1, 0, [timestamp + 1, null]);
 			}
 
 		}
 
-		public getGraphData() : any[][] {
-			return this._data;
+
+		public getData() : TimeSeries[] {
+			return this._series;
 		}
 
 
-		public getGraphLabels() : string[] {
-			var labels : string[] = ["Time"];
+		public getColors() :  {[device: string]: {[sensor: string]: string}} {
+			var colors : {[device: string]: {[sensor: string]: string}} = {};
 
-			for(var index = 0; index < this._sensors.length; index++) {
-				labels.push(this._sensors[index].label);
+			for(var deviceId in this._sensorMap) {
+				colors[deviceId] = {};
+				for(var sensorId in this._sensorMap[deviceId]) {
+					var index = this._sensorMap[deviceId][sensorId];
+					colors[deviceId][sensorId] = this._series[index].line.color;
+				}
+			}
+
+			return colors;
+		}
+
+
+		public getLabels() : {[device: string]: {[sensor: string]: string}} {
+			var labels : {[device: string]: {[sensor: string]: string}} = {};
+
+			for(var deviceId in this._sensorLabels) {
+				labels[deviceId] = {};
+				for(var sensorId in this._sensorLabels[deviceId]) {
+					labels[deviceId][sensorId] = this._sensorLabels[deviceId][sensorId];
+				}
 			}
 
 			return labels;

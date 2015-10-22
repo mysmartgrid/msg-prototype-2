@@ -21,7 +21,7 @@ var Msg2Socket;
         });
         Socket.prototype._callHandlers = function (handlers, param) {
             for (var i in handlers) {
-                if (this.$rootScope.$$phase == "apply") {
+                if (this.$rootScope.$$phase === "apply" || this.$rootScope.$$phase === "$digest") {
                     handlers[i](param);
                 }
                 else {
@@ -66,7 +66,6 @@ var Msg2Socket;
         };
         Socket.prototype._onMessage = function (msg) {
             var data = JSON.parse(msg.data);
-            console.log(data.cmd);
             switch (data.cmd) {
                 case "update":
                     this._emitUpdate(data.args);
@@ -130,10 +129,362 @@ var Msg2Socket;
     Msg2Socket.Socket = Socket;
     ;
 })(Msg2Socket || (Msg2Socket = {}));
+/// <reference path="es6-shim.d.ts" />
+/// <reference path="msg2socket.ts" />
+"use strict";
+var Store;
+(function (Store) {
+    var ColorScheme = ['#00A8F0', '#C0D800', '#CB4B4B', '#4DA74D', '#9440ED'];
+    var SensorValueStore = (function () {
+        function SensorValueStore() {
+            this._series = [];
+            this._sensorMap = {};
+            this._sensorLabels = {};
+            this._timeout = 2.5 * 60 * 1000;
+            this._interval = 5 * 60 * 1000;
+            this._colorIndex = 0;
+        }
+        ;
+        SensorValueStore.prototype._pickColor = function () {
+            var color = ColorScheme[this._colorIndex];
+            this._colorIndex = (this._colorIndex + 1) % ColorScheme.length;
+            return color;
+        };
+        SensorValueStore.prototype._getSensorIndex = function (deviceId, sensorId) {
+            if (this._sensorMap[deviceId] !== undefined && this._sensorMap[deviceId][sensorId] !== undefined) {
+                return this._sensorMap[deviceId][sensorId];
+            }
+            return -1;
+        };
+        SensorValueStore.prototype.setInterval = function (interval) {
+            this._interval = interval;
+        };
+        SensorValueStore.prototype.setTimeout = function (timeout) {
+            this._timeout = timeout;
+        };
+        SensorValueStore.prototype.clampData = function () {
+            var oldest = (new Date()).getTime() - this._interval;
+            this._series.forEach(function (series) {
+                series.data = series.data.filter(function (point) {
+                    return point[0] >= oldest;
+                });
+                if (series.data.length > 0) {
+                    if (series.data[0][1] === null) {
+                        series.data.splice(0, 1);
+                    }
+                    if (series.data[series.data.length - 1][1] === null) {
+                        series.data.splice(series.data.length - 1, 1);
+                    }
+                }
+            });
+        };
+        SensorValueStore.prototype.addSensor = function (deviceId, sensorId, label) {
+            if (this.hasSensor(deviceId, sensorId)) {
+                throw new Error("Sensor has been added already");
+            }
+            var index = this._series.length;
+            if (this._sensorMap[deviceId] === undefined) {
+                this._sensorMap[deviceId] = {};
+                this._sensorLabels[deviceId] = {};
+            }
+            this._sensorMap[deviceId][sensorId] = index;
+            this._sensorLabels[deviceId][sensorId] = label;
+            this._series.push({
+                line: {
+                    color: this._pickColor(),
+                },
+                data: []
+            });
+        };
+        SensorValueStore.prototype.hasSensor = function (device, sensor) {
+            return this._getSensorIndex(device, sensor) !== -1;
+        };
+        SensorValueStore.prototype.removeSensor = function (deviceId, sensorId) {
+            var index = this._getSensorIndex(deviceId, sensorId);
+            if (index === -1) {
+                throw new Error("No such sensor");
+            }
+            this._series.splice(index, 1);
+            delete this._sensorMap[deviceId][sensorId];
+            delete this._sensorLabels[deviceId][sensorId];
+        };
+        SensorValueStore.prototype.setLabel = function (deviceId, sensorId, label) {
+            if (!this.hasSensor(deviceId, sensorId)) {
+                throw new Error("No such sensor");
+            }
+            this._sensorLabels[deviceId][sensorId] = label;
+        };
+        SensorValueStore.prototype.addValue = function (deviceId, sensorId, timestamp, value) {
+            var _this = this;
+            var seriesIndex = this._getSensorIndex(deviceId, sensorId);
+            if (seriesIndex === -1) {
+                throw new Error("No such sensor");
+            }
+            // Remove all timeout entries invalidated by this entry
+            this._series[seriesIndex].data = this._series[seriesIndex].data.filter(function (point) {
+                return !(point[1] === null && Math.abs(timestamp - point[0]) < _this._timeout);
+            });
+            // Find position for inserting
+            var data = this._series[seriesIndex].data;
+            var pos = data.findIndex(function (point) {
+                return point[0] > timestamp;
+            });
+            if (pos === -1) {
+                pos = data.length;
+            }
+            // Insert
+            data.splice(pos, 0, [timestamp, value]);
+            //Check if a null in the past is needed
+            if (pos > 0 && data[pos - 1][1] !== null && timestamp - data[pos - 1][0] >= this._timeout) {
+                data.splice(pos, 0, [timestamp - 1, null]);
+            }
+            //Check if a null in the future is needed
+            if (pos < data.length - 1 && data[pos + 1][1] !== null && data[pos + 1][0] - timestamp >= this._timeout) {
+                data.splice(pos + 1, 0, [timestamp + 1, null]);
+            }
+        };
+        SensorValueStore.prototype.getData = function () {
+            return this._series;
+        };
+        SensorValueStore.prototype.getColors = function () {
+            var colors = {};
+            for (var deviceId in this._sensorMap) {
+                colors[deviceId] = {};
+                for (var sensorId in this._sensorMap[deviceId]) {
+                    var index = this._sensorMap[deviceId][sensorId];
+                    colors[deviceId][sensorId] = this._series[index].line.color;
+                }
+            }
+            return colors;
+        };
+        SensorValueStore.prototype.getLabels = function () {
+            var labels = {};
+            for (var deviceId in this._sensorLabels) {
+                labels[deviceId] = {};
+                for (var sensorId in this._sensorLabels[deviceId]) {
+                    labels[deviceId][sensorId] = this._sensorLabels[deviceId][sensorId];
+                }
+            }
+            return labels;
+        };
+        return SensorValueStore;
+    })();
+    Store.SensorValueStore = SensorValueStore;
+})(Store || (Store = {}));
+/// <reference path="angular.d.ts" />
+/// <reference path="msg2socket.ts" />
+/// <reference path="sensorvaluestore.ts" />
+/// <reference path="graphview.ts" />
+"use strict";
+var Directives;
+(function (Directives) {
+    var SensorCollectionGraphController = (function () {
+        function SensorCollectionGraphController($scope, $interval) {
+            var _this = this;
+            this.$scope = $scope;
+            this.$interval = $interval;
+            this.store = new Store.SensorValueStore();
+            $scope.$watch('maxAgeMs', function (interval) { return _this.store.setInterval(interval); });
+            $scope.$watch('assumeMissingAfterMs', function (timeout) { return _this.store.setTimeout(timeout); });
+            $scope.$watch('sensors', function () { return _this.updateSensors(); });
+            $interval(function () { return _this.store.clampData(); }, 1000);
+        }
+        SensorCollectionGraphController.prototype.updateSensors = function () {
+            var labels = this.store.getLabels();
+            for (var key in this.$scope.sensors) {
+                var sensor = this.$scope.sensors[key];
+                if (!this.store.hasSensor(sensor.deviceID, sensor.sensorID)) {
+                    this.store.addSensor(sensor.deviceID, sensor.sensorID, sensor.name);
+                }
+                else if (labels[sensor.deviceID][sensor.sensorID] !== sensor.name) {
+                    this.store.setLabel(sensor.deviceID, sensor.sensorID, sensor.name);
+                }
+                else {
+                    delete labels[sensor.deviceID][sensor.sensorID];
+                }
+            }
+            for (var deviceID in labels) {
+                for (var sensorID in labels[deviceID]) {
+                    this.store.removeSensor(deviceID, sensorID);
+                }
+            }
+            this.$scope.sensorColors = this.store.getColors();
+            console.log(this.$scope.sensorColors);
+        };
+        SensorCollectionGraphController.prototype.updateValues = function (deviceID, sensorID, timestamp, value) {
+            this.store.addValue(deviceID, sensorID, timestamp, value);
+        };
+        SensorCollectionGraphController.prototype.createGraph = function (element) {
+            var _this = this;
+            this.graphOptions = {
+                xaxis: {
+                    mode: 'time',
+                    timeMode: 'local',
+                    title: 'Uhrzeit'
+                },
+                resolution: window.devicePixelRatio,
+                HtmlText: false,
+                preventDefault: false,
+                title: 'Messwerte [' + this.$scope.unit + ']'
+            };
+            this.graphNode = element.find(".sensor-graph").get(0);
+            this.redrawGraph();
+            this.$interval(function () { return _this.redrawGraph(); }, 100);
+        };
+        SensorCollectionGraphController.prototype.redrawGraph = function () {
+            var time = (new Date()).getTime();
+            this.graphOptions.xaxis.max = time - 1000;
+            this.graphOptions.xaxis.min = time - this.$scope.maxAgeMs + 1000;
+            //options.resolution = Math.max(1.0, window.devicePixelRatio);
+            Flotr.draw(this.graphNode, this.store.getData(), this.graphOptions);
+        };
+        return SensorCollectionGraphController;
+    })();
+    Directives.SensorCollectionGraphController = SensorCollectionGraphController;
+    var SensorCollectionGraphDirective = (function () {
+        function SensorCollectionGraphDirective() {
+            this.require = ["^graphView", "sensorCollectionGraph"];
+            this.restrict = "A";
+            this.templateUrl = "/html/sensor-collection-graph.html";
+            this.scope = {
+                unit: "=",
+                sensors: "=",
+                maxAgeMs: "=",
+                assumeMissingAfterMs: "=",
+            };
+            this.controller = ["$scope", "$interval", SensorCollectionGraphController];
+            // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
+            this.link = function ($scope, element, attrs, controllers) {
+                var graphView = controllers[0];
+                var sensorCollectionGraph = controllers[1];
+                sensorCollectionGraph.createGraph(element);
+                graphView.registerGraph($scope.unit, sensorCollectionGraph);
+            };
+        }
+        return SensorCollectionGraphDirective;
+    })();
+    function SensorCollectionGraphFactory() {
+        return function () { return new SensorCollectionGraphDirective(); };
+    }
+    Directives.SensorCollectionGraphFactory = SensorCollectionGraphFactory;
+})(Directives || (Directives = {}));
+/// <reference path="angular.d.ts" />
+/// <reference path="msg2socket.ts" />
+/// <reference path="sensorvaluestore.ts" />
+/// <reference path="sensorcollectiongraph.ts" />
+"use strict";
+var Directives;
+(function (Directives) {
+    function sensorKey(deviceID, sensorID) {
+        return deviceID + ':' + sensorID;
+    }
+    Directives.sensorKey = sensorKey;
+    var GraphViewController = (function () {
+        function GraphViewController($scope, wsclient) {
+            var _this = this;
+            this.$scope = $scope;
+            this.wsclient = wsclient;
+            this.graphs = {};
+            this.$scope.sensors = {};
+            this.wsclient.onMetadata(function (meta) {
+                for (var deviceID in meta.devices) {
+                    var device = meta.devices[deviceID];
+                    for (var sensorID in device.sensors) {
+                        var sensorMetadata = device.sensors[sensorID];
+                        _this.updateSensors(deviceID, sensorID, device.name, sensorMetadata);
+                    }
+                    for (var deletedID in device.deletedSensors) {
+                    }
+                }
+            });
+            this.wsclient.onUpdate(function (update) {
+                for (var deviceID in update) {
+                    for (var sensorID in update[deviceID]) {
+                        var unit = _this.findUnit(deviceID, sensorID);
+                        update[deviceID][sensorID].forEach(function (point) {
+                            return _this.graphs[unit].updateValues(deviceID, sensorID, point[0], point[1]);
+                        });
+                    }
+                }
+            });
+            this.wsclient.onOpen(function (err) {
+                if (err) {
+                    return;
+                }
+                _this.wsclient.requestValues(+new Date() - 120 * 1000, true); //Results in Metadata update
+            });
+        }
+        GraphViewController.prototype.updateSensors = function (deviceID, sensorID, deviceName, meta) {
+            var unit = this.findUnit(deviceID, sensorID);
+            if (unit === undefined) {
+                var sensor = {
+                    deviceID: deviceID,
+                    sensorID: sensorID,
+                    deviceName: deviceName,
+                    name: meta.name,
+                    port: meta.port,
+                    unit: meta.unit
+                };
+                if (this.$scope.sensors[meta.unit] === undefined) {
+                    this.$scope.sensors[meta.unit] = {};
+                }
+                this.$scope.sensors[meta.unit][sensorKey(deviceID, sensorID)] = sensor;
+                ;
+            }
+            else {
+                var sensor = this.$scope.sensors[unit][sensorKey(deviceID, sensorID)];
+                sensor.deviceName = deviceName || sensor.deviceName;
+                sensor.name = meta.name || sensor.name;
+                sensor.port = meta.port || sensor.port;
+                sensor.unit = meta.unit || sensor.unit;
+            }
+        };
+        GraphViewController.prototype.findUnit = function (deviceID, sensorID) {
+            var _this = this;
+            var units = Object.keys(this.$scope.sensors);
+            var unit = units.filter(function (unit) { return _this.$scope.sensors[unit][sensorKey(deviceID, sensorID)] !== undefined; });
+            if (unit.length > 1) {
+                throw new Error("Multiple units for sensor " + sensorKey(deviceID, sensorID));
+            }
+            else if (unit.length === 0) {
+                return undefined;
+            }
+            return unit[0];
+        };
+        GraphViewController.prototype.registerGraph = function (unit, graph) {
+            this.graphs[unit] = graph;
+            console.log(this.graphs);
+        };
+        return GraphViewController;
+    })();
+    Directives.GraphViewController = GraphViewController;
+    var GraphViewDirective = (function () {
+        function GraphViewDirective() {
+            this.restrict = "A";
+            this.templateUrl = "/html/graph-view.html";
+            this.scope = {
+                title: "@"
+            };
+            // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
+            this.link = function ($scope, element, attrs, controller) {
+            };
+            this.controller = ["$scope", "WSUserClient", GraphViewController];
+        }
+        ;
+        return GraphViewDirective;
+    })();
+    function GraphViewFactory() {
+        return function () { return new GraphViewDirective(); };
+    }
+    Directives.GraphViewFactory = GraphViewFactory;
+})(Directives || (Directives = {}));
 /// <reference path="jquery.d.ts" />
 /// <reference path="angular.d.ts" />
 /// <reference path="bootstrap.d.ts" />
 /// <reference path="msg2socket.ts" />
+/// <reference path="sensorvaluestore.ts" />
+/// <reference path="graphview.ts" />
+/// <reference path="sensorcollectiongraph.ts" />
 "use strict";
 angular.module("msgp", [])
     .config(function ($interpolateProvider) {
@@ -145,270 +496,8 @@ angular.module("msgp", [])
             throw "websocket support required";
         return new Msg2Socket.Socket($rootScope);
     }])
-    .directive("sensorCollectionGraph", ["$interval", function ($interval) {
-        return {
-            require: "^graphView",
-            restrict: "A",
-            templateUrl: "/html/sensor-collection-graph.html",
-            scope: {
-                unit: "=",
-                sensors: "=",
-                maxAgeMs: "=",
-                assumeMissingAfterMs: "=",
-            },
-            link: function (scope, element, attrs, graphView) {
-                var graph = new Dygraph(element.find(".sensor-graph").get(0), [[new Date()]], {
-                    labels: ["Time"],
-                    connectSeparatedPoints: true
-                });
-                var maxAgeMs = undefined;
-                var assumeMissingAfterMs = undefined;
-                var columns = ["Time"];
-                var data = [[new Date()]];
-                var sensorToIndexMap = {};
-                var lastUpdateOf = {};
-                var valueMissingTimeouts = {};
-                var valueMissing = function (sensorID) {
-                    scope.mergeDataset({
-                        sensorID: [[+new Date(), NaN]]
-                    });
-                };
-                var restartValueMissingTimeout = function (sensorID) {
-                    if (sensorID === void 0) { sensorID = undefined; }
-                    if (sensorID !== undefined) {
-                        if (sensorID in valueMissingTimeouts)
-                            $interval.cancel(valueMissingTimeouts[sensorID]);
-                        if (assumeMissingAfterMs !== undefined)
-                            valueMissingTimeouts[sensorID] = $interval(valueMissing, assumeMissingAfterMs, 1, true, sensorID);
-                    }
-                    else {
-                        Object.getOwnPropertyNames(valueMissingTimeouts).forEach(restartValueMissingTimeout);
-                    }
-                };
-                var clampToMaxAge = function () {
-                    if (maxAgeMs === undefined)
-                        return;
-                    var now = +new Date();
-                    while (data.length > 0 && (now - data[0][0]) > maxAgeMs)
-                        data.shift();
-                    data.unshift([new Date((+new Date()) - maxAgeMs)]);
-                    while (data[0].length < columns.length)
-                        data[0].push(NaN);
-                };
-                scope.sensorColor = {};
-                scope.mergeDataset = function (set, omitUpdate) {
-                    //console.log(data);
-                    //console.log(set);
-                    var needsSorting = false;
-                    data.pop();
-                    Object.getOwnPropertyNames(set).forEach(function (sensor) {
-                        for (var i = 0; i < set[sensor].length; i++) {
-                            var item = set[sensor][i];
-                            var at = new Date(Math.floor(item[0]));
-                            if (data.length > 0 && at < data[data.length - 1][0])
-                                needsSorting = true;
-                            var line = [at];
-                            while (line.length < columns.length)
-                                line.push(null);
-                            if (sensor in lastUpdateOf && +at - lastUpdateOf[sensor] >= assumeMissingAfterMs) {
-                                var sep = [at];
-                                while (sep.length < line.length)
-                                    sep.push(null);
-                                sep[sensorToIndexMap[sensor]] = NaN;
-                                data.push(sep);
-                            }
-                            lastUpdateOf[sensor] = at;
-                            line[sensorToIndexMap[sensor]] = item[1];
-                            data.push(line);
-                        }
-                        restartValueMissingTimeout(sensor);
-                    });
-                    if (needsSorting) {
-                        data.sort(function (a, b) { return a[0] - b[0]; });
-                        lastUpdateOf = {};
-                        var ids = Object.getOwnPropertyNames(sensorToIndexMap);
-                        var wholeSet = data;
-                        data = [[]];
-                        for (var i = 0; i < wholeSet.length; i++) {
-                            var line = wholeSet[i];
-                            for (var j = 0; j < ids.length; j++) {
-                                var sensor = ids[j];
-                                var val = line[sensorToIndexMap[sensor]];
-                                if (typeof val == "number" && !isNaN(val)) {
-                                    var obj = {};
-                                    obj[sensor] = [[line[0], val]];
-                                    scope.mergeDataset(obj, true);
-                                }
-                            }
-                        }
-                        graph.updateOptions({
-                            file: data
-                        });
-                        return;
-                    }
-                    clampToMaxAge();
-                    data.push([new Date()]);
-                    while (data[data.length - 1].length < columns.length)
-                        data[data.length - 1].push(NaN);
-                    if (!omitUpdate) {
-                        graph.updateOptions({
-                            file: data
-                        });
-                    }
-                };
-                scope.$watch(attrs.maxAgeMs, function (val) {
-                    maxAgeMs = val === undefined ? undefined : +val;
-                });
-                scope.$watch(attrs.assumeMissingAfterMs, function (val) {
-                    assumeMissingAfterMs = val === undefined ? undefined : +val;
-                    restartValueMissingTimeout();
-                });
-                scope.$watchCollection(attrs.sensors, function (val) {
-                    Object.getOwnPropertyNames(sensorToIndexMap).forEach(function (id) {
-                        if (sensorToIndexMap[id] == 0 || id in val)
-                            return;
-                        var idx = sensorToIndexMap[id];
-                        columns.splice(idx, 1);
-                        for (var i = 0; i < data.length; i++) {
-                            data[i].splice(idx, 1);
-                        }
-                        delete sensorToIndexMap[id];
-                        Object.getOwnPropertyNames(sensorToIndexMap).forEach(function (id) {
-                            if (sensorToIndexMap[id] >= idx)
-                                sensorToIndexMap[id] -= 1;
-                        });
-                        graph.updateOptions({
-                            labels: columns,
-                            file: data
-                        });
-                    });
-                    Object.getOwnPropertyNames(val).forEach(function (id) {
-                        if (id in sensorToIndexMap)
-                            return;
-                        var idx = Object.getOwnPropertyNames(sensorToIndexMap).length;
-                        sensorToIndexMap[id] = idx + 1;
-                        columns.push(val[id].name);
-                        for (var i = 0; i < data.length; i++) {
-                            data[i].push(null);
-                        }
-                        graph.updateOptions({
-                            labels: columns,
-                            file: data
-                        });
-                    });
-                    Object.getOwnPropertyNames(sensorToIndexMap).forEach(function (key) {
-                        scope.sensorColor[key] = graph.getColors()[sensorToIndexMap[key] - 1];
-                    });
-                });
-                graphView.registerGraph(scope.unit, scope);
-            }
-        };
-    }])
-    .directive("graphView", ["$interval", "WSUserClient", function ($interval, wsclient) {
-        return {
-            restrict: "A",
-            templateUrl: "/html/graph-view.html",
-            scope: {
-                title: "@"
-            },
-            controller: function ($scope) {
-                var graphInstances = $scope[".graphInstances"] = {};
-                this.registerGraph = function (unit, graph) {
-                    graphInstances[unit] = graph;
-                };
-            },
-            link: function (scope, element, attrs) {
-                scope.sensors = {};
-                scope.sensorsByUnit = {};
-                var graphInstances = scope[".graphInstances"];
-                var sensorKey = function (devID, sensorID) {
-                    return [devID.length, devID, sensorID.length, sensorID].join();
-                };
-                var addGraph = function (unit) {
-                    scope.sensorsByUnit[unit] = unit;
-                };
-                var removeGraph = function (unit) {
-                    delete scope.sensorsByUnit[unit];
-                    if (graphInstances[unit] !== undefined) {
-                        graphInstances[unit].destroy();
-                        delete graphInstances[unit];
-                    }
-                };
-                var getGraph = function (unit) {
-                    return graphInstances[unit];
-                };
-                var realtimeUpdateTimeout;
-                var requestRealtimeUpdates = function () {
-                    if (realtimeUpdateTimeout !== undefined) {
-                        $interval.cancel(realtimeUpdateTimeout);
-                    }
-                    var sensors = {};
-                    Object.getOwnPropertyNames(scope.sensors).forEach(function (id) {
-                        var sens = scope.sensors[id];
-                        sensors[sens[".deviceID"]] = sensors[sens[".deviceID"]] || [];
-                        sensors[sens[".deviceID"]].push(sens[".sensorID"]);
-                    });
-                    wsclient.requestRealtimeUpdates(sensors);
-                    realtimeUpdateTimeout = $interval(requestRealtimeUpdates, 30 * 1000, 1, true);
-                };
-                wsclient.onMetadata(function (md) {
-                    Object.getOwnPropertyNames(md.devices).forEach(function (devID) {
-                        var mdev = md.devices[devID];
-                        Object.getOwnPropertyNames(mdev.deletedSensors || {}).forEach(function (sensorID) {
-                            var key = sensorKey(devID, sensorID);
-                            var unit = scope.sensors[key].unit || "";
-                            delete scope.sensorsByUnit[unit][key];
-                            delete scope.sensors[key];
-                        });
-                        Object.getOwnPropertyNames(mdev.sensors || {}).forEach(function (sensorID) {
-                            var msens = mdev.sensors[sensorID];
-                            var key = sensorKey(devID, sensorID);
-                            if (!(key in scope.sensors)) {
-                                scope.sensors[key] = {};
-                            }
-                            var sens = scope.sensors[key];
-                            sens.name = msens.name || sens.name || "";
-                            sens.unit = msens.unit || sens.unit || "";
-                            sens.port = msens.port || sens.port || -1;
-                            sens[".deviceID"] = devID;
-                            sens[".sensorID"] = sensorID;
-                            sens.id = sensorID;
-                            sens.key = key;
-                            scope.sensorsByUnit[sens.unit] = scope.sensorsByUnit[sens.unit] || {};
-                            scope.sensorsByUnit[sens.unit][key] = sens;
-                        });
-                    });
-                    requestRealtimeUpdates();
-                });
-                wsclient.onUpdate(function (data) {
-                    var updatesByUnit = {};
-                    Object.getOwnPropertyNames(data).forEach(function (devID) {
-                        Object.getOwnPropertyNames(data[devID]).forEach(function (sensorID) {
-                            var key = sensorKey(devID, sensorID);
-                            if (scope.sensors[key] !== undefined) {
-                                var unit = scope.sensors[key].unit;
-                                updatesByUnit[unit] = updatesByUnit[unit] || {};
-                                updatesByUnit[unit][key] = data[devID][sensorID];
-                            }
-                        });
-                    });
-                    Object.getOwnPropertyNames(updatesByUnit).forEach(function (unit) {
-                        getGraph(unit).mergeDataset(updatesByUnit[unit]);
-                    });
-                });
-                var onError = function (e) {
-                    scope.wsConnectionFailed = true;
-                };
-                wsclient.onClose(onError);
-                wsclient.onError(onError);
-                wsclient.onOpen(function (err) {
-                    if (err)
-                        return;
-                    wsclient.requestValues(+new Date() - 120 * 1000, true);
-                });
-            }
-        };
-    }])
+    .directive("sensorCollectionGraph", Directives.SensorCollectionGraphFactory())
+    .directive("graphView", Directives.GraphViewFactory())
     .directive("deviceEditor", [function () {
         return {
             restrict: "A",
@@ -541,3 +630,13 @@ angular.module("msgp", [])
             });
         };
     }]);
+"use strict";
+var Store;
+(function (Store) {
+    var SensorStore = (function () {
+        function SensorStore() {
+        }
+        return SensorStore;
+    })();
+    Store.SensorStore = SensorStore;
+})(Store || (Store = {}));
