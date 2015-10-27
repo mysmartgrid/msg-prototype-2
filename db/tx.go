@@ -129,7 +129,7 @@ func (tx *tx) Groups() map[string]Group {
 	return result
 }
 
-func (tx *tx) loadReadings(since, until time.Time, user User, res TimeRes, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
+func (tx *tx) loadReadings(since, until time.Time, user User, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
 	keys := make([]uint64, 0)
 	for _, sensors := range sensors {
 		for _, sensor := range sensors {
@@ -137,7 +137,7 @@ func (tx *tx) loadReadings(since, until time.Time, user User, res TimeRes, senso
 		}
 	}
 
-	queryResult, err := tx.db.sqldb.loadValues(since, until, res, keys)
+	queryResult, err := tx.db.sqldb.loadValues(since, until, resolution, keys)
 	if err != nil {
 		return nil, err
 	}

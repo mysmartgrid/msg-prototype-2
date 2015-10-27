@@ -2,28 +2,6 @@ package db
 
 import "time"
 
-type TimeRes int
-
-const (
-	TimeResSecond = iota
-	TimeResMinute
-	TimeResHour
-	TimeResDay
-	TimeResWeek
-	TimeResMonth
-	TimeResYear
-)
-
-var TimeResMap map[string]TimeRes = map[string]TimeRes{
-	"second": TimeResSecond,
-	"minute": TimeResMinute,
-	"hour":   TimeResHour,
-	"day":    TimeResDay,
-	"week":   TimeResWeek,
-	"month":  TimeResMonth,
-	"year":   TimeResYear,
-}
-
 type Tx interface {
 	AddUser(id, password string) (User, error)
 	RemoveUser(id string) error
@@ -42,6 +20,10 @@ type Db interface {
 	View(func(Tx) error) error
 
 	AddReading(sensor Sensor, time time.Time, value float64) error
+	SetRealtimeHandler(handler func(values map[Device]map[string]map[Sensor][]Value))
+	RequestRealtimeUpdates(sensors map[Device]map[string][]Sensor)
+
+	Run()
 
 	RunBenchmark(usr_cnt, dev_cnt, sns_cnt int, duration time.Duration)
 }
@@ -61,7 +43,7 @@ type User interface {
 
 	Id() string
 
-	LoadReadings(since, until time.Time, res TimeRes, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error)
+	LoadReadings(since, until time.Time, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error)
 }
 
 type Group interface {
@@ -87,6 +69,7 @@ type Device interface {
 	RemoveSensor(id string) error
 
 	Id() string
+	User() string
 	Key() []byte
 
 	Name() string

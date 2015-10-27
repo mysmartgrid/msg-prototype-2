@@ -63,6 +63,14 @@ func (d *device) RemoveSensor(id string) error {
 	return err
 }
 
+func (d *device) Id() string {
+	return d.id
+}
+
+func (d *device) User() string {
+	return d.user.Id()
+}
+
 func (d *device) Key() []byte {
 	var key []byte
 	err := d.user.tx.QueryRow(`SELECT key FROM devices WHERE user_id = $1 AND device_id = $2`, d.user.id, d.id).Scan(&key)
@@ -70,10 +78,6 @@ func (d *device) Key() []byte {
 		return nil
 	}
 	return key
-}
-
-func (d *device) Id() string {
-	return d.id
 }
 
 func (d *device) Name() string {

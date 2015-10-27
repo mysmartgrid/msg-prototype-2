@@ -7,14 +7,14 @@ import (
 
 type MessageIn struct {
 	Command string          `json:"cmd"`
-	Error   *Error        `json:"error"`
+	Error   *Error          `json:"error"`
 	Args    json.RawMessage `json:"args"`
 }
 
 type MessageOut struct {
 	Command string      `json:"cmd,omitempty"`
 	Now     *int64      `json:"now,omitempty"`
-	Error   *Error    `json:"error,omitempty"`
+	Error   *Error      `json:"error,omitempty"`
 	Args    interface{} `json:"args,omitempty"`
 }
 
@@ -35,14 +35,16 @@ type DeviceCmdUpdateMetadataArgs DeviceMetadata
 type DeviceCmdRequestRealtimeUpdatesArgs []string
 
 type UserCmdGetValuesArgs struct {
-	SinceUnixMs  float64 `json:"since"`
-	WithMetadata bool    `json:"withMetadata"`
+	SinceUnixMs    float64 `json:"since"`
+	UntilUnixMs    float64 `json:"until"`
+	TimeResolution string  `json:"resolution"`
+	WithMetadata   bool    `json:"withMetadata"`
 }
 
-type UserCmdRequestRealtimeUpdatesArgs map[string][]string
+type UserCmdRequestRealtimeUpdatesArgs map[string]map[string][]string //[Device][Resolution][Sensor]
 
 type UserEventUpdateArgs struct {
-	Values map[string]map[string][]Measurement `json:"values"`
+	Values map[string]map[string]map[string][]Measurement `json:"values"`
 }
 
 type UserEventMetadataArgs struct {

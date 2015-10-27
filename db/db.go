@@ -26,11 +26,18 @@ type db struct {
 	bufferInput chan bufferValue
 	bufferAdd   chan uint64
 	bufferKill  chan uint64
+
+	realtimeSensors map[Device]map[string]map[Sensor]realtimeEntry
+	realtimeHandler func(values map[Device]map[string]map[Sensor][]Value)
 }
 
 type bufferValue struct {
 	key   uint64
 	value Value
+}
+
+type realtimeEntry struct {
+	lastRequest, lastUpdate time.Time
 }
 
 func (db *db) flushBuffer() {
@@ -103,6 +110,8 @@ func OpenDb(sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
 		bufferInput:    make(chan bufferValue),
 		bufferKill:     make(chan uint64),
 		bufferAdd:      make(chan uint64),
+
+		realtimeSensors: make(map[Device]map[string]map[Sensor]realtimeEntry),
 	}
 
 	go result.manageBuffer()
@@ -181,4 +190,79 @@ func (d *db) Update(fn func(Tx) error) error {
 func (d *db) AddReading(sensor Sensor, time time.Time, value float64) error {
 	d.bufferInput <- bufferValue{sensor.DbId(), Value{time, value}}
 	return nil
+}
+
+func (d *db) SetRealtimeHandler(handler func(values map[Device]map[string]map[Sensor][]Value)) {
+	d.realtimeHandler = handler
+}
+
+func (d *db) RequestRealtimeUpdates(sensors map[Device]map[string][]Sensor) {
+	for device, resolutions := range sensors {
+		for resolution, sens := range resolutions {
+			for _, sensor := range sens {
+				entry, ok := d.realtimeSensors[device][resolution][sensor]
+				if !ok {
+					d.realtimeSensors[device][resolution][sensor] = realtimeEntry{time.Now(), time.Now()}
+				} else {
+					entry.lastRequest = time.Now()
+				}
+			}
+		}
+	}
+}
+
+func (d *db) doRealtimeUpdates(resolution string) {
+	var interval time.Duration
+
+	switch resolution {
+	case "second":
+		interval = time.Second
+	case "minute":
+		interval = time.Minute
+	case "hour":
+		interval = time.Hour
+	case "day":
+	case "week":
+	case "month":
+	case "year":
+		interval = time.Hour * 24
+	default:
+		return
+	}
+
+	for {
+		result := make(map[Device]map[string]map[Sensor][]Value)
+
+		for device, resolutions := range d.realtimeSensors {
+			for sensor, entry := range resolutions[resolution] {
+				values, err := d.sqldb.loadValuesSingle(entry.lastUpdate, time.Now(), resolution, sensor.DbId())
+				if err == nil {
+					result[device][resolution][sensor] = values
+					entry.lastUpdate = time.Now()
+				}
+			}
+		}
+		d.realtimeHandler(result)
+		time.Sleep(interval)
+	}
+}
+
+func (d *db) Run() {
+	go func() {
+		for _, resolutions := range d.realtimeSensors {
+			for _, sensors := range resolutions {
+				for sensor, entry := range sensors {
+					if !entry.lastRequest.Add(time.Second * 30).After(time.Now()) {
+						delete(sensors, sensor)
+					}
+				}
+			}
+		}
+	}()
+
+	resolutions := [...]string{"second", "minute", "hour", "day", "week", "month", "year"}
+	for _, res := range resolutions {
+		go d.doRealtimeUpdates(res)
+	}
+
 }
