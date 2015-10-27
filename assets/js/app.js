@@ -192,6 +192,7 @@ var Store;
             this._series.push({
                 line: {
                     color: this._pickColor(),
+                    fill: false,
                 },
                 data: []
             });
@@ -282,10 +283,11 @@ var Store;
 var Directives;
 (function (Directives) {
     var SensorCollectionGraphController = (function () {
-        function SensorCollectionGraphController($scope, $interval) {
+        function SensorCollectionGraphController($scope, $interval, $timeout) {
             var _this = this;
             this.$scope = $scope;
             this.$interval = $interval;
+            this.$timeout = $timeout;
             this.store = new Store.SensorValueStore();
             $scope.$watch('maxAgeMs', function (interval) { return _this.store.setInterval(interval); });
             $scope.$watch('assumeMissingAfterMs', function (timeout) { return _this.store.setTimeout(timeout); });
@@ -315,32 +317,36 @@ var Directives;
             console.log(this.$scope.sensorColors);
         };
         SensorCollectionGraphController.prototype.updateValues = function (deviceID, sensorID, timestamp, value) {
+            //console.log("Update: " + deviceID + ":" + sensorID + " " + timestamp + " " + value);
             this.store.addValue(deviceID, sensorID, timestamp, value);
         };
         SensorCollectionGraphController.prototype.createGraph = function (element) {
-            var _this = this;
             this.graphOptions = {
                 xaxis: {
                     mode: 'time',
                     timeMode: 'local',
                     title: 'Uhrzeit'
                 },
-                resolution: window.devicePixelRatio,
                 HtmlText: false,
                 preventDefault: false,
-                title: 'Messwerte [' + this.$scope.unit + ']'
+                title: 'Messwerte [' + this.$scope.unit + ']',
+                shadowSize: 0,
+                lines: {
+                    lineWidth: 2,
+                }
             };
             this.graphNode = element.find(".sensor-graph").get(0);
             this.redrawGraph();
-            var delay = this.$scope.maxAgeMs / $(this.graphNode).width();
-            this.$interval(function () { return _this.redrawGraph(); }, 1000 / 60);
         };
         SensorCollectionGraphController.prototype.redrawGraph = function () {
+            var _this = this;
             var time = (new Date()).getTime();
             this.graphOptions.xaxis.max = time - 1000;
             this.graphOptions.xaxis.min = time - this.$scope.maxAgeMs + 1000;
-            //options.resolution = Math.max(1.0, window.devicePixelRatio);
-            Flotr.draw(this.graphNode, this.store.getData(), this.graphOptions);
+            //this.graphOptions.resolution = Math.max(1.0, window.devicePixelRatio);
+            var graph = Flotr.draw(this.graphNode, this.store.getData(), this.graphOptions);
+            var delay = (this.$scope.maxAgeMs - 2000) / graph.plotWidth;
+            this.$timeout(function () { return _this.redrawGraph(); }, delay);
         };
         return SensorCollectionGraphController;
     })();
@@ -356,7 +362,7 @@ var Directives;
                 maxAgeMs: "=",
                 assumeMissingAfterMs: "=",
             };
-            this.controller = ["$scope", "$interval", SensorCollectionGraphController];
+            this.controller = ["$scope", "$interval", "$timeout", SensorCollectionGraphController];
             // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
             this.link = function ($scope, element, attrs, controllers) {
                 var graphView = controllers[0];
@@ -406,7 +412,10 @@ var Directives;
                     for (var sensorID in update[deviceID]) {
                         var unit = _this.findUnit(deviceID, sensorID);
                         update[deviceID][sensorID].forEach(function (point) {
-                            return _this.graphs[unit].updateValues(deviceID, sensorID, point[0], point[1]);
+                            // We ignore updates we don't have metadata for
+                            if (_this.graphs[unit] !== undefined) {
+                                _this.graphs[unit].updateValues(deviceID, sensorID, point[0], point[1]);
+                            }
                         });
                     }
                 }

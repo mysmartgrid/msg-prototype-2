@@ -23,9 +23,8 @@ module Directives {
 		private graphOptions : any
 		private graphNode : HTMLElement
 
-		constructor(private $scope : SensorCollectionGraphScope, private $interval : ng.IIntervalService) {
+		constructor(private $scope : SensorCollectionGraphScope, private $interval : ng.IIntervalService, private $timeout: ng.ITimeoutService) {
 			this.store = new Store.SensorValueStore();
-
 			$scope.$watch('maxAgeMs', (interval : number) => this.store.setInterval(interval));
 
 			$scope.$watch('assumeMissingAfterMs', (timeout : number) => this.store.setTimeout(timeout));
@@ -61,6 +60,7 @@ module Directives {
 		}
 
 		public updateValues(deviceID : string, sensorID : string, timestamp : number, value: number) {
+			//console.log("Update: " + deviceID + ":" + sensorID + " " + timestamp + " " + value);
 			this.store.addValue(deviceID, sensorID, timestamp, value);
 		}
 
@@ -71,16 +71,18 @@ module Directives {
 					timeMode : 'local',
 					title: 'Uhrzeit'
 				},
-				resolution: window.devicePixelRatio,
         		HtmlText: false,
 				preventDefault : false,
-        		title: 'Messwerte [' + this.$scope.unit + ']'
+        		title: 'Messwerte [' + this.$scope.unit + ']',
+				shadowSize: 0,
+				lines: {
+					lineWidth: 2,
+				}
 			}
 
 			this.graphNode = element.find(".sensor-graph").get(0);
 
 			this.redrawGraph();
-			this.$interval(() => this.redrawGraph(), 100);
 		}
 
 		private redrawGraph() {
@@ -88,9 +90,12 @@ module Directives {
 			this.graphOptions.xaxis.max = time - 1000;
 			this.graphOptions.xaxis.min = time - this.$scope.maxAgeMs + 1000;
 
-			//options.resolution = Math.max(1.0, window.devicePixelRatio);
+			//this.graphOptions.resolution = Math.max(1.0, window.devicePixelRatio);
 
-			Flotr.draw(this.graphNode, this.store.getData(), this.graphOptions);
+			var graph = Flotr.draw(this.graphNode, this.store.getData(), this.graphOptions);
+
+			var delay = (this.$scope.maxAgeMs - 2000) / graph.plotWidth;
+			this.$timeout(() => this.redrawGraph(), delay);
 		}
 	}
 
@@ -105,7 +110,7 @@ module Directives {
 			assumeMissingAfterMs: "=",
 		}
 
-		public controller = ["$scope", "$interval", SensorCollectionGraphController];
+		public controller = ["$scope", "$interval", "$timeout", SensorCollectionGraphController];
 
 		// Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
 		public link:Function  = ($scope : SensorCollectionGraphScope,

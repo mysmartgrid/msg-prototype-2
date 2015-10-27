@@ -1,10 +1,12 @@
 {{define "index_user"}}
 {{template "head" "home:logged-in"}}
-<div class="container">
+<div class="container-fluid">
 	<div class="row" data-ng-app="msgp">
+		<div class="col-md-12">
 		<div data-ng-controller="GraphPage">
 			<div data-graph-view="" data-title="sensor graphs">
 			</div>
+		</div>
 		</div>
 
 		<script>

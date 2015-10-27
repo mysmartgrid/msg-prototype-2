@@ -52,8 +52,12 @@ module Directives {
 				for(var deviceID in update) {
 					for(var sensorID in update[deviceID]) {
 						var unit = this.findUnit(deviceID, sensorID);
-						update[deviceID][sensorID].forEach((point : [number, number]) => 
-							this.graphs[unit].updateValues(deviceID, sensorID, point[0], point[1]));
+						update[deviceID][sensorID].forEach((point : [number, number]) => {
+							// We ignore updates we don't have metadata for
+							if(this.graphs[unit] !== undefined) {
+								this.graphs[unit].updateValues(deviceID, sensorID, point[0], point[1])
+							}
+						});
 					}
 				}
 			});

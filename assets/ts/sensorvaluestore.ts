@@ -93,6 +93,7 @@ module Store {
 			this._series.push({
 				line: {
 					color : this._pickColor(),
+					fill: false,
 				},
 				data: []
 			})
