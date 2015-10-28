@@ -395,12 +395,14 @@ var Directives;
     }
     Directives.sensorKey = sensorKey;
     var GraphViewController = (function () {
-        function GraphViewController($scope, wsclient) {
+        function GraphViewController($scope, $timeout, wsclient) {
             var _this = this;
             this.$scope = $scope;
+            this.$timeout = $timeout;
             this.wsclient = wsclient;
             this.graphs = {};
             this.$scope.sensors = {};
+            this.realtimeUpdateTimeout = null;
             this.wsclient.onMetadata(function (meta) {
                 for (var deviceID in meta.devices) {
                     var device = meta.devices[deviceID];
@@ -411,6 +413,7 @@ var Directives;
                     for (var deletedID in device.deletedSensors) {
                     }
                 }
+                _this.requestRealtimeUpdates();
             });
             this.wsclient.onUpdate(function (update) {
                 for (var deviceID in update) {
@@ -458,6 +461,24 @@ var Directives;
                 sensor.unit = meta.unit || sensor.unit;
             }
         };
+        GraphViewController.prototype.requestRealtimeUpdates = function () {
+            var _this = this;
+            if (this.realtimeUpdateTimeout !== null) {
+                this.$timeout.cancel(this.realtimeUpdateTimeout);
+            }
+            var sensors = {};
+            for (var unit in this.$scope.sensors) {
+                for (var key in this.$scope.sensors[unit]) {
+                    var sensor = this.$scope.sensors[unit][key];
+                    if (sensors[sensor.deviceID] === undefined) {
+                        sensors[sensor.deviceID] = [];
+                    }
+                    sensors[sensor.deviceID].push(sensor.sensorID);
+                }
+            }
+            this.wsclient.requestRealtimeUpdates(sensors);
+            this.realtimeUpdateTimeout = this.$timeout(function () { return _this.requestRealtimeUpdates(); }, 30 * 1000);
+        };
         GraphViewController.prototype.findUnit = function (deviceID, sensorID) {
             var _this = this;
             var units = Object.keys(this.$scope.sensors);
@@ -487,7 +508,7 @@ var Directives;
             // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
             this.link = function ($scope, element, attrs, controller) {
             };
-            this.controller = ["$scope", "WSUserClient", GraphViewController];
+            this.controller = ["$scope", "$timeout", "WSUserClient", GraphViewController];
         }
         ;
         return GraphViewDirective;

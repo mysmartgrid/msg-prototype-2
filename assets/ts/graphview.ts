@@ -31,8 +31,12 @@ module Directives {
 	export class GraphViewController {
 		public graphs : {[unit : string] : SensorCollectionGraphController} = {};
 
-		constructor(private $scope : GraphViewScope, private wsclient : Msg2Socket.Socket) {
+		private realtimeUpdateTimeout : ng.IPromise<any>;
+
+		constructor(private $scope : GraphViewScope, private $timeout : ng.ITimeoutService, private wsclient : Msg2Socket.Socket) {
 			this.$scope.sensors = {};
+
+			this.realtimeUpdateTimeout = null;
 
 			this.wsclient.onMetadata((meta : Msg2Socket.MetadataUpdate) => {
 				for(var deviceID in meta.devices) {
@@ -45,6 +49,8 @@ module Directives {
 						//TODO: Implement
 					}
 				}
+
+				this.requestRealtimeUpdates();
 			});
 
 
@@ -70,6 +76,7 @@ module Directives {
 				var now = (new Date()).getTime();
 
 				this.wsclient.requestValues(now - 120 * 1000, now, "seconds", true); //Results in Metadata update
+
 			});
 
 		}
@@ -99,6 +106,28 @@ module Directives {
 				sensor.port = meta.port || sensor.port;
 				sensor.unit = meta.unit || sensor.unit;
 			}
+		}
+
+		private requestRealtimeUpdates() : void {
+			if(this.realtimeUpdateTimeout !== null) {
+				this.$timeout.cancel(this.realtimeUpdateTimeout);
+			}
+
+			var sensors : Msg2Socket.RequestRealtimeUpdateArgs = {};
+
+			for(var unit in this.$scope.sensors) {
+				for(var key in this.$scope.sensors[unit]) {
+					var sensor = this.$scope.sensors[unit][key];
+					if(sensors[sensor.deviceID] === undefined) {
+						sensors[sensor.deviceID] = [];
+					}
+					sensors[sensor.deviceID].push(sensor.sensorID);
+				}
+			}
+
+			this.wsclient.requestRealtimeUpdates(sensors);
+
+			this.realtimeUpdateTimeout = this.$timeout(() => this.requestRealtimeUpdates(), 30 * 1000);
 		}
 
 		private findUnit(deviceID : string, sensorID : string) : string {
@@ -140,7 +169,7 @@ module Directives {
 
 		constructor() {};
 
-		public controller =	["$scope", "WSUserClient", GraphViewController];
+		public controller =	["$scope", "$timeout", "WSUserClient", GraphViewController];
 	}
 
 
