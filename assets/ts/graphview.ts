@@ -67,7 +67,9 @@ module Directives {
 					return;
 				}
 
-				this.wsclient.requestValues(+new Date() - 120 * 1000, true); //Results in Metadata update
+				var now = (new Date()).getTime();
+
+				this.wsclient.requestValues(now - 120 * 1000, now, "seconds", true); //Results in Metadata update
 			});
 
 		}

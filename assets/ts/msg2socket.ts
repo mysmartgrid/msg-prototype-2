@@ -62,8 +62,20 @@ module Msg2Socket {
 		(metadata : MetadataUpdate) : void;
 	}
 
+	export interface UserCommand {
+		cmd : string;
+		args : RequestRealtimeUpdateArgs | GetValuesArgs;
+	}
+
 	export interface RequestRealtimeUpdateArgs {
 		[deviceID : string] : string[];
+	}
+
+	export interface GetValuesArgs {
+		since : number;
+		until : number;
+		resolution : string;
+		withMetadata : boolean;
 	}
 
 	export class Socket {
@@ -191,6 +203,10 @@ module Msg2Socket {
 			};
 		};
 
+		private _sendUserCommand(cmd : UserCommand) {
+			this._socket.send(JSON.stringify(cmd));
+		}
+
 		public close() : void {
 			if (this._socket) {
 				this._socket.close();
@@ -199,24 +215,26 @@ module Msg2Socket {
 			}
 		};
 
-		public requestValues(since : number, withMetadata : boolean) : void {
+		public requestValues(since : number, until : number, resolution: string, withMetadata : boolean) : void {
             var cmd = {
-                "cmd": "getValues",
-                "args": {
-                    "since": since,
-                    "withMetadata": withMetadata
+                cmd: "getValues",
+                args: {
+                    since: since,
+					until: until,
+					resolution: resolution,
+                    withMetadata: withMetadata
                 }
             };
-            this._socket.send(JSON.stringify(cmd));
+            this._sendUserCommand(cmd);
         };
 
         public requestRealtimeUpdates(sensors : RequestRealtimeUpdateArgs) : void {
             var cmd = {
-                "cmd": "requestRealtimeUpdates",
-                "args": sensors
+                cmd: "requestRealtimeUpdates",
+                args: sensors
             };
-            this._socket.send(JSON.stringify(cmd));
-        };
+        	this._sendUserCommand(cmd);
+		};
 	};
 }
 

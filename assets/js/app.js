@@ -97,6 +97,9 @@ var Msg2Socket;
             };
         };
         ;
+        Socket.prototype._sendUserCommand = function (cmd) {
+            this._socket.send(JSON.stringify(cmd));
+        };
         Socket.prototype.close = function () {
             if (this._socket) {
                 this._socket.close();
@@ -105,23 +108,25 @@ var Msg2Socket;
             }
         };
         ;
-        Socket.prototype.requestValues = function (since, withMetadata) {
+        Socket.prototype.requestValues = function (since, until, resolution, withMetadata) {
             var cmd = {
-                "cmd": "getValues",
-                "args": {
-                    "since": since,
-                    "withMetadata": withMetadata
+                cmd: "getValues",
+                args: {
+                    since: since,
+                    until: until,
+                    resolution: resolution,
+                    withMetadata: withMetadata
                 }
             };
-            this._socket.send(JSON.stringify(cmd));
+            this._sendUserCommand(cmd);
         };
         ;
         Socket.prototype.requestRealtimeUpdates = function (sensors) {
             var cmd = {
-                "cmd": "requestRealtimeUpdates",
-                "args": sensors
+                cmd: "requestRealtimeUpdates",
+                args: sensors
             };
-            this._socket.send(JSON.stringify(cmd));
+            this._sendUserCommand(cmd);
         };
         ;
         return Socket;
@@ -424,7 +429,8 @@ var Directives;
                 if (err) {
                     return;
                 }
-                _this.wsclient.requestValues(+new Date() - 120 * 1000, true); //Results in Metadata update
+                var now = (new Date()).getTime();
+                _this.wsclient.requestValues(now - 120 * 1000, now, "seconds", true); //Results in Metadata update
             });
         }
         GraphViewController.prototype.updateSensors = function (deviceID, sensorID, deviceName, meta) {
