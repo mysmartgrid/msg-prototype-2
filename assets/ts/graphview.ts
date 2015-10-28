@@ -75,7 +75,7 @@ module Directives {
 
 				var now = (new Date()).getTime();
 
-				this.wsclient.requestValues(now - 120 * 1000, now, "seconds", true); //Results in Metadata update
+				this.wsclient.requestValues(now - 120 * 1000, now, "raw", true); //Results in Metadata update
 
 			});
 
@@ -97,7 +97,7 @@ module Directives {
 				if(this.$scope.sensors[meta.unit] === undefined) {
 						this.$scope.sensors[meta.unit] = {};
 				}
-				this.$scope.sensors[meta.unit][sensorKey(deviceID, sensorID)] = sensor;;
+				this.$scope.sensors[meta.unit][sensorKey(deviceID, sensorID)] = sensor;
 			}
 			else {
 				var sensor : Sensor = this.$scope.sensors[unit][sensorKey(deviceID, sensorID)];
@@ -119,9 +119,9 @@ module Directives {
 				for(var key in this.$scope.sensors[unit]) {
 					var sensor = this.$scope.sensors[unit][key];
 					if(sensors[sensor.deviceID] === undefined) {
-						sensors[sensor.deviceID] = [];
+						sensors[sensor.deviceID] = {raw : []};
 					}
-					sensors[sensor.deviceID].push(sensor.sensorID);
+					sensors[sensor.deviceID]['raw'].push(sensor.sensorID);
 				}
 			}
 

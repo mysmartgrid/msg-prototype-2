@@ -68,7 +68,7 @@ module Msg2Socket {
 	}
 
 	export interface RequestRealtimeUpdateArgs {
-		[deviceID : string] : string[];
+		[deviceID : string] : {[resolution : string] : string[]};
 	}
 
 	export interface GetValuesArgs {
