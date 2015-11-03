@@ -2,6 +2,8 @@
 "use strict";
 
 module Msg2Socket {
+	const ApiVersion : string = "v2.user.msg";
+	
 	export interface OpenError {
 		error : string;
 	}
@@ -180,13 +182,13 @@ module Msg2Socket {
 		}
 
 		public connect(url : string) {
-			this._socket = new WebSocket(url, ["v1.user.msg"]);
+			this._socket = new WebSocket(url, [ApiVersion]);
 
 			this._socket.onerror = this._emitError.bind(this);
 			this._socket.onclose = this._emitClose.bind(this);
 
 			this._socket.onopen = (e : Event) => {
-				if (this._socket.protocol != "v1.user.msg") {
+				if (this._socket.protocol !== ApiVersion) {
 					this._emitOpen({error: "protocol negotiation failed"});
 					this._socket.close();
 					this._socket = null;
