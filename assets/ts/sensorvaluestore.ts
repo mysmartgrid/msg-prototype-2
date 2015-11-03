@@ -138,10 +138,6 @@ module Store {
 				pos = data.length;
 			}
 
-			console.log(pos);
-			console.log(data);
-
-
 			// Check if the value is an update for an existing timestamp
 			if(data.length > 0 && pos === 0 && data[0][0] === timestamp) {
 				// Update for the first tuple
