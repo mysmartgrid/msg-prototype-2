@@ -19,11 +19,8 @@ module Msg2Socket {
 	}
 
 	export interface UpdateData {
-		[deviceID : string] : DeviceData;
-	}
-
-	export interface DeviceData {
-		[sensorID : string] : [number, number][];
+		resolution: string;
+		values: {[deviceID : string] : {[sensorID : string] : [number, number][]}};
 	}
 
 	export interface UpdateHandler {
@@ -68,7 +65,7 @@ module Msg2Socket {
 	}
 
 	export interface RequestRealtimeUpdateArgs {
-		[deviceID : string] : {[resolution : string] : string[]};
+		[deviceID : string] : {[resolution: string] : string[]};
 	}
 
 	export interface GetValuesArgs {
