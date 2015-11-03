@@ -55,10 +55,11 @@ module Directives {
 
 
 			this.wsclient.onUpdate((update : Msg2Socket.UpdateData) => {
-				for(var deviceID in update) {
-					for(var sensorID in update[deviceID]) {
+				var values = update.values;
+				for(var deviceID in values) {
+					for(var sensorID in values[deviceID]) {
 						var unit = this.findUnit(deviceID, sensorID);
-						update[deviceID][sensorID].forEach((point : [number, number]) => {
+						values[deviceID][sensorID].forEach((point : [number, number]) => {
 							// We ignore updates we don't have metadata for
 							if(this.graphs[unit] !== undefined) {
 								this.graphs[unit].updateValues(deviceID, sensorID, point[0], point[1])
@@ -72,11 +73,9 @@ module Directives {
 				if (err) {
 					return;
 				}
-
+				
 				var now = (new Date()).getTime();
-
-				this.wsclient.requestValues(now - 120 * 1000, now, "raw", true); //Results in Metadata update
-
+				this.wsclient.requestValues(now - 120 * 1000, now, "seconds", true); //Results in Metadata update
 			});
 
 		}
