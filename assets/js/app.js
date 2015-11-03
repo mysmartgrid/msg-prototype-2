@@ -1,4 +1,8 @@
-/// <reference path="angular.d.ts" />
+
+
+
+
+
 "use strict";
 var Msg2Socket;
 (function (Msg2Socket) {
@@ -135,8 +139,6 @@ var Msg2Socket;
     Msg2Socket.Socket = Socket;
     ;
 })(Msg2Socket || (Msg2Socket = {}));
-/// <reference path="es6-shim.d.ts" />
-/// <reference path="msg2socket.ts" />
 "use strict";
 var Store;
 (function (Store) {
@@ -225,7 +227,6 @@ var Store;
             if (seriesIndex === -1) {
                 throw new Error("No such sensor");
             }
-            // Find position for inserting
             var data = this._series[seriesIndex].data;
             var pos = data.findIndex(function (point) {
                 return point[0] > timestamp;
@@ -233,21 +234,16 @@ var Store;
             if (pos === -1) {
                 pos = data.length;
             }
-            // Insert
             data.splice(pos, 0, [timestamp, value]);
-            //Check if we need to remove a timeout in the past
             if (pos > 0 && data[pos - 1][1] === null && timestamp - data[pos - 1][0] < this._timeout) {
                 data.splice(pos - 1, 1);
             }
-            //Check if we need to remove a timeout in the future
             if (pos < data.length - 1 && data[pos + 1][1] === null && data[pos + 1][0] - timestamp < this._timeout) {
                 data.splice(pos + 1, 1);
             }
-            //Check if a null in the past is needed
             if (pos > 0 && data[pos - 1][1] !== null && timestamp - data[pos - 1][0] >= this._timeout) {
                 data.splice(pos, 0, [timestamp - 1, null]);
             }
-            //Check if a null in the future is needed
             if (pos < data.length - 1 && data[pos + 1][1] !== null && data[pos + 1][0] - timestamp >= this._timeout) {
                 data.splice(pos + 1, 0, [timestamp + 1, null]);
             }
@@ -280,10 +276,6 @@ var Store;
     })();
     Store.SensorValueStore = SensorValueStore;
 })(Store || (Store = {}));
-/// <reference path="angular.d.ts" />
-/// <reference path="msg2socket.ts" />
-/// <reference path="sensorvaluestore.ts" />
-/// <reference path="graphview.ts" />
 "use strict";
 var Directives;
 (function (Directives) {
@@ -322,7 +314,6 @@ var Directives;
             console.log(this.$scope.sensorColors);
         };
         SensorCollectionGraphController.prototype.updateValues = function (deviceID, sensorID, timestamp, value) {
-            //console.log("Update: " + deviceID + ":" + sensorID + " " + timestamp + " " + value);
             this.store.addValue(deviceID, sensorID, timestamp, value);
         };
         SensorCollectionGraphController.prototype.createGraph = function (element) {
@@ -348,7 +339,6 @@ var Directives;
             var time = (new Date()).getTime();
             this.graphOptions.xaxis.max = time - 1000;
             this.graphOptions.xaxis.min = time - this.$scope.maxAgeMs + 1000;
-            //this.graphOptions.resolution = Math.max(1.0, window.devicePixelRatio);
             var graph = Flotr.draw(this.graphNode, this.store.getData(), this.graphOptions);
             var delay = (this.$scope.maxAgeMs - 2000) / graph.plotWidth;
             this.$timeout(function () { return _this.redrawGraph(); }, delay);
@@ -368,7 +358,6 @@ var Directives;
                 assumeMissingAfterMs: "=",
             };
             this.controller = ["$scope", "$interval", "$timeout", SensorCollectionGraphController];
-            // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
             this.link = function ($scope, element, attrs, controllers) {
                 var graphView = controllers[0];
                 var sensorCollectionGraph = controllers[1];
@@ -383,10 +372,6 @@ var Directives;
     }
     Directives.SensorCollectionGraphFactory = SensorCollectionGraphFactory;
 })(Directives || (Directives = {}));
-/// <reference path="angular.d.ts" />
-/// <reference path="msg2socket.ts" />
-/// <reference path="sensorvaluestore.ts" />
-/// <reference path="sensorcollectiongraph.ts" />
 "use strict";
 var Directives;
 (function (Directives) {
@@ -416,11 +401,11 @@ var Directives;
                 _this.requestRealtimeUpdates();
             });
             this.wsclient.onUpdate(function (update) {
-                for (var deviceID in update) {
-                    for (var sensorID in update[deviceID]) {
+                var values = update.values;
+                for (var deviceID in values) {
+                    for (var sensorID in values[deviceID]) {
                         var unit = _this.findUnit(deviceID, sensorID);
-                        update[deviceID][sensorID].forEach(function (point) {
-                            // We ignore updates we don't have metadata for
+                        values[deviceID][sensorID].forEach(function (point) {
                             if (_this.graphs[unit] !== undefined) {
                                 _this.graphs[unit].updateValues(deviceID, sensorID, point[0], point[1]);
                             }
@@ -433,7 +418,7 @@ var Directives;
                     return;
                 }
                 var now = (new Date()).getTime();
-                _this.wsclient.requestValues(now - 120 * 1000, now, "raw", true); //Results in Metadata update
+                _this.wsclient.requestValues(now - 120 * 1000, now, "seconds", true);
             });
         }
         GraphViewController.prototype.updateSensors = function (deviceID, sensorID, deviceName, meta) {
@@ -504,7 +489,6 @@ var Directives;
             this.scope = {
                 title: "@"
             };
-            // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
             this.link = function ($scope, element, attrs, controller) {
             };
             this.controller = ["$scope", "$timeout", "WSUserClient", GraphViewController];
@@ -517,13 +501,6 @@ var Directives;
     }
     Directives.GraphViewFactory = GraphViewFactory;
 })(Directives || (Directives = {}));
-/// <reference path="jquery.d.ts" />
-/// <reference path="angular.d.ts" />
-/// <reference path="bootstrap.d.ts" />
-/// <reference path="msg2socket.ts" />
-/// <reference path="sensorvaluestore.ts" />
-/// <reference path="graphview.ts" />
-/// <reference path="sensorcollectiongraph.ts" />
 "use strict";
 angular.module("msgp", [])
     .config(function ($interpolateProvider) {
@@ -669,3 +646,4 @@ angular.module("msgp", [])
             });
         };
     }]);
+//# sourceMappingURL=app.js.map
