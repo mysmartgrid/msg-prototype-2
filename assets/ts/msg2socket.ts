@@ -19,11 +19,8 @@ module Msg2Socket {
 	}
 
 	export interface UpdateData {
-		[deviceID : string] : DeviceData;
-	}
-
-	export interface DeviceData {
-		[sensorID : string] : [number, number][];
+		resolution: string;
+		values: {[deviceID : string] : {[sensorID : string] : [number, number][]}};
 	}
 
 	export interface UpdateHandler {
@@ -68,7 +65,7 @@ module Msg2Socket {
 	}
 
 	export interface RequestRealtimeUpdateArgs {
-		[deviceID : string] : {[resolution : string] : string[]};
+		[deviceID : string] : {[resolution: string] : string[]};
 	}
 
 	export interface GetValuesArgs {
@@ -97,7 +94,7 @@ module Msg2Socket {
 
 		private _callHandlers<U>(handlers : ((p : U) => void)[], param : U) {
 			for(var i in handlers) {
-				if (this.$rootScope.$$phase === "apply" || this.$rootScope.$$phase === "$digest") {
+				if(this.$rootScope.$$phase === "apply" || this.$rootScope.$$phase === "$digest") {
 					handlers[i](param);
 				} else {
 					this.$rootScope.$apply(function(scope : angular.IScope) : any {
@@ -237,4 +234,3 @@ module Msg2Socket {
 		};
 	};
 }
-
