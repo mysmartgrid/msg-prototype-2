@@ -19,4 +19,4 @@ do-benchmark = false
 users        = 10
 devices      = 100
 sensors      = 50
-duration     = 600 # in minutes
+duration     = 5 # in minutes

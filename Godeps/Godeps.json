@@ -45,7 +45,7 @@
 		},
 		{
 			"ImportPath": "github.com/mysmartgrid/msg2api",
-			"Rev": "cd4ecfd032176e339fdce2aa0b10b1cba1f9e02c"
+			"Rev": "8dd091236fae5c929be897f6c1cbf9df78027840"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/bcrypt",

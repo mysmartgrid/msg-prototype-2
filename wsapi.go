@@ -379,9 +379,10 @@ func (api *WsUserApi) Run() error {
 			}
 			switch v := val.Data.(type) {
 			case measurementWithMetadata:
-				api.server.SendUpdate(map[string]map[string]map[string][]msg2api.Measurement{
-					v.Device: {
-						v.Resolution: {
+				api.server.SendUpdate(msg2api.UserEventUpdateArgs{
+					Resolution: v.Resolution,
+					Values: map[string]map[string][]msg2api.Measurement{
+						v.Device: {
 							v.Sensor: {
 								{v.Time, v.Value},
 							},
@@ -457,10 +458,13 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, wit
 		if err != nil {
 			return err
 		}
-		update := make(map[string]map[string]map[string][]msg2api.Measurement)
+
+		var update msg2api.UserEventUpdateArgs
+		update.Resolution = resolution
+		update.Values = make(map[string]map[string][]msg2api.Measurement)
 		for dev, svalues := range readings {
 			dupdate := make(map[string][]msg2api.Measurement, len(svalues))
-			update[dev.Id()][resolution] = dupdate
+			update.Values[dev.Id()] = dupdate
 			for sensor, values := range svalues {
 				supdate := make([]msg2api.Measurement, 0, len(values))
 				for _, val := range values {
@@ -478,7 +482,7 @@ func (api *WsUserApi) doRequestRealtimeUpdates(sensors map[string]map[string][]s
 		err := api.Ctx.WithDevice(dev, func(dev *WsDevApi) error {
 			var err error = nil
 			for resolution, sensors := range resolutions {
-				if resolution == "raw" || resolution == "second" {
+				if resolution == "raw" {
 					dev.RequestRealtimeUpdates(sensors)
 				} else {
 					dbsensors := make(map[db.Device]map[string][]db.Sensor)

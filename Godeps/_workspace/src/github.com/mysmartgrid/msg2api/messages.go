@@ -44,7 +44,8 @@ type UserCmdGetValuesArgs struct {
 type UserCmdRequestRealtimeUpdatesArgs map[string]map[string][]string //[Device][Resolution][Sensor]
 
 type UserEventUpdateArgs struct {
-	Values map[string]map[string]map[string][]Measurement `json:"values"`
+	Resolution string                              `json:"resolution"`
+	Values     map[string]map[string][]Measurement `json:"values"`
 }
 
 type UserEventMetadataArgs struct {
