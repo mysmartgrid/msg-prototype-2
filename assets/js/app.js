@@ -2,6 +2,7 @@
 "use strict";
 var Msg2Socket;
 (function (Msg2Socket) {
+    var ApiVersion = "v2.user.msg";
     var Socket = (function () {
         function Socket($rootScope) {
             this.$rootScope = $rootScope;
@@ -81,11 +82,11 @@ var Msg2Socket;
         };
         Socket.prototype.connect = function (url) {
             var _this = this;
-            this._socket = new WebSocket(url, ["v1.user.msg"]);
+            this._socket = new WebSocket(url, [ApiVersion]);
             this._socket.onerror = this._emitError.bind(this);
             this._socket.onclose = this._emitClose.bind(this);
             this._socket.onopen = function (e) {
-                if (_this._socket.protocol != "v1.user.msg") {
+                if (_this._socket.protocol !== ApiVersion) {
                     _this._emitOpen({ error: "protocol negotiation failed" });
                     _this._socket.close();
                     _this._socket = null;
@@ -197,7 +198,6 @@ var Store;
             this._series.push({
                 line: {
                     color: this._pickColor(),
-                    fill: false,
                 },
                 data: []
             });

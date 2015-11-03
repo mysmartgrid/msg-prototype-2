@@ -63,7 +63,7 @@ module Store {
 				series.data = series.data.filter((point : [number, number]) : boolean => {
 					return point[0] >= oldest;
 				});
-				
+
 				if(series.data.length > 0) {
 					if(series.data[0][1] === null) {
 						series.data.splice(0,1);
@@ -93,7 +93,6 @@ module Store {
 			this._series.push({
 				line: {
 					color : this._pickColor(),
-					fill: false,
 				},
 				data: []
 			})
