@@ -1,39 +1,7 @@
 {
 	"ImportPath": "github.com/mysmartgrid/msg-prototype-2",
 	"GoVersion": "go1.5.1",
-	"Packages": [
-		".",
-		"./cmd/msgpd",
-		"./cmd/msgpdevd",
-		"./cmd/msgpc"
-	],
 	"Deps": [
-		{
-			"ImportPath": "github.com/BurntSushi/toml",
-			"Comment": "v0.1.0-21-g056c9bc",
-			"Rev": "056c9bc7be7190eaa7715723883caffa5f8fa3e4"
-		},
-		{
-			"ImportPath": "github.com/boltdb/bolt",
-			"Comment": "v1.0-98-gafceb31",
-			"Rev": "afceb316b96ea97cbac6d23afbdf69543d80748a"
-		},
-		{
-			"ImportPath": "github.com/gorilla/context",
-			"Rev": "215affda49addc4c8ef7e2534915df2c8c35c6cd"
-		},
-		{
-			"ImportPath": "github.com/gorilla/mux",
-			"Rev": "47e8f450ef38c857cdd922ec08862ca9d65a1c6d"
-		},
-		{
-			"ImportPath": "github.com/gorilla/securecookie",
-			"Rev": "8e98dd730fc43f1383f19615db6f2e702c9738e8"
-		},
-		{
-			"ImportPath": "github.com/gorilla/sessions",
-			"Rev": "f61c3ec2cf65d69e7efedfd4d060fe128882c951"
-		},
 		{
 			"ImportPath": "github.com/gorilla/websocket",
 			"Rev": "a3ec486e6a7a41858210b0fc5d7b5df593b3c4a3"
