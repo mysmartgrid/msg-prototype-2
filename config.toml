@@ -6,8 +6,17 @@ db-dir        = "./"
 
 motherlode = true
 
-[influx]
+[postgres]
 user     = "msgp"
 password = "msgp"
 database = "msgp"
-address  = "localhost:8086"
+address  = "localhost"
+port     = "5432"
+
+[benchmark]
+# Caution: Benchmark empties database!
+do-benchmark = false
+users        = 10
+devices      = 100
+sensors      = 50
+duration     = 5 # in minutes

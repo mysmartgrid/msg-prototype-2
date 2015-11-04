@@ -30,6 +30,7 @@ type measurementWithMetadata struct {
 	Device, Sensor string
 	Time           time.Time
 	Value          float64
+	Resolution     string
 }
 
 type WsApiContext struct {
@@ -38,6 +39,23 @@ type WsApiContext struct {
 
 	devices map[string]*WsDevApi
 	devMtx  sync.RWMutex
+}
+
+func NewWsApiContext(d db.Db, hub *hub.Hub) *WsApiContext {
+	d.SetRealtimeHandler(func(values map[db.Device]map[string]map[db.Sensor][]db.Value) {
+		for dev, reses := range values {
+			for res, sensors := range reses {
+				for sensor, vals := range sensors {
+					for _, val := range vals {
+						hub.Publish(dev.User(), measurementWithMetadata{dev.Id(), sensor.Id(), val.Time, val.Value, res})
+					}
+				}
+			}
+		}
+	})
+	d.Run()
+
+	return &WsApiContext{Db: d, Hub: hub}
 }
 
 func (ctx *WsApiContext) RegisterDevice(dev *WsDevApi) (error, *WsDevApi) {
@@ -250,11 +268,11 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 
 			s := device.Sensor(sensor)
 			for _, value := range values {
-				err := api.ctx.Db.AddReading(user, device, s, value.Time, value.Value)
+				err := api.ctx.Db.AddReading(s, value.Time, value.Value)
 				if err != nil {
 					return &msg2api.Error{Code: "could not add readings"}
 				}
-				api.ctx.Hub.Publish(api.User, measurementWithMetadata{device.Id(), s.Id(), value.Time, value.Value})
+				api.ctx.Hub.Publish(api.User, measurementWithMetadata{device.Id(), s.Id(), value.Time, value.Value, "raw"})
 			}
 		}
 
@@ -361,10 +379,13 @@ func (api *WsUserApi) Run() error {
 			}
 			switch v := val.Data.(type) {
 			case measurementWithMetadata:
-				api.server.SendUpdate(map[string]map[string][]msg2api.Measurement{
-					v.Device: {
-						v.Sensor: {
-							{v.Time, v.Value},
+				api.server.SendUpdate(msg2api.UserEventUpdateArgs{
+					Resolution: v.Resolution,
+					Values: map[string]map[string][]msg2api.Measurement{
+						v.Device: {
+							v.Sensor: {
+								{v.Time, v.Value},
+							},
 						},
 					},
 				})
@@ -395,7 +416,7 @@ func (api *WsUserApi) Close() {
 	}
 }
 
-func (api *WsUserApi) doGetValues(since time.Time, withMetadata bool) error {
+func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, withMetadata bool) error {
 	return api.Ctx.Db.View(func(tx db.Tx) error {
 		user := tx.User(api.User)
 		if user == nil {
@@ -432,14 +453,18 @@ func (api *WsUserApi) doGetValues(since time.Time, withMetadata bool) error {
 				return err
 			}
 		}
-		readings, err := user.LoadReadings(since, sensors)
+
+		readings, err := user.LoadReadings(since, until, resolution, sensors)
 		if err != nil {
 			return err
 		}
-		update := make(map[string]map[string][]msg2api.Measurement)
+
+		var update msg2api.UserEventUpdateArgs
+		update.Resolution = resolution
+		update.Values = make(map[string]map[string][]msg2api.Measurement)
 		for dev, svalues := range readings {
 			dupdate := make(map[string][]msg2api.Measurement, len(svalues))
-			update[dev.Id()] = dupdate
+			update.Values[dev.Id()] = dupdate
 			for sensor, values := range svalues {
 				supdate := make([]msg2api.Measurement, 0, len(values))
 				for _, val := range values {
@@ -452,11 +477,36 @@ func (api *WsUserApi) doGetValues(since time.Time, withMetadata bool) error {
 	})
 }
 
-func (api *WsUserApi) doRequestRealtimeUpdates(sensors map[string][]string) error {
-	for dev, sensors := range sensors {
+func (api *WsUserApi) doRequestRealtimeUpdates(sensors map[string]map[string][]string) error {
+	for dev, resolutions := range sensors {
 		err := api.Ctx.WithDevice(dev, func(dev *WsDevApi) error {
-			dev.RequestRealtimeUpdates(sensors)
-			return nil
+			var err error = nil
+			for resolution, sensors := range resolutions {
+				if resolution == "raw" {
+					dev.RequestRealtimeUpdates(sensors)
+				} else {
+					dbsensors := make(map[db.Device]map[string][]db.Sensor)
+					err = api.Ctx.Db.View(func(tx db.Tx) error {
+						user := tx.User(api.User)
+						if user == nil {
+							return deviceNotRegistered
+						}
+						device := user.Device(dev.Device)
+						if user == nil {
+							return deviceNotRegistered
+						}
+						for idx, sensor := range sensors {
+							dbsensors[device][resolution][idx] = device.Sensor(sensor)
+							if dbsensors[device][resolution][idx] == nil {
+								return noSensor
+							}
+						}
+						return nil
+					})
+					dev.ctx.Db.RequestRealtimeUpdates(dbsensors)
+				}
+			}
+			return err
 		})
 		if err != nil && err != deviceNotRegistered {
 			return err

@@ -26,10 +26,11 @@ import (
 	"time"
 )
 
-type influxConfig struct {
+type postgresConfig struct {
 	User     string `toml:"user"`
 	Password string `toml:"password"`
 	Address  string `toml:"address"`
+	Port     string `toml:"port"`
 	Database string `toml:"database"`
 }
 
@@ -38,15 +39,24 @@ type tlsConfig struct {
 	Key  string `toml:"key"`
 }
 
+type benchmarkConfig struct {
+	DoBenchmark bool          `toml:"do-benchmark"`
+	UserCount   int           `toml:"users"`
+	DeviceCount int           `toml:"devices"`
+	SensorCount int           `toml:"sensors"`
+	Duration    time.Duration `toml:"duration"`
+}
+
 type serverConfig struct {
-	ListenAddr        string       `toml:"listen"`
-	AssetsDir         string       `toml:"assets-dir"`
-	TemplatesDir      string       `toml:"templates-dir"`
-	DbDir             string       `toml:"db-dir"`
-	Influx            influxConfig `toml:"influx"`
-	Tls               tlsConfig    `toml:"tls"`
-	DeviceProxyConfig string       `toml:"device-proxy-config"`
-	EnableAdminOps    bool         `toml:"motherlode"`
+	ListenAddr        string          `toml:"listen"`
+	AssetsDir         string          `toml:"assets-dir"`
+	TemplatesDir      string          `toml:"templates-dir"`
+	DbDir             string          `toml:"db-dir"`
+	Postgres          postgresConfig  `toml:"postgres"`
+	Tls               tlsConfig       `toml:"tls"`
+	DeviceProxyConfig string          `toml:"device-proxy-config"`
+	EnableAdminOps    bool            `toml:"motherlode"`
+	Benchmark         benchmarkConfig `toml:"benchmark"`
 }
 
 const (
@@ -126,8 +136,8 @@ func init() {
 	orDefault(&config.TemplatesDir, "./templates")
 	orDefault(&config.DbDir, ".")
 
-	if config.Influx.User == "" || config.Influx.Address == "" || config.Influx.Database == "" {
-		log.Fatal("influxdb config incomplete")
+	if config.Postgres.User == "" || config.Postgres.Address == "" || config.Postgres.Database == "" {
+		log.Fatal("postgres config incomplete")
 	}
 
 	switch fi, err := os.Stat(config.AssetsDir); true {
@@ -185,8 +195,8 @@ func init() {
 		log.Fatal("error parsing templates: ", err)
 	}
 
-	db, err = msgpdb.OpenDb(config.DbDir+"/users.db", config.Influx.Address, config.Influx.Database,
-		config.Influx.User, config.Influx.Password)
+	db, err = msgpdb.OpenDb(config.Postgres.Address, config.Postgres.Port, config.Postgres.Database,
+		config.Postgres.User, config.Postgres.Password)
 	if err != nil {
 		log.Fatal("error opening user db: ", err)
 	}
@@ -196,10 +206,7 @@ func init() {
 		log.Fatal("error opening device db: ", err)
 	}
 
-	apiCtx = msgp.WsApiContext{
-		Db:  db,
-		Hub: h,
-	}
+	apiCtx = *msgp.NewWsApiContext(db, h)
 }
 
 func getSession(w http.ResponseWriter, r *http.Request) *sessions.Session {
@@ -733,46 +740,50 @@ func api_User_Device_Sensor_Props_Set(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	router := mux.NewRouter()
-	server := regdev.DeviceServer{Db: devdb}
-
-	router.HandleFunc("/", loggedInSwitch(wsTemplate("index_user"), staticTemplate("index_nouser"))).Methods("GET")
-	router.HandleFunc("/user/login", staticTemplate("user-login")).Methods("GET")
-	router.HandleFunc("/user/login", doLogin).Methods("POST")
-	router.HandleFunc("/user/logout", doLogout).Methods("GET")
-	router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
-	router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
-	router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
-	router.HandleFunc("/api/user/v1/device/{device}", apiBlock(api_User_Devices_Add)).Methods("POST")
-	router.HandleFunc("/api/user/v1/device/{device}", apiBlock(api_User_Devices_Remove)).Methods("DELETE")
-	router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(api_User_Device_Config_Get)).Methods("GET")
-	router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(api_User_Device_Config_Set)).Methods("POST")
-	router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(api_User_Device_Sensor_Props_Set)).Methods("POST")
-
-	router.HandleFunc("/admin", defaultHeaders(adminHandler))
-
-	if config.EnableAdminOps {
-		router.HandleFunc("/admin/user/{user}", adminUser_Add).Methods("PUT")
-		router.HandleFunc("/admin/user/{user}/props", adminUser_Set).Methods("POST")
-	}
-
-	router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
-	router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
-	server.RegisterRoutes(router.PathPrefix("/api/regdev").Subrouter())
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir(config.AssetsDir)))
-
-	http.Handle("/", router)
-
-	log.Print("Listening on ", config.ListenAddr)
-	if config.Tls.Cert != "" {
-		log.Printf("Using SSL cert and key %v, %v", config.Tls.Cert, config.Tls.Key)
-
-		if err := http.ListenAndServeTLS(config.ListenAddr, config.Tls.Cert, config.Tls.Key, nil); err != nil {
-			log.Fatalf("failed: %v", err.Error())
-		}
+	if config.Benchmark.DoBenchmark {
+		db.RunBenchmark(config.Benchmark.UserCount, config.Benchmark.DeviceCount, config.Benchmark.SensorCount, config.Benchmark.Duration*time.Minute)
 	} else {
-		if err := http.ListenAndServe(config.ListenAddr, nil); err != nil {
-			log.Fatalf("failed: %v", err.Error())
+		router := mux.NewRouter()
+		server := regdev.DeviceServer{Db: devdb}
+
+		router.HandleFunc("/", loggedInSwitch(wsTemplate("index_user"), staticTemplate("index_nouser"))).Methods("GET")
+		router.HandleFunc("/user/login", staticTemplate("user-login")).Methods("GET")
+		router.HandleFunc("/user/login", doLogin).Methods("POST")
+		router.HandleFunc("/user/logout", doLogout).Methods("GET")
+		router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
+		router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
+		router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
+		router.HandleFunc("/api/user/v1/device/{device}", apiBlock(api_User_Devices_Add)).Methods("POST")
+		router.HandleFunc("/api/user/v1/device/{device}", apiBlock(api_User_Devices_Remove)).Methods("DELETE")
+		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(api_User_Device_Config_Get)).Methods("GET")
+		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(api_User_Device_Config_Set)).Methods("POST")
+		router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(api_User_Device_Sensor_Props_Set)).Methods("POST")
+
+		router.HandleFunc("/admin", defaultHeaders(adminHandler))
+
+		if config.EnableAdminOps {
+			router.HandleFunc("/admin/user/{user}", adminUser_Add).Methods("PUT")
+			router.HandleFunc("/admin/user/{user}/props", adminUser_Set).Methods("POST")
+		}
+
+		router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
+		router.HandleFunc("/ws/device/{user}/{device}", wsHandlerDevice)
+		server.RegisterRoutes(router.PathPrefix("/api/regdev").Subrouter())
+		router.PathPrefix("/").Handler(http.FileServer(http.Dir(config.AssetsDir)))
+
+		http.Handle("/", router)
+
+		log.Print("Listening on ", config.ListenAddr)
+		if config.Tls.Cert != "" {
+			log.Printf("Using SSL cert and key %v, %v", config.Tls.Cert, config.Tls.Key)
+
+			if err := http.ListenAndServeTLS(config.ListenAddr, config.Tls.Cert, config.Tls.Key, nil); err != nil {
+				log.Fatalf("failed: %v", err.Error())
+			}
+		} else {
+			if err := http.ListenAndServe(config.ListenAddr, nil); err != nil {
+				log.Fatalf("failed: %v", err.Error())
+			}
 		}
 	}
 }

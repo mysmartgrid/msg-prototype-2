@@ -1,9 +1,9 @@
 package db
 
 import (
+	"database/sql"
 	"errors"
-	"github.com/boltdb/bolt"
-	"github.com/influxdb/influxdb/client"
+	"fmt"
 	"log"
 	"time"
 )
@@ -15,31 +15,29 @@ const (
 var (
 	InvalidId = errors.New("id invalid")
 	IdExists  = errors.New("id exists")
-
-	db_users = []byte("users")
 )
 
 type db struct {
-	store *bolt.DB
+	sqldb sqlHandler
 
-	influx influxHandler
-
-	bufferedValues     map[bufferKey][]Value
+	bufferedValues     map[uint64][]Value
 	bufferedValueCount uint32
 
 	bufferInput chan bufferValue
-	bufferAdd   chan bufferKey
-	bufferKill  chan bufferKey
-}
+	bufferAdd   chan uint64
+	bufferKill  chan uint64
 
-type bufferKey struct {
-	user, device, sensor uint64
-	unit                 string
+	realtimeSensors map[Device]map[string]map[Sensor]realtimeEntry
+	realtimeHandler func(values map[Device]map[string]map[Sensor][]Value)
 }
 
 type bufferValue struct {
-	key   bufferKey
+	key   uint64
 	value Value
+}
+
+type realtimeEntry struct {
+	lastRequest, lastUpdate time.Time
 }
 
 func (db *db) flushBuffer() {
@@ -47,7 +45,7 @@ func (db *db) flushBuffer() {
 		return
 	}
 
-	err := db.influx.saveValuesAndClear(db.bufferedValues)
+	err := db.sqldb.saveValuesAndClear(db.bufferedValues)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -92,71 +90,179 @@ func (d *db) manageBuffer() {
 	}
 }
 
-func OpenDb(path, influxAddr, influxDb, influxUser, influxPass string) (Db, error) {
-	store, err := bolt.Open(path, 0600, nil)
-	if err != nil {
-		return nil, err
-	}
+func OpenDb(sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
+	cfg := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
+		sqlUser,
+		sqlPass,
+		sqlDb,
+		sqlAddr,
+		sqlPort,
+	)
 
-	store.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists(db_users)
-		return nil
-	})
-
-	cfg := client.ClientConfig{
-		Host:     influxAddr,
-		Username: influxUser,
-		Password: influxPass,
-		Database: influxDb,
-	}
-	influxC, err := client.New(&cfg)
+	postgres, err := sql.Open("postgres", cfg)
 	if err != nil {
 		return nil, err
 	}
 
 	result := &db{
-		store:          store,
-		influx:         influxHandler{influxC},
-		bufferedValues: make(map[bufferKey][]Value),
+		sqldb:          sqlHandler{postgres},
+		bufferedValues: make(map[uint64][]Value),
 		bufferInput:    make(chan bufferValue),
-		bufferKill:     make(chan bufferKey),
-		bufferAdd:      make(chan bufferKey),
+		bufferKill:     make(chan uint64),
+		bufferAdd:      make(chan uint64),
+
+		realtimeSensors: make(map[Device]map[string]map[Sensor]realtimeEntry),
 	}
 
 	go result.manageBuffer()
 
-	result.View(func(tx Tx) error {
-		for _, user := range tx.Users() {
-			for _, dev := range user.Devices() {
-				for _, sensor := range dev.Sensors() {
-					result.bufferAdd <- bufferKey{user.dbId(), dev.dbId(), sensor.dbId(), sensor.Unit()}
-				}
-			}
+	rows, err := result.sqldb.db.Query(`SELECT sensor_seq FROM sensors`)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+	for rows.Next() {
+		var seq uint64
+		err = rows.Scan(&seq)
+		if err != nil {
+			return nil, err
 		}
-		return nil
-	})
+		result.bufferAdd <- seq
+	}
+	if err != nil {
+		return nil, err
+	}
 
 	return result, nil
 }
 
 func (d *db) Close() {
 	close(d.bufferInput)
-	d.store.Close()
+	d.sqldb.db.Close()
 }
 
 func (d *db) View(fn func(Tx) error) error {
-	return d.store.View(func(btx *bolt.Tx) error {
-		return fn(&tx{d, btx})
-	})
+	t, err := d.sqldb.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			t.Rollback()
+		}
+	}()
+
+	err = fn(&tx{d, t})
+
+	if err != nil {
+		_ = t.Rollback()
+		return err
+	}
+	if err := t.Rollback(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d *db) Update(fn func(Tx) error) error {
-	return d.store.Update(func(btx *bolt.Tx) error {
-		return fn(&tx{d, btx})
-	})
+	t, err := d.sqldb.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			t.Rollback()
+		}
+	}()
+
+	err = fn(&tx{d, t})
+
+	if err != nil {
+		_ = t.Rollback()
+		return err
+	}
+	return t.Commit()
 }
 
-func (d *db) AddReading(user User, device Device, sensor Sensor, time time.Time, value float64) error {
-	d.bufferInput <- bufferValue{bufferKey{user.dbId(), device.dbId(), sensor.dbId(), sensor.Unit()}, Value{time, value}}
+func (d *db) AddReading(sensor Sensor, time time.Time, value float64) error {
+	d.bufferInput <- bufferValue{sensor.DbId(), Value{time, value}}
 	return nil
+}
+
+func (d *db) SetRealtimeHandler(handler func(values map[Device]map[string]map[Sensor][]Value)) {
+	d.realtimeHandler = handler
+}
+
+func (d *db) RequestRealtimeUpdates(sensors map[Device]map[string][]Sensor) {
+	for device, resolutions := range sensors {
+		for resolution, sens := range resolutions {
+			for _, sensor := range sens {
+				entry, ok := d.realtimeSensors[device][resolution][sensor]
+				if !ok {
+					d.realtimeSensors[device][resolution][sensor] = realtimeEntry{time.Now(), time.Now()}
+				} else {
+					entry.lastRequest = time.Now()
+				}
+			}
+		}
+	}
+}
+
+func (d *db) doRealtimeUpdates(resolution string) {
+	var interval time.Duration
+
+	switch resolution {
+	case "second":
+		interval = time.Second
+	case "minute":
+		interval = time.Minute
+	case "hour":
+		interval = time.Hour
+	case "day":
+	case "week":
+	case "month":
+	case "year":
+		interval = time.Hour * 24
+	default:
+		return
+	}
+
+	for {
+		result := make(map[Device]map[string]map[Sensor][]Value)
+
+		for device, resolutions := range d.realtimeSensors {
+			for sensor, entry := range resolutions[resolution] {
+				values, err := d.sqldb.loadValuesSingle(entry.lastUpdate, time.Now(), resolution, sensor.DbId())
+				if err == nil {
+					result[device][resolution][sensor] = values
+					entry.lastUpdate = time.Now()
+				}
+			}
+		}
+		d.realtimeHandler(result)
+		time.Sleep(interval)
+	}
+}
+
+func (d *db) Run() {
+	go func() {
+		for _, resolutions := range d.realtimeSensors {
+			for _, sensors := range resolutions {
+				for sensor, entry := range sensors {
+					if !entry.lastRequest.Add(time.Second * 30).After(time.Now()) {
+						delete(sensors, sensor)
+					}
+				}
+			}
+		}
+	}()
+
+	resolutions := [...]string{"second", "minute", "hour", "day", "week", "month", "year"}
+	for _, res := range resolutions {
+		go d.doRealtimeUpdates(res)
+	}
+
 }

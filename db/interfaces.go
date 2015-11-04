@@ -4,8 +4,13 @@ import "time"
 
 type Tx interface {
 	AddUser(id, password string) (User, error)
+	RemoveUser(id string) error
 	User(id string) User
 	Users() map[string]User
+	AddGroup(id string) (Group, error)
+	RemoveGroup(id string) error
+	Group(id string) Group
+	Groups() map[string]Group
 }
 
 type Db interface {
@@ -14,7 +19,13 @@ type Db interface {
 	Update(func(Tx) error) error
 	View(func(Tx) error) error
 
-	AddReading(user User, device Device, sensor Sensor, time time.Time, value float64) error
+	AddReading(sensor Sensor, time time.Time, value float64) error
+	SetRealtimeHandler(handler func(values map[Device]map[string]map[Sensor][]Value))
+	RequestRealtimeUpdates(sensors map[Device]map[string][]Sensor)
+
+	Run()
+
+	RunBenchmark(usr_cnt, dev_cnt, sns_cnt int, duration time.Duration)
 }
 
 type User interface {
@@ -27,10 +38,28 @@ type User interface {
 	IsAdmin() bool
 	SetAdmin(b bool) error
 
-	Id() string
-	dbId() uint64
+	Groups() map[string]Group
+	IsGroupAdmin(group_id string) bool
 
-	LoadReadings(since time.Time, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error)
+	Id() string
+
+	LoadReadings(since, until time.Time, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error)
+}
+
+type Group interface {
+	AddUser(id string) error
+	RemoveUser(id string) error
+	GetUsers() map[string]User
+
+	SetAdmin(id string) error
+	UnsetAdmin(id string) error
+	GetAdmins() map[string]User
+
+	AddSensor(dbid uint64) error
+	RemoveSensor(dbid uint64) error
+	GetSensors() []uint64
+
+	Id() string
 }
 
 type Device interface {
@@ -40,7 +69,7 @@ type Device interface {
 	RemoveSensor(id string) error
 
 	Id() string
-	dbId() uint64
+	User() string
 	Key() []byte
 
 	Name() string
@@ -49,10 +78,12 @@ type Device interface {
 
 type Sensor interface {
 	Id() string
-	dbId() uint64
+	DbId() uint64
 
 	Name() string
 	SetName(string) error
+
+	Groups() map[string]Group
 
 	Port() int32
 	Unit() string
