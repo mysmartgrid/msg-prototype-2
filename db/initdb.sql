@@ -4,7 +4,7 @@
 
 -- Dumped from database version 9.3.9
 -- Dumped by pg_dump version 9.3.9
--- Started on 2015-11-03 14:56:47 CET
+-- Started on 2015-11-05 11:39:50 CET
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -15,16 +15,16 @@ SET client_min_messages = warning;
 
 --
 -- TOC entry 185 (class 3079 OID 11791)
--- Name: plpgsql; Type: EXTENSION; Schema: -; Owner: 
+-- Name: plpgsql; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 
 
 --
--- TOC entry 2069 (class 0 OID 0)
+-- TOC entry 2068 (class 0 OID 0)
 -- Dependencies: 185
--- Name: EXTENSION plpgsql; Type: COMMENT; Schema: -; Owner: 
+-- Name: EXTENSION plpgsql; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
@@ -34,7 +34,7 @@ SET search_path = public, pg_catalog;
 
 --
 -- TOC entry 199 (class 1255 OID 17846)
--- Name: do_aggregate(); Type: FUNCTION; Schema: public; Owner: msgp
+-- Name: do_aggregate(); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION do_aggregate() RETURNS bigint
@@ -324,11 +324,9 @@ with updates as (
 select count(*) from do_update_y;$$;
 
 
-ALTER FUNCTION public.do_aggregate() OWNER TO msgp;
-
 --
 -- TOC entry 200 (class 1255 OID 18086)
--- Name: do_remove_old_values(); Type: FUNCTION; Schema: public; Owner: msgp
+-- Name: do_remove_old_values(); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION do_remove_old_values() RETURNS void
@@ -373,11 +371,9 @@ WHERE sensor = s.sensor_seq
 END;$$;
 
 
-ALTER FUNCTION public.do_remove_old_values() OWNER TO msgp;
-
 --
 -- TOC entry 198 (class 1255 OID 18591)
--- Name: measure_raw_insert_trigger(); Type: FUNCTION; Schema: public; Owner: msgp
+-- Name: measure_raw_insert_trigger(); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION measure_raw_insert_trigger() RETURNS trigger
@@ -392,15 +388,13 @@ END;
 $$;
 
 
-ALTER FUNCTION public.measure_raw_insert_trigger() OWNER TO msgp;
-
 SET default_tablespace = '';
 
 SET default_with_oids = false;
 
 --
 -- TOC entry 171 (class 1259 OID 16633)
--- Name: devices; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: devices; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE TABLE devices (
@@ -411,11 +405,9 @@ CREATE TABLE devices (
 );
 
 
-ALTER TABLE public.devices OWNER TO msgp;
-
 --
 -- TOC entry 175 (class 1259 OID 18087)
--- Name: groups; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: groups; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE TABLE groups (
@@ -423,11 +415,9 @@ CREATE TABLE groups (
 );
 
 
-ALTER TABLE public.groups OWNER TO msgp;
-
 --
 -- TOC entry 179 (class 1259 OID 18358)
--- Name: measure_aggregated_days; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: measure_aggregated_days; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_days (
@@ -439,11 +429,9 @@ CREATE UNLOGGED TABLE measure_aggregated_days (
 );
 
 
-ALTER TABLE public.measure_aggregated_days OWNER TO msgp;
-
 --
 -- TOC entry 178 (class 1259 OID 18350)
--- Name: measure_aggregated_hours; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: measure_aggregated_hours; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_hours (
@@ -455,11 +443,9 @@ CREATE UNLOGGED TABLE measure_aggregated_hours (
 );
 
 
-ALTER TABLE public.measure_aggregated_hours OWNER TO msgp;
-
 --
 -- TOC entry 177 (class 1259 OID 18342)
--- Name: measure_aggregated_minutes; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: measure_aggregated_minutes; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_minutes (
@@ -471,11 +457,9 @@ CREATE UNLOGGED TABLE measure_aggregated_minutes (
 );
 
 
-ALTER TABLE public.measure_aggregated_minutes OWNER TO msgp;
-
 --
 -- TOC entry 181 (class 1259 OID 18375)
--- Name: measure_aggregated_months; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: measure_aggregated_months; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_months (
@@ -487,11 +471,9 @@ CREATE UNLOGGED TABLE measure_aggregated_months (
 );
 
 
-ALTER TABLE public.measure_aggregated_months OWNER TO msgp;
-
 --
 -- TOC entry 176 (class 1259 OID 18334)
--- Name: measure_aggregated_seconds; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: measure_aggregated_seconds; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_seconds (
@@ -503,11 +485,9 @@ CREATE UNLOGGED TABLE measure_aggregated_seconds (
 );
 
 
-ALTER TABLE public.measure_aggregated_seconds OWNER TO msgp;
-
 --
 -- TOC entry 180 (class 1259 OID 18366)
--- Name: measure_aggregated_weeks; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: measure_aggregated_weeks; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_weeks (
@@ -519,11 +499,9 @@ CREATE UNLOGGED TABLE measure_aggregated_weeks (
 );
 
 
-ALTER TABLE public.measure_aggregated_weeks OWNER TO msgp;
-
 --
 -- TOC entry 182 (class 1259 OID 18383)
--- Name: measure_aggregated_years; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: measure_aggregated_years; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_years (
@@ -535,11 +513,9 @@ CREATE UNLOGGED TABLE measure_aggregated_years (
 );
 
 
-ALTER TABLE public.measure_aggregated_years OWNER TO msgp;
-
 --
 -- TOC entry 174 (class 1259 OID 18054)
--- Name: measure_raw; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: measure_raw; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE UNLOGGED TABLE measure_raw (
@@ -549,11 +525,9 @@ CREATE UNLOGGED TABLE measure_raw (
 );
 
 
-ALTER TABLE public.measure_raw OWNER TO msgp;
-
 --
 -- TOC entry 184 (class 1259 OID 18506)
--- Name: sensor_groups; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: sensor_groups; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE TABLE sensor_groups (
@@ -562,11 +536,9 @@ CREATE TABLE sensor_groups (
 );
 
 
-ALTER TABLE public.sensor_groups OWNER TO msgp;
-
 --
 -- TOC entry 172 (class 1259 OID 16646)
--- Name: sensors; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: sensors; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE TABLE sensors (
@@ -581,11 +553,9 @@ CREATE TABLE sensors (
 );
 
 
-ALTER TABLE public.sensors OWNER TO msgp;
-
 --
 -- TOC entry 173 (class 1259 OID 16659)
--- Name: sensors_sensor_seq_seq; Type: SEQUENCE; Schema: public; Owner: msgp
+-- Name: sensors_sensor_seq_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
 CREATE SEQUENCE sensors_sensor_seq_seq
@@ -596,12 +566,10 @@ CREATE SEQUENCE sensors_sensor_seq_seq
     CACHE 1;
 
 
-ALTER TABLE public.sensors_sensor_seq_seq OWNER TO msgp;
-
 --
--- TOC entry 2070 (class 0 OID 0)
+-- TOC entry 2069 (class 0 OID 0)
 -- Dependencies: 173
--- Name: sensors_sensor_seq_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: msgp
+-- Name: sensors_sensor_seq_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE sensors_sensor_seq_seq OWNED BY sensors.sensor_seq;
@@ -609,7 +577,7 @@ ALTER SEQUENCE sensors_sensor_seq_seq OWNED BY sensors.sensor_seq;
 
 --
 -- TOC entry 183 (class 1259 OID 18433)
--- Name: user_groups; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: user_groups; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE TABLE user_groups (
@@ -619,11 +587,9 @@ CREATE TABLE user_groups (
 );
 
 
-ALTER TABLE public.user_groups OWNER TO msgp;
-
 --
 -- TOC entry 170 (class 1259 OID 16625)
--- Name: users; Type: TABLE; Schema: public; Owner: msgp; Tablespace: 
+-- Name: users; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
 CREATE TABLE users (
@@ -634,11 +600,9 @@ CREATE TABLE users (
 );
 
 
-ALTER TABLE public.users OWNER TO msgp;
-
 --
 -- TOC entry 1924 (class 2604 OID 16661)
--- Name: sensor_seq; Type: DEFAULT; Schema: public; Owner: msgp
+-- Name: sensor_seq; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sensors ALTER COLUMN sensor_seq SET DEFAULT nextval('sensors_sensor_seq_seq'::regclass);
@@ -646,7 +610,7 @@ ALTER TABLE ONLY sensors ALTER COLUMN sensor_seq SET DEFAULT nextval('sensors_se
 
 --
 -- TOC entry 1930 (class 2606 OID 16640)
--- Name: device_pk; Type: CONSTRAINT; Schema: public; Owner: msgp; Tablespace: 
+-- Name: device_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY devices
@@ -655,7 +619,7 @@ ALTER TABLE ONLY devices
 
 --
 -- TOC entry 1936 (class 2606 OID 18094)
--- Name: groups_pk; Type: CONSTRAINT; Schema: public; Owner: msgp; Tablespace: 
+-- Name: groups_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY groups
@@ -664,7 +628,7 @@ ALTER TABLE ONLY groups
 
 --
 -- TOC entry 1940 (class 2606 OID 18513)
--- Name: sensor_groups_pk; Type: CONSTRAINT; Schema: public; Owner: msgp; Tablespace: 
+-- Name: sensor_groups_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY sensor_groups
@@ -673,7 +637,7 @@ ALTER TABLE ONLY sensor_groups
 
 --
 -- TOC entry 1932 (class 2606 OID 16685)
--- Name: sensor_pk; Type: CONSTRAINT; Schema: public; Owner: msgp; Tablespace: 
+-- Name: sensor_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY sensors
@@ -682,7 +646,7 @@ ALTER TABLE ONLY sensors
 
 --
 -- TOC entry 1934 (class 2606 OID 16670)
--- Name: seq_unique; Type: CONSTRAINT; Schema: public; Owner: msgp; Tablespace: 
+-- Name: seq_unique; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY sensors
@@ -691,7 +655,7 @@ ALTER TABLE ONLY sensors
 
 --
 -- TOC entry 1938 (class 2606 OID 18440)
--- Name: user_group_pk; Type: CONSTRAINT; Schema: public; Owner: msgp; Tablespace: 
+-- Name: user_group_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY user_groups
@@ -700,7 +664,7 @@ ALTER TABLE ONLY user_groups
 
 --
 -- TOC entry 1928 (class 2606 OID 16632)
--- Name: users_pk; Type: CONSTRAINT; Schema: public; Owner: msgp; Tablespace: 
+-- Name: users_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY users
@@ -709,7 +673,7 @@ ALTER TABLE ONLY users
 
 --
 -- TOC entry 1942 (class 2606 OID 16654)
--- Name: device_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: device_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sensors
@@ -718,7 +682,7 @@ ALTER TABLE ONLY sensors
 
 --
 -- TOC entry 1953 (class 2606 OID 18514)
--- Name: group_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: group_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sensor_groups
@@ -727,7 +691,7 @@ ALTER TABLE ONLY sensor_groups
 
 --
 -- TOC entry 1952 (class 2606 OID 18456)
--- Name: groups_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: groups_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY user_groups
@@ -736,7 +700,7 @@ ALTER TABLE ONLY user_groups
 
 --
 -- TOC entry 1943 (class 2606 OID 18057)
--- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY measure_raw
@@ -745,7 +709,7 @@ ALTER TABLE ONLY measure_raw
 
 --
 -- TOC entry 1944 (class 2606 OID 18337)
--- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY measure_aggregated_seconds
@@ -754,7 +718,7 @@ ALTER TABLE ONLY measure_aggregated_seconds
 
 --
 -- TOC entry 1945 (class 2606 OID 18345)
--- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY measure_aggregated_minutes
@@ -763,7 +727,7 @@ ALTER TABLE ONLY measure_aggregated_minutes
 
 --
 -- TOC entry 1946 (class 2606 OID 18353)
--- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY measure_aggregated_hours
@@ -772,7 +736,7 @@ ALTER TABLE ONLY measure_aggregated_hours
 
 --
 -- TOC entry 1947 (class 2606 OID 18361)
--- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY measure_aggregated_days
@@ -781,7 +745,7 @@ ALTER TABLE ONLY measure_aggregated_days
 
 --
 -- TOC entry 1948 (class 2606 OID 18369)
--- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY measure_aggregated_weeks
@@ -790,7 +754,7 @@ ALTER TABLE ONLY measure_aggregated_weeks
 
 --
 -- TOC entry 1949 (class 2606 OID 18378)
--- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY measure_aggregated_months
@@ -799,7 +763,7 @@ ALTER TABLE ONLY measure_aggregated_months
 
 --
 -- TOC entry 1950 (class 2606 OID 18386)
--- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY measure_aggregated_years
@@ -808,7 +772,7 @@ ALTER TABLE ONLY measure_aggregated_years
 
 --
 -- TOC entry 1954 (class 2606 OID 18519)
--- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sensor_groups
@@ -817,7 +781,7 @@ ALTER TABLE ONLY sensor_groups
 
 --
 -- TOC entry 1941 (class 2606 OID 16641)
--- Name: user_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: user_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY devices
@@ -826,26 +790,14 @@ ALTER TABLE ONLY devices
 
 --
 -- TOC entry 1951 (class 2606 OID 18451)
--- Name: users_fk; Type: FK CONSTRAINT; Schema: public; Owner: msgp
+-- Name: users_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY user_groups
     ADD CONSTRAINT users_fk FOREIGN KEY (user_id) REFERENCES users(user_id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 
---
--- TOC entry 2068 (class 0 OID 0)
--- Dependencies: 5
--- Name: public; Type: ACL; Schema: -; Owner: postgres
---
-
-REVOKE ALL ON SCHEMA public FROM PUBLIC;
-REVOKE ALL ON SCHEMA public FROM postgres;
-GRANT ALL ON SCHEMA public TO postgres;
-GRANT ALL ON SCHEMA public TO PUBLIC;
-
-
--- Completed on 2015-11-03 14:56:47 CET
+-- Completed on 2015-11-05 11:39:50 CET
 
 --
 -- PostgreSQL database dump complete
