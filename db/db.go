@@ -215,16 +215,11 @@ func (d *db) doRealtimeUpdates(resolution string) {
 	var interval time.Duration
 
 	switch resolution {
-	case "second":
-		interval = time.Second
 	case "minute":
 		interval = time.Minute
 	case "hour":
 		interval = time.Hour
-	case "day":
-	case "week":
-	case "month":
-	case "year":
+	case "day", "week", "month", "year":
 		interval = time.Hour * 24
 	default:
 		return
@@ -260,7 +255,7 @@ func (d *db) Run() {
 		}
 	}()
 
-	resolutions := [...]string{"second", "minute", "hour", "day", "week", "month", "year"}
+	resolutions := [...]string{"minute", "hour", "day", "week", "month", "year"}
 	for _, res := range resolutions {
 		go d.doRealtimeUpdates(res)
 	}
