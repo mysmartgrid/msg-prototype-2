@@ -221,10 +221,7 @@ func (d *db) doRealtimeUpdates(resolution string) {
 		interval = time.Minute
 	case "hour":
 		interval = time.Hour
-	case "day":
-	case "week":
-	case "month":
-	case "year":
+	case "day", "week", "month", "year":
 		interval = time.Hour * 24
 	default:
 		return
