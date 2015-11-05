@@ -24,6 +24,8 @@ var (
 
 	deviceNotRegistered     = errors.New("device not registered")
 	deviceAlreadyRegistered = errors.New("device already registered")
+
+	noRealtime = errors.New("no realtime support for this resolution")
 )
 
 type measurementWithMetadata struct {
@@ -484,6 +486,8 @@ func (api *WsUserApi) doRequestRealtimeUpdates(sensors map[string]map[string][]s
 			for resolution, sensors := range resolutions {
 				if resolution == "raw" {
 					dev.RequestRealtimeUpdates(sensors)
+				} else if resolution == "second" {
+					err = noRealtime
 				} else {
 					dbsensors := make(map[db.Device]map[string][]db.Sensor)
 					err = api.Ctx.Db.View(func(tx db.Tx) error {
