@@ -1,0 +1,11 @@
+{
+    "compilerOptions": {
+        "out": "./tests.js",
+        "target": "es5",
+        "sourceMap": true
+    },
+    "files": [
+        "sensorvaluestore.ts",
+        "../sensorvaluestore.ts"
+    ]
+}

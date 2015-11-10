@@ -134,6 +134,52 @@ QUnit.test("Add single value", function(assert : QUnitAssert) : void {
 	assert.deepEqual(data[0].data, [[timestamp, 42]], "The value and timestamp should match");
 });
 
+
+QUnit.test("Add two values with different timestamps", function(assert : QUnitAssert) : void {
+	var store = new Store.SensorValueStore();
+
+	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+
+	var timestamp = now();
+	store.addValue("ADevice", "ASensor1", timestamp, 42);
+	store.addValue("ADevice", "ASensor1", timestamp - 1000, 84);
+
+	var data = store.getData();
+	assert.ok(data[0].data.length === 2, "There be two values in the data array");
+	assert.deepEqual(data[0].data, [ [timestamp - 1000, 84], [timestamp, 42]], "The values and timestamps should match");
+});
+
+QUnit.test("Add values with same imestamps", function(assert : QUnitAssert) : void {
+	var store = new Store.SensorValueStore();
+
+	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+
+	var timestamp = now();
+
+	store.addValue("ADevice", "ASensor1", timestamp - 3000, 23);
+	store.addValue("ADevice", "ASensor1", timestamp - 2000, 1337);
+	store.addValue("ADevice", "ASensor1", timestamp - 1000, 666);
+	store.addValue("ADevice", "ASensor1", timestamp, 42);
+
+	//Update first tuple
+	store.addValue("ADevice", "ASensor1", timestamp - 3000, 46);
+
+	//Update tuple in between
+	store.addValue("ADevice", "ASensor1", timestamp - 1000, 0);
+
+	//Update last tuple
+	store.addValue("ADevice", "ASensor1", timestamp, 84);
+
+
+	var data = store.getData();
+	assert.ok(data[0].data.length === 4, "There should be four values in the data array");
+	assert.deepEqual(data[0].data, [[timestamp - 3000, 46],
+									[timestamp - 2000, 1337],
+									[timestamp - 1000, 0],
+									[timestamp, 84]],
+					"The values and timestamps should match");
+});
+
 QUnit.test("Clamp data", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
@@ -180,5 +226,3 @@ QUnit.test("Test timeout", function(assert : QUnitAssert) : void {
 						[[oldTimestamp, 23], [middleTimestamp, 39], [timestamp, 42]],
 						"Both values should be in the array");
 });
-
-

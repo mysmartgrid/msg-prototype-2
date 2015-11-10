@@ -138,28 +138,39 @@ module Store {
 				pos = data.length;
 			}
 
-			// Insert
-			data.splice(pos, 0, [timestamp, value]);
-
-			//Check if we need to remove a timeout in the past
-			if(pos > 0 && data[pos - 1][1] === null && timestamp - data[pos - 1][0] < this._timeout) {
-				data.splice(pos - 1, 1);
+			// Check if the value is an update for an existing timestamp
+			if(data.length > 0 && pos === 0 && data[0][0] === timestamp) {
+				// Update for the first tuple
+				data[0][1] = value;
 			}
-
-			//Check if we need to remove a timeout in the future
-			if(pos < data.length - 1 && data[pos + 1][1] === null && data[pos + 1][0] - timestamp < this._timeout) {
-				data.splice(pos + 1, 1);
+			else if(data.length > 0 && pos > 0 && pos <= data.length && data[pos - 1][0] === timestamp) {
+				//Update any other tuple including the last one
+				data[pos - 1][1] = value;
 			}
+			else {
+				// Insert
+				data.splice(pos, 0, [timestamp, value]);
 
-			//Check if a null in the past is needed
-			if(pos > 0 && data[pos - 1][1] !== null && timestamp - data[pos - 1][0] >= this._timeout) {
-				data.splice(pos, 0, [timestamp - 1, null]);
-				//console.log(JSON.stringify(data));
-			}
+				//Check if we need to remove a timeout in the past
+				if(pos > 0 && data[pos - 1][1] === null && timestamp - data[pos - 1][0] < this._timeout) {
+					data.splice(pos - 1, 1);
+				}
 
-			//Check if a null in the future is needed
-			if(pos < data.length - 1 && data[pos + 1][1] !== null && data[pos + 1][0] - timestamp >= this._timeout) {
-				data.splice(pos + 1, 0, [timestamp + 1, null]);
+				//Check if we need to remove a timeout in the future
+				if(pos < data.length - 1 && data[pos + 1][1] === null && data[pos + 1][0] - timestamp < this._timeout) {
+					data.splice(pos + 1, 1);
+				}
+
+				//Check if a null in the past is needed
+				if(pos > 0 && data[pos - 1][1] !== null && timestamp - data[pos - 1][0] >= this._timeout) {
+					data.splice(pos, 0, [timestamp - 1, null]);
+					//console.log(JSON.stringify(data));
+				}
+
+				//Check if a null in the future is needed
+				if(pos < data.length - 1 && data[pos + 1][1] !== null && data[pos + 1][0] - timestamp >= this._timeout) {
+					data.splice(pos + 1, 0, [timestamp + 1, null]);
+				}
 			}
 
 		}

@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+      "out": "../js/app.js",
+      "target": "es5",
+       "sourceMap": true,
+       "sourceRoot": "/ts/",
+       "mapRoot": "/js/"
+    },
+    "files": [
+      "app.ts",
+      "graphview.ts",
+      "sensorcollectiongraph",
+      "msg2socket.ts",
+      "sensorvaluestore.ts"
+    ]
+}
