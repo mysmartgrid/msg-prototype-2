@@ -2,7 +2,9 @@
     "compilerOptions": {
       "out": "../js/app.js",
       "target": "es5",
-       "sourceMap": true
+       "sourceMap": true,
+       "sourceRoot": "/ts/",
+       "mapRoot": "/js/"
     },
     "files": [
       "app.ts",

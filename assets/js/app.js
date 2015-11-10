@@ -681,4 +681,4 @@ angular.module("msgp", [])
             });
         };
     }]);
-//# sourceMappingURL=app.js.map
+//# sourceMappingURL=/js/app.js.map
