@@ -151,9 +151,12 @@ module Store {
 				// Insert
 				data.splice(pos, 0, [timestamp, value]);
 
+
 				//Check if we need to remove a timeout in the past
 				if(pos > 0 && data[pos - 1][1] === null && timestamp - data[pos - 1][0] < this._timeout) {
 					data.splice(pos - 1, 1);
+					// We delete something bevor pos, so we should move pos
+					pos -= 1;
 				}
 
 				//Check if we need to remove a timeout in the future
@@ -164,7 +167,6 @@ module Store {
 				//Check if a null in the past is needed
 				if(pos > 0 && data[pos - 1][1] !== null && timestamp - data[pos - 1][0] >= this._timeout) {
 					data.splice(pos, 0, [timestamp - 1, null]);
-					//console.log(JSON.stringify(data));
 				}
 
 				//Check if a null in the future is needed

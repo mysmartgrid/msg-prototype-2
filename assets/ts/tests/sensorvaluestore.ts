@@ -15,6 +15,10 @@ function now() : number {
 	return (new Date()).getTime();
 }
 
+function rand(min : number, max : number) : number {
+	return Math.floor(min + Math.random() * (max -min));
+}
+
 
 QUnit.module("Misc setup tests");
 QUnit.test("Constructor test", function(assert : QUnitAssert) : void {
@@ -157,8 +161,8 @@ QUnit.test("Add values with same imestamps", function(assert : QUnitAssert) : vo
 	var timestamp = now();
 
 	store.addValue("ADevice", "ASensor1", timestamp - 3000, 23);
-	store.addValue("ADevice", "ASensor1", timestamp - 2000, 1337);
 	store.addValue("ADevice", "ASensor1", timestamp - 1000, 666);
+	store.addValue("ADevice", "ASensor1", timestamp - 2000, 1337);
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
 
 	//Update first tuple
@@ -203,7 +207,7 @@ QUnit.test("Clamp data", function(assert : QUnitAssert) : void {
 
 });
 
-QUnit.test("Test timeout", function(assert : QUnitAssert) : void {
+QUnit.test("Test timeout past", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
 	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
@@ -225,4 +229,63 @@ QUnit.test("Test timeout", function(assert : QUnitAssert) : void {
 	assert.deepEqual(data[0].data,
 						[[oldTimestamp, 23], [middleTimestamp, 39], [timestamp, 42]],
 						"Both values should be in the array");
+});
+
+
+QUnit.test("Test timeout future", function(assert : QUnitAssert) : void {
+	var store = new Store.SensorValueStore();
+
+	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+
+	var timestamp = now();
+	var oldTimestamp = timestamp - 3 * 60 * 1000;
+	var middleTimestamp = timestamp - 1 * 60 * 1000;
+	store.addValue("ADevice", "ASensor1", timestamp, 42);
+	store.addValue("ADevice", "ASensor1", oldTimestamp , 23);
+
+
+	var data = store.getData();
+	assert.deepEqual(data[0].data,
+						[[oldTimestamp, 23], [oldTimestamp + 1, null], [timestamp, 42]],
+						"Both values should be in the array");
+
+	store.addValue("ADevice", "ASensor1", middleTimestamp, 39);
+
+	data = store.getData();
+	assert.deepEqual(data[0].data,
+						[[oldTimestamp, 23], [middleTimestamp, 39], [timestamp, 42]],
+						"Both values should be in the array");
+});
+
+QUnit.test("Remove past timeout, reinsert in future", function(assert : QUnitAssert) : void {
+	var store = new Store.SensorValueStore();
+
+	const Timeout = 10 * 1000;
+
+	store.setTimeout(Timeout);
+
+	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+
+
+	var lastTimestamp = now();
+	var firstTimestamp = now() - 60 * 1000;
+	var middleTimestamp = firstTimestamp + 9 * 1000;
+
+	store.addValue("ADevice", "ASensor1", lastTimestamp, 0);
+	store.addValue("ADevice", "ASensor1", firstTimestamp, 1);
+
+	var result1 = [[firstTimestamp, 1],
+					[firstTimestamp + 1, null],
+					[lastTimestamp, 0]];
+
+	assert.deepEqual(store.getData()[0].data, result1, "There should be a timeout.");
+
+	store.addValue("ADevice", "ASensor1", middleTimestamp, 2);
+
+	var result2 = [[firstTimestamp, 1],
+					[middleTimestamp, 2],
+					[middleTimestamp + 1, null],
+					[lastTimestamp, 0]];
+
+	assert.deepEqual(store.getData()[0].data, result2, "Timeout should have shifted.");
 });

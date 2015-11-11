@@ -3,7 +3,7 @@
 
 module Msg2Socket {
 	const ApiVersion : string = "v2.user.msg";
-	
+
 	export interface OpenError {
 		error : string;
 	}

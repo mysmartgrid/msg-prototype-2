@@ -248,6 +248,8 @@ var Store;
                 //Check if we need to remove a timeout in the past
                 if (pos > 0 && data[pos - 1][1] === null && timestamp - data[pos - 1][0] < this._timeout) {
                     data.splice(pos - 1, 1);
+                    // We delete something bevor pos, so we should move pos
+                    pos -= 1;
                 }
                 //Check if we need to remove a timeout in the future
                 if (pos < data.length - 1 && data[pos + 1][1] === null && data[pos + 1][0] - timestamp < this._timeout) {
