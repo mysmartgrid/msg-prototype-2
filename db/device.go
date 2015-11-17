@@ -67,8 +67,8 @@ func (d *device) Id() string {
 	return d.id
 }
 
-func (d *device) User() string {
-	return d.user.Id()
+func (d *device) User() User {
+	return d.user
 }
 
 func (d *device) Key() []byte {

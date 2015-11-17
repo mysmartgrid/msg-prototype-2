@@ -23,6 +23,10 @@ func (s *sensor) Name() string {
 	return name
 }
 
+func (s *sensor) Device() Device {
+	return s.device
+}
+
 func (s *sensor) SetName(name string) error {
 	_, err := s.device.user.tx.Exec(`UPDATE sensors SET name = $1 WHERE sensor_seq = $2`, name, s.seq)
 	return err

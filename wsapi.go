@@ -20,7 +20,6 @@ import (
 var (
 	notAuthorized    = errors.New("not authorized")
 	apiNotAuthorized = &msg2api.Error{Code: notAuthorized.Error()}
-	noSensor         = errors.New("sensor not found")
 
 	deviceNotRegistered     = errors.New("device not registered")
 	deviceAlreadyRegistered = errors.New("device already registered")
@@ -44,12 +43,14 @@ type WsApiContext struct {
 }
 
 func NewWsApiContext(d db.Db, hub *hub.Hub) *WsApiContext {
-	d.SetRealtimeHandler(func(values map[db.Device]map[string]map[db.Sensor][]db.Value) {
-		for dev, reses := range values {
-			for res, sensors := range reses {
-				for sensor, vals := range sensors {
-					for _, val := range vals {
-						hub.Publish(dev.User(), measurementWithMetadata{dev.Id(), sensor.Id(), val.Time, val.Value, res})
+	d.SetRealtimeHandler(func(values map[string]map[string]map[string]map[string][]db.Value) {
+		for user, devs := range values {
+			for dev, reses := range devs {
+				for res, sensors := range reses {
+					for sensor, vals := range sensors {
+						for _, val := range vals {
+							hub.Publish(user, measurementWithMetadata{dev, sensor, val.Time, val.Value, res})
+						}
 					}
 				}
 			}
@@ -481,37 +482,19 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, wit
 
 func (api *WsUserApi) doRequestRealtimeUpdates(sensors map[string]map[string][]string) error {
 	for dev, resolutions := range sensors {
-		err := api.Ctx.WithDevice(dev, func(dev *WsDevApi) error {
-			var err error = nil
-			for resolution, sensors := range resolutions {
-				if resolution == "raw" {
+		var err error = nil
+		for resolution, sensors := range resolutions {
+			if resolution == "raw" {
+				err = api.Ctx.WithDevice(dev, func(dev *WsDevApi) error {
 					dev.RequestRealtimeUpdates(sensors)
-				} else if resolution == "second" {
-					err = noRealtime
-				} else {
-					dbsensors := make(map[db.Device]map[string][]db.Sensor)
-					err = api.Ctx.Db.View(func(tx db.Tx) error {
-						user := tx.User(api.User)
-						if user == nil {
-							return deviceNotRegistered
-						}
-						device := user.Device(dev.Device)
-						if user == nil {
-							return deviceNotRegistered
-						}
-						for idx, sensor := range sensors {
-							dbsensors[device][resolution][idx] = device.Sensor(sensor)
-							if dbsensors[device][resolution][idx] == nil {
-								return noSensor
-							}
-						}
-						return nil
-					})
-					dev.ctx.Db.RequestRealtimeUpdates(dbsensors)
-				}
+					return nil
+				})
+			} else if resolution == "second" {
+				err = noRealtime
+			} else {
+				err = api.Ctx.Db.RequestRealtimeUpdates(api.User, dev, resolution, sensors)
 			}
-			return err
-		})
+		}
 		if err != nil && err != deviceNotRegistered {
 			return err
 		}
