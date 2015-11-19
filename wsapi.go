@@ -256,7 +256,7 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 	}
 
 	return api.viewDevice(func(tx db.Tx, user db.User, device db.Device) *msg2api.Error {
-		for name, _ := range values {
+		for name := range values {
 			if device.Sensor(name) == nil {
 				return &msg2api.Error{Code: "no sensor", Extra: name}
 			}
@@ -281,8 +281,6 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 
 		return nil
 	})
-
-	return nil
 }
 
 func (api *WsDevApi) doAddSensor(name, unit string, port int32) *msg2api.Error {
@@ -478,12 +476,12 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, wit
 
 		// Append already aggregated second values
 		if resolution == "raw" {
-			add_readings, err := user.LoadReadings(since, until, "second", sensors)
+			addReadings, err := user.LoadReadings(since, until, "second", sensors)
 			if err != nil {
 				return err
 			}
 
-			for dev, svalues := range add_readings {
+			for dev, svalues := range addReadings {
 				if _, ok := update.Values[dev.Id()]; !ok {
 					update.Values[dev.Id()] = make(map[string][]msg2api.Measurement, len(svalues))
 				}
@@ -507,7 +505,7 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, wit
 
 func (api *WsUserApi) doRequestRealtimeUpdates(sensors map[string]map[string][]string) error {
 	for dev, resolutions := range sensors {
-		var err error = nil
+		var err error
 		for resolution, sensors := range resolutions {
 			if resolution == "raw" {
 				err = api.Ctx.WithDevice(dev, func(dev *WsDevApi) error {

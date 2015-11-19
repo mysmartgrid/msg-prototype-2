@@ -80,30 +80,30 @@ func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]Value) error {
 		return err
 	}
 
-	for id, _ := range valueMap {
+	for id := range valueMap {
 		valueMap[id] = make([]Value, 0, 1)
 	}
 	return nil
 }
 
-func (h *sqlHandler) loadValues(since, until time.Time, resolution string, sensor_seqs []uint64) (map[uint64][]Value, error) {
+func (h *sqlHandler) loadValues(since, until time.Time, resolution string, sensorSeqs []uint64) (map[uint64][]Value, error) {
 	var valueQuery string
-	var sensor_seqs_list bytes.Buffer
-	for idx, seq := range sensor_seqs {
+	var sensorSeqsList bytes.Buffer
+	for idx, seq := range sensorSeqs {
 		if idx != 0 {
-			sensor_seqs_list.WriteString(", ")
+			sensorSeqsList.WriteString(", ")
 		}
-		sensor_seqs_list.WriteString(strconv.FormatUint(seq, 10))
+		sensorSeqsList.WriteString(strconv.FormatUint(seq, 10))
 	}
 
 	if resolution == "raw" {
-		valueQuery = fmt.Sprintf(`SELECT "sensor", "timestamp", "value" FROM "measure_raw" WHERE "sensor" IN (%v) AND "timestamp" BETWEEN $1 AND $2`, sensor_seqs_list.String())
+		valueQuery = fmt.Sprintf(`SELECT "sensor", "timestamp", "value" FROM "measure_raw" WHERE "sensor" IN (%v) AND "timestamp" BETWEEN $1 AND $2`, sensorSeqsList.String())
 	} else {
 		res, ok := timeResMap[resolution]
 		if !ok {
 			return nil, errors.New("Time resolution not supported.")
 		}
-		valueQuery = fmt.Sprintf(`SELECT "sensor", "timestamp", "sum", "count" FROM "%v" WHERE "sensor" IN (%v) AND "timestamp" BETWEEN $1 AND $2`, timeResTable[res], sensor_seqs_list.String())
+		valueQuery = fmt.Sprintf(`SELECT "sensor", "timestamp", "sum", "count" FROM "%v" WHERE "sensor" IN (%v) AND "timestamp" BETWEEN $1 AND $2`, timeResTable[res], sensorSeqsList.String())
 	}
 
 	rows, err := h.db.Query(valueQuery, since, until)

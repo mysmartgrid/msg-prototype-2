@@ -25,7 +25,7 @@ type Db interface {
 
 	Run()
 
-	RunBenchmark(usr_cnt, dev_cnt, sns_cnt int, duration time.Duration)
+	RunBenchmark(usrCount, devCnt, snsCnt int, duration time.Duration)
 }
 
 type User interface {
@@ -39,7 +39,7 @@ type User interface {
 	SetAdmin(b bool) error
 
 	Groups() map[string]Group
-	IsGroupAdmin(group_id string) bool
+	IsGroupAdmin(groupId string) bool
 
 	Id() string
 
