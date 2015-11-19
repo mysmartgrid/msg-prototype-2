@@ -248,7 +248,8 @@ func (d *db) doRealtimeUpdates() {
 	result := make(map[string]map[string]map[string]map[string][]Value)
 	for resolution, sensorids := range d.realtimeSensors {
 		for sensorid, entry := range sensorids {
-			values, err := d.sqldb.loadValuesSingle(entry.lastUpdate, time.Now(), resolution, sensorid)
+			dev_values, err := d.sqldb.loadValues(entry.lastUpdate, time.Now(), resolution, []uint64{sensorid})
+			values := dev_values[sensorid]
 			if err == nil {
 				entry.lastUpdate = time.Now()
 				if len(values) > 0 {

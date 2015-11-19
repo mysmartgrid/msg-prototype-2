@@ -1,10 +1,12 @@
 package db
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/lib/pq"
+	"strconv"
 	"time"
 )
 
@@ -84,50 +86,63 @@ func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]Value) error {
 	return nil
 }
 
-func (h *sqlHandler) loadValuesSingle(since, until time.Time, resolution string, sensor_seq uint64) ([]Value, error) {
-	res, ok := timeResMap[resolution]
-	if !ok {
-		return nil, errors.New("Time resolution not supported.")
+func (h *sqlHandler) loadValues(since, until time.Time, resolution string, sensor_seqs []uint64) (map[uint64][]Value, error) {
+	var valueQuery string
+	var sensor_seqs_list bytes.Buffer
+	for idx, seq := range sensor_seqs {
+		if idx != 0 {
+			sensor_seqs_list.WriteString(", ")
+		}
+		sensor_seqs_list.WriteString(strconv.FormatUint(seq, 10))
 	}
 
-	valueQuery := fmt.Sprintf(`SELECT "timestamp", "sum", "count" FROM "%v" WHERE "sensor" = $1 AND "timestamp" BETWEEN $2 AND $3`, timeResTable[res])
-	rows, err := h.db.Query(valueQuery, sensor_seq, since, until)
+	if resolution == "raw" {
+		valueQuery = fmt.Sprintf(`SELECT "sensor", "timestamp", "value" FROM "measure_raw" WHERE "sensor" IN (%v) AND "timestamp" BETWEEN $1 AND $2`, sensor_seqs_list.String())
+	} else {
+		res, ok := timeResMap[resolution]
+		if !ok {
+			return nil, errors.New("Time resolution not supported.")
+		}
+		valueQuery = fmt.Sprintf(`SELECT "sensor", "timestamp", "sum", "count" FROM "%v" WHERE "sensor" IN (%v) AND "timestamp" BETWEEN $1 AND $2`, timeResTable[res], sensor_seqs_list.String())
+	}
+
+	rows, err := h.db.Query(valueQuery, since, until)
 	if err != nil {
 		return nil, err
 	}
 
-	var values []Value
-	for rows.Next() {
-		var timestamp time.Time
-		var sum float64
-		var count int64
+	result := make(map[uint64][]Value)
+	if resolution == "raw" {
+		for rows.Next() {
+			var sensorid uint64
+			var timestamp time.Time
+			var value float64
 
-		err = rows.Scan(&timestamp, &sum, &count)
-		if err != nil {
-			return nil, err
+			err = rows.Scan(&sensorid, &timestamp, &value)
+			if err != nil {
+				return nil, err
+			}
+			result[sensorid] = append(result[sensorid], Value{timestamp, value})
 		}
+	} else {
+		for rows.Next() {
+			var sensorid uint64
+			var timestamp time.Time
+			var sum float64
+			var count int64
 
-		values = append(values, Value{timestamp, sum / float64(count)})
+			err = rows.Scan(&sensorid, &timestamp, &sum, &count)
+			if err != nil {
+				return nil, err
+			}
+			result[sensorid] = append(result[sensorid], Value{timestamp, sum / float64(count)})
+		}
 	}
 
 	rows.Close()
 	err = rows.Err()
 	if err != nil {
 		return nil, err
-	}
-
-	return values, nil
-}
-
-func (h *sqlHandler) loadValues(since, until time.Time, resolution string, sensor_seqs []uint64) (map[uint64][]Value, error) {
-	result := make(map[uint64][]Value)
-
-	var err error
-	for _, seq := range sensor_seqs {
-		result[seq], err = h.loadValuesSingle(since, until, resolution, seq)
-		if err != nil {
-			return result, err
-		}
 	}
 
 	return result, nil

@@ -466,16 +466,41 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, wit
 		update.Resolution = resolution
 		update.Values = make(map[string]map[string][]msg2api.Measurement)
 		for dev, svalues := range readings {
-			dupdate := make(map[string][]msg2api.Measurement, len(svalues))
-			update.Values[dev.Id()] = dupdate
+			update.Values[dev.Id()] = make(map[string][]msg2api.Measurement, len(svalues))
 			for sensor, values := range svalues {
 				supdate := make([]msg2api.Measurement, 0, len(values))
 				for _, val := range values {
 					supdate = append(supdate, msg2api.Measurement{val.Time, val.Value})
 				}
-				dupdate[sensor.Id()] = supdate
+				update.Values[dev.Id()][sensor.Id()] = supdate
 			}
 		}
+
+		// Append already aggregated second values
+		if resolution == "raw" {
+			add_readings, err := user.LoadReadings(since, until, "second", sensors)
+			if err != nil {
+				return err
+			}
+
+			for dev, svalues := range add_readings {
+				if _, ok := update.Values[dev.Id()]; !ok {
+					update.Values[dev.Id()] = make(map[string][]msg2api.Measurement, len(svalues))
+				}
+				for sensor, values := range svalues {
+					supdate := make([]msg2api.Measurement, 0, len(values))
+					for _, val := range values {
+						supdate = append(supdate, msg2api.Measurement{val.Time, val.Value})
+					}
+					if _, ok := update.Values[dev.Id()][sensor.Id()]; ok {
+						update.Values[dev.Id()][sensor.Id()] = append(update.Values[dev.Id()][sensor.Id()], supdate...)
+					} else {
+						update.Values[dev.Id()][sensor.Id()] = supdate
+					}
+				}
+			}
+		}
+
 		return api.server.SendUpdate(update)
 	})
 }
