@@ -406,6 +406,7 @@ func (api *WsUserApi) Run() error {
 	}
 
 	api.server = server
+	api.server.GetMetadata = api.doGetMetadata
 	api.server.GetValues = api.doGetValues
 	api.server.RequestRealtimeUpdates = api.doRequestRealtimeUpdates
 	return api.server.Run()
@@ -417,7 +418,7 @@ func (api *WsUserApi) Close() {
 	}
 }
 
-func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, withMetadata bool) error {
+func (api *WsUserApi) doGetMetadata() error {
 	return api.Ctx.Db.View(func(tx db.Tx) error {
 		user := tx.User(api.User)
 		if user == nil {
@@ -432,30 +433,45 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, wit
 			}
 			sensors[dev] = slist
 		}
-		if withMetadata {
-			meta := make(map[string]msg2api.DeviceMetadata)
-			for did, dev := range user.Devices() {
-				meta[did] = msg2api.DeviceMetadata{
-					Name:    dev.Name(),
-					Sensors: make(map[string]msg2api.SensorMetadata),
-				}
-				for sid, sensor := range dev.Sensors() {
-					name := sensor.Name()
-					unit := sensor.Unit()
-					port := sensor.Port()
-					meta[dev.Id()].Sensors[sid] = msg2api.SensorMetadata{
-						Name: &name,
-						Unit: &unit,
-						Port: &port,
-					}
+
+		meta := make(map[string]msg2api.DeviceMetadata)
+		for did, dev := range user.Devices() {
+			meta[did] = msg2api.DeviceMetadata{
+				Name:    dev.Name(),
+				Sensors: make(map[string]msg2api.SensorMetadata),
+			}
+			for sid, sensor := range dev.Sensors() {
+				name := sensor.Name()
+				unit := sensor.Unit()
+				port := sensor.Port()
+				meta[dev.Id()].Sensors[sid] = msg2api.SensorMetadata{
+					Name: &name,
+					Unit: &unit,
+					Port: &port,
 				}
 			}
-			if err := api.server.SendMetadata(msg2api.UserEventMetadataArgs{meta}); err != nil {
-				return err
+		}
+		return api.server.SendMetadata(msg2api.UserEventMetadataArgs{Devices: meta})
+	})
+}
+
+func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, sensors map[string][]string) error {
+	return api.Ctx.Db.View(func(tx db.Tx) error {
+		user := tx.User(api.User)
+		if user == nil {
+			return notAuthorized
+		}
+
+		dbsensors := make(map[db.Device][]db.Sensor)
+		for device, sensors := range sensors {
+			dbdevice := user.Device(device)
+			dbsensors[dbdevice] = make([]db.Sensor, len(sensors))
+			for idx, sensor := range sensors {
+				dbsensors[dbdevice][idx] = dbdevice.Sensor(sensor)
 			}
 		}
 
-		readings, err := user.LoadReadings(since, until, resolution, sensors)
+		readings, err := user.LoadReadings(since, until, resolution, dbsensors)
 		if err != nil {
 			return err
 		}
@@ -468,7 +484,7 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, wit
 			for sensor, values := range svalues {
 				supdate := make([]msg2api.Measurement, 0, len(values))
 				for _, val := range values {
-					supdate = append(supdate, msg2api.Measurement{val.Time, val.Value})
+					supdate = append(supdate, msg2api.Measurement{Time: val.Time, Value: val.Value})
 				}
 				update.Values[dev.Id()][sensor.Id()] = supdate
 			}
@@ -476,7 +492,7 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, wit
 
 		// Append already aggregated second values
 		if resolution == "raw" {
-			addReadings, err := user.LoadReadings(since, until, "second", sensors)
+			addReadings, err := user.LoadReadings(since, until, "second", dbsensors)
 			if err != nil {
 				return err
 			}
@@ -488,7 +504,7 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, wit
 				for sensor, values := range svalues {
 					supdate := make([]msg2api.Measurement, 0, len(values))
 					for _, val := range values {
-						supdate = append(supdate, msg2api.Measurement{val.Time, val.Value})
+						supdate = append(supdate, msg2api.Measurement{Time: val.Time, Value: val.Value})
 					}
 					if _, ok := update.Values[dev.Id()][sensor.Id()]; ok {
 						update.Values[dev.Id()][sensor.Id()] = append(update.Values[dev.Id()][sensor.Id()], supdate...)

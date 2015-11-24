@@ -10,7 +10,8 @@ import (
 type UserServer struct {
 	*apiBase
 
-	GetValues              func(since, until time.Time, resolution string, withMetadata bool) error
+	GetMetadata            func() error
+	GetValues              func(since, until time.Time, resolution string, sensors map[string][]string) error
 	RequestRealtimeUpdates func(sensors map[string]map[string][]string) error
 }
 
@@ -26,6 +27,9 @@ func (u *UserServer) Run() error {
 		var opError *Error
 
 		switch msg.Command {
+		case "getMetadata":
+			opError = u.doGetMetadata(&msg)
+
 		case "getValues":
 			opError = u.doGetValues(&msg)
 
@@ -40,8 +44,6 @@ func (u *UserServer) Run() error {
 			u.socket.WriteJSON(MessageOut{Error: opError})
 		}
 	}
-
-	return nil
 }
 
 func (u *UserServer) SendUpdate(values UserEventUpdateArgs) error {
@@ -50,6 +52,21 @@ func (u *UserServer) SendUpdate(values UserEventUpdateArgs) error {
 
 func (u *UserServer) SendMetadata(data UserEventMetadataArgs) error {
 	return u.socket.WriteJSON(MessageOut{Command: "metadata", Args: data})
+}
+
+func (u *UserServer) doGetMetadata(cmd *MessageIn) *Error {
+	var err error
+
+	if u.GetMetadata == nil {
+		return operationFailed("not supported")
+	}
+
+	err = u.GetMetadata()
+
+	if err != nil {
+		return operationFailed(err.Error())
+	}
+	return nil
 }
 
 func (u *UserServer) doGetValues(cmd *MessageIn) *Error {
@@ -67,7 +84,7 @@ func (u *UserServer) doGetValues(cmd *MessageIn) *Error {
 	err = u.GetValues(time.Unix(int64(args.SinceUnixMs/1000), int64(args.SinceUnixMs)%1000*1e6),
 		time.Unix(int64(args.UntilUnixMs/1000), int64(args.UntilUnixMs)%1000*1e6),
 		args.TimeResolution,
-		args.WithMetadata)
+		args.Sensors)
 
 	if err != nil {
 		return operationFailed(err.Error())
@@ -95,7 +112,7 @@ func (u *UserServer) doRequestRealtimeUpdates(cmd *MessageIn) *Error {
 }
 
 func NewUserServer(w http.ResponseWriter, r *http.Request) (*UserServer, error) {
-	base, err := initApiBaseFromHttp(w, r, []string{userApiProtocolV1})
+	base, err := initApiBaseFromHttp(w, r, []string{userApiProtocolV3})
 	if err != nil {
 		return nil, err
 	}
