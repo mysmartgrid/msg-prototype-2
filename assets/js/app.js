@@ -21,13 +21,14 @@ var Msg2Socket;
             configurable: true
         });
         Socket.prototype._callHandlers = function (handlers, param) {
-            for (var i in handlers) {
+            for (var _i = 0; _i < handlers.length; _i++) {
+                var handler = handlers[_i];
                 if (this.$rootScope.$$phase === "apply" || this.$rootScope.$$phase === "$digest") {
-                    handlers[i](param);
+                    handler(param);
                 }
                 else {
                     this.$rootScope.$apply(function (scope) {
-                        handlers[i](param);
+                        handler(param);
                     });
                 }
             }
@@ -135,6 +136,299 @@ var Msg2Socket;
     Msg2Socket.Socket = Socket;
     ;
 })(Msg2Socket || (Msg2Socket = {}));
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Utils;
+(function (Utils) {
+    var ExtArray = (function (_super) {
+        __extends(ExtArray, _super);
+        function ExtArray() {
+            _super.apply(this, arguments);
+        }
+        ExtArray.prototype.contains = function (element) {
+            var i = this.indexOf(element);
+            return i !== -1;
+        };
+        ExtArray.prototype.remove = function (element) {
+            var i = this.indexOf(element);
+            if (i !== -1) {
+                this.splice(i, 1);
+            }
+        };
+        ExtArray.prototype.removeWhere = function (pred) {
+            var i = this.findIndex(pred);
+            while (i !== -1) {
+                this.splice(i, 1);
+                var i = this.findIndex(pred);
+            }
+        };
+        return ExtArray;
+    })(Array);
+    Utils.ExtArray = ExtArray;
+})(Utils || (Utils = {}));
+var Common;
+(function (Common) {
+    function forEachSensor(map, f) {
+        for (var deviceId in map) {
+            for (var sensorId in map[deviceId]) {
+                f(deviceId, sensorId, map[deviceId][sensorId]);
+            }
+        }
+    }
+    Common.forEachSensor = forEachSensor;
+    function updateProperties(target, source) {
+        var wasUpdated = false;
+        for (var prop in target) {
+            if (target[prop] !== source[prop]) {
+                target[prop] = source[prop];
+                wasUpdated = true;
+            }
+        }
+        return wasUpdated;
+    }
+    Common.updateProperties = updateProperties;
+})(Common || (Common = {}));
+/// <reference path="utils.ts"/>
+/// <reference path="common.ts"/>
+/// <reference path="msg2socket.ts" />
+var ExtArray = Utils.ExtArray;
+var UpdateDispatcher;
+(function (UpdateDispatcher_1) {
+    ;
+    UpdateDispatcher_1.SupportedResolutions = new Set(["raw", "second", "minute", "hour", "day", "week", "month", "year"]);
+    UpdateDispatcher_1.UpdateDispatcherFactory = ["WSUserClient",
+        function (wsClient, $interval) {
+            return new UpdateDispatcher(wsClient, $interval);
+        }];
+    var UpdateDispatcher = (function () {
+        function UpdateDispatcher(_wsClient, $interval) {
+            var _this = this;
+            this._wsClient = _wsClient;
+            this.$interval = $interval;
+            this._devices = {};
+            this._subscribers = {};
+            this._InitialCallbacks = new Array();
+            _wsClient.onOpen(function (error) {
+                _wsClient.onMetadata(function (metadata) { return _this._updateMetadata(metadata); });
+                _wsClient.onUpdate(function (data) { return _this._updateValues(data); });
+                _this._hasInitialMetadata = false;
+                _this._wsClient.requestValues(0, 0, "second", true);
+            });
+        }
+        Object.defineProperty(UpdateDispatcher.prototype, "devices", {
+            get: function () {
+                return this._devices;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        UpdateDispatcher.prototype.subscribeSensor = function (deviceId, sensorId, resolution, start, end, subscriber) {
+            if (this._devices[deviceId] === undefined) {
+                throw new Error("Unknown device");
+            }
+            if (this._devices[deviceId] === undefined) {
+                throw new Error("Unknown device");
+            }
+            if (!UpdateDispatcher_1.SupportedResolutions.has(resolution)) {
+                throw new Error("Unsupported resolution");
+            }
+            if (this._subscribers[deviceId][sensorId][resolution] === undefined) {
+                this._subscribers[deviceId][sensorId][resolution] = new ExtArray();
+            }
+            this._subscribers[deviceId][sensorId][resolution].push({ start: start, end: end, subscriber: subscriber });
+            if (end === null) {
+                var request = {};
+                request[deviceId] = {};
+                request[deviceId][resolution] = [sensorId];
+                this._wsClient.requestRealtimeUpdates(request);
+            }
+        };
+        UpdateDispatcher.prototype.unsubscribeSensor = function (deviceId, sensorId, resolution, subscriber, start, end) {
+            if (this._devices[deviceId] === undefined) {
+                throw new Error("Unknown device");
+            }
+            if (this._devices[deviceId] === undefined) {
+                throw new Error("Unknown device");
+            }
+            if (this._subscribers[deviceId][sensorId][resolution] === undefined) {
+                throw new Error("No subscribers for this resolution");
+            }
+            if (start === undefined && end === undefined) {
+                this._subscribers[deviceId][sensorId][resolution].removeWhere(function (settings) { return settings.subscriber == subscriber; });
+            }
+            else if (start !== undefined && end !== undefined) {
+                this._subscribers[deviceId][sensorId][resolution].removeWhere(function (settings) {
+                    return settings.subscriber === subscriber &&
+                        settings.start === start &&
+                        settings.end === end;
+                });
+            }
+            else {
+                throw new Error("Either start or end missing");
+            }
+        };
+        UpdateDispatcher.prototype.unsubscribeAll = function (subscriber) {
+            var _this = this;
+            Common.forEachSensor(this._subscribers, function (deviceId, sensorId, sensor) {
+                for (var resolution in sensor) {
+                    _this.unsubscribeSensor(deviceId, sensorId, resolution, subscriber);
+                }
+            });
+        };
+        UpdateDispatcher.prototype.onInitialMetadata = function (callback) {
+            if (!this._hasInitialMetadata) {
+                this._InitialCallbacks.push(callback);
+            }
+            else {
+                callback();
+            }
+        };
+        UpdateDispatcher.prototype._updateMetadata = function (metadata) {
+            console.log(metadata);
+            for (var deviceId in metadata.devices) {
+                // Create device if necessary
+                if (this._devices[deviceId] === undefined) {
+                    this._devices[deviceId] = {
+                        name: null,
+                        sensors: {}
+                    };
+                }
+                // Add space for subscribers if necessary
+                if (this._subscribers[deviceId] === undefined) {
+                    this._subscribers[deviceId] = {};
+                }
+                var deviceName = metadata.devices[deviceId].name;
+                //TODO: Redo this check as soon as we have more device metadata
+                if (deviceName !== undefined && this._devices[deviceId].name !== deviceName) {
+                    console.log("Device name change '" + deviceName + "' '" + this._devices[deviceId].name + "'");
+                    this._devices[deviceId].name = deviceName;
+                    this._emitDeviceMetadataUpdate(deviceId);
+                }
+                // Add or update sensors
+                for (var sensorId in metadata.devices[deviceId].sensors) {
+                    // Add space for subscribers
+                    if (this._subscribers[deviceId][sensorId] === undefined) {
+                        this._subscribers[deviceId][sensorId] = {};
+                    }
+                    // Add empty entry to make updateProperties work
+                    if (this._devices[deviceId].sensors[sensorId] === undefined) {
+                        this._devices[deviceId].sensors[sensorId] = {
+                            name: null,
+                            unit: null,
+                            port: null,
+                        };
+                    }
+                    // Update metatdata and inform subscribers
+                    var wasUpdated = Common.updateProperties(this._devices[deviceId].sensors[sensorId], metadata.devices[deviceId].sensors[sensorId]);
+                    if (wasUpdated) {
+                        this._emitSensorMetadataUpdate(deviceId, sensorId);
+                    }
+                }
+                // Delete sensors
+                for (var sensorId in metadata.devices[deviceId].deletedSensors) {
+                    delete this._devices[deviceId].sensors[sensorId];
+                    this._emitRemoveSensor(deviceId, sensorId);
+                    delete this._subscribers[deviceId][sensorId];
+                }
+            }
+            if (!this._hasInitialMetadata) {
+                this._hasInitialMetadata = true;
+                for (var _i = 0, _a = this._InitialCallbacks; _i < _a.length; _i++) {
+                    var callback = _a[_i];
+                    callback();
+                }
+            }
+        };
+        UpdateDispatcher.prototype._emitDeviceMetadataUpdate = function (deviceId) {
+            // Notify every subscriber to the devices sensors once
+            var notified = new Set();
+            for (var sensorId in this._subscribers[deviceId]) {
+                for (var resolution in this._subscribers[deviceId][sensorId]) {
+                    for (var _i = 0, _a = this._subscribers[deviceId][sensorId][resolution]; _i < _a.length; _i++) {
+                        var subscriber = _a[_i].subscriber;
+                        if (!notified.has(subscriber)) {
+                            subscriber.updateDeviceMetadata(deviceId);
+                            notified.add(subscriber);
+                        }
+                    }
+                }
+            }
+        };
+        UpdateDispatcher.prototype._emitSensorMetadataUpdate = function (deviceId, sensorId) {
+            // Notify every subscriber to the sensor once
+            var notified = new Set();
+            for (var resolution in this._subscribers[deviceId][sensorId]) {
+                for (var _i = 0, _a = this._subscribers[deviceId][sensorId][resolution]; _i < _a.length; _i++) {
+                    var subscriber = _a[_i].subscriber;
+                    if (!notified.has(subscriber)) {
+                        subscriber.updateSensorMetadata(deviceId, sensorId);
+                        notified.add(subscriber);
+                    }
+                }
+            }
+        };
+        UpdateDispatcher.prototype._emitRemoveSensor = function (deviceId, sensorId) {
+            // Notify every subscriber to the sensor once
+            var notified = new Set();
+            for (var resolution in this._subscribers[deviceId][sensorId]) {
+                for (var _i = 0, _a = this._subscribers[deviceId][sensorId][resolution]; _i < _a.length; _i++) {
+                    var subscriber = _a[_i].subscriber;
+                    if (!notified.has(subscriber)) {
+                        subscriber.removeSensor(deviceId, sensorId);
+                        notified.add(subscriber);
+                    }
+                }
+            }
+        };
+        UpdateDispatcher.prototype._updateValues = function (data) {
+            var resolution = data.resolution, values = data.values;
+            for (var deviceId in values) {
+                for (var sensorId in values[deviceId]) {
+                    for (var _i = 0, _a = values[deviceId][sensorId]; _i < _a.length; _i++) {
+                        var _b = _a[_i], timestamp = _b[0], value = _b[1];
+                        this._emitValueUpdate(deviceId, sensorId, resolution, timestamp, value);
+                    }
+                }
+            }
+        };
+        UpdateDispatcher.prototype._emitValueUpdate = function (deviceId, sensorId, resolution, timestamp, value) {
+            if (this._subscribers[deviceId][sensorId][resolution] !== undefined) {
+                for (var _i = 0, _a = this._subscribers[deviceId][sensorId][resolution]; _i < _a.length; _i++) {
+                    var _b = _a[_i], start = _b.start, end = _b.end, subscriber = _b.subscriber;
+                    if (start <= timestamp && (end >= timestamp || end === null)) {
+                        subscriber.updateValue(deviceId, sensorId, resolution, timestamp, value);
+                    }
+                }
+            }
+        };
+        return UpdateDispatcher;
+    })();
+    UpdateDispatcher_1.UpdateDispatcher = UpdateDispatcher;
+    var DummySubscriber = (function () {
+        function DummySubscriber() {
+        }
+        DummySubscriber.prototype.updateValue = function (deviceId, sensorId, resolution, timestamp, value) {
+            console.log("Update for value " + deviceId + ":" + sensorId + " " + resolution + " " + timestamp + " " + value);
+        };
+        DummySubscriber.prototype.updateDeviceMetadata = function (deviceId) {
+            console.log("Update for device metadata " + deviceId);
+        };
+        DummySubscriber.prototype.updateSensorMetadata = function (deviceId, sensorId) {
+            console.log("Update for sensor metadata " + deviceId + ":" + sensorId);
+        };
+        DummySubscriber.prototype.removeDevice = function (deviceId) {
+            console.log("Removed device " + deviceId);
+        };
+        DummySubscriber.prototype.removeSensor = function (deviceId, sensorId) {
+            console.log("Remove sensor " + deviceId + ":" + sensorId);
+        };
+        return DummySubscriber;
+    })();
+    UpdateDispatcher_1.DummySubscriber = DummySubscriber;
+})(UpdateDispatcher || (UpdateDispatcher = {}));
 /// <reference path="es6-shim.d.ts" />
 /// <reference path="msg2socket.ts" />
 "use strict";
@@ -174,6 +468,7 @@ var Store;
                 series.data = series.data.filter(function (point) {
                     return point[0] >= oldest;
                 });
+                //Series should not start or end with null after clamping
                 if (series.data.length > 0) {
                     if (series.data[0][1] === null) {
                         series.data.splice(0, 1);
@@ -332,7 +627,7 @@ var Directives;
                 }
             }
             this.$scope.sensorColors = this.store.getColors();
-            console.log(this.$scope.sensorColors);
+            //console.log(this.$scope.sensorColors);
         };
         SensorCollectionGraphController.prototype.updateValues = function (deviceID, sensorID, timestamp, value) {
             //console.log("Update: " + deviceID + ":" + sensorID + " " + timestamp + " " + value);
@@ -408,7 +703,7 @@ var Directives;
     }
     Directives.sensorKey = sensorKey;
     var GraphViewController = (function () {
-        function GraphViewController($scope, $timeout, wsclient) {
+        function GraphViewController($scope, $timeout, wsclient, updateDispatcher) {
             var _this = this;
             this.$scope = $scope;
             this.$timeout = $timeout;
@@ -506,7 +801,7 @@ var Directives;
         };
         GraphViewController.prototype.registerGraph = function (unit, graph) {
             this.graphs[unit] = graph;
-            console.log(this.graphs);
+            //console.log(this.graphs);
         };
         return GraphViewController;
     })();
@@ -521,7 +816,7 @@ var Directives;
             // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
             this.link = function ($scope, element, attrs, controller) {
             };
-            this.controller = ["$scope", "$timeout", "WSUserClient", GraphViewController];
+            this.controller = ["$scope", "$timeout", "WSUserClient", "UpdateDispatcher", GraphViewController];
         }
         ;
         return GraphViewDirective;
@@ -535,6 +830,7 @@ var Directives;
 /// <reference path="angular.d.ts" />
 /// <reference path="bootstrap.d.ts" />
 /// <reference path="msg2socket.ts" />
+/// <reference path="updatedispatcher.ts"/>
 /// <reference path="sensorvaluestore.ts" />
 /// <reference path="graphview.ts" />
 /// <reference path="sensorcollectiongraph.ts" />
@@ -549,6 +845,7 @@ angular.module("msgp", [])
             throw "websocket support required";
         return new Msg2Socket.Socket($rootScope);
     }])
+    .factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
     .directive("sensorCollectionGraph", Directives.SensorCollectionGraphFactory())
     .directive("graphView", Directives.GraphViewFactory())
     .directive("deviceEditor", [function () {
@@ -663,8 +960,9 @@ angular.module("msgp", [])
             }
         };
     }])
-    .controller("GraphPage", ["WSUserClient", "wsurl", "$http", function (wsclient, wsurl, $http) {
+    .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "UpdateDispatcher", function (wsclient, wsurl, $http, dispatcher) {
         wsclient.connect(wsurl);
+        dispatcher.onInitialMetadata(function () { return dispatcher.subscribeSensor("99a1f8639246d5ae3c3c4b24026ab20b", "010bd04b2dda7fe0823e1759906e5c56", "raw", 0, null, new UpdateDispatcher.DummySubscriber()); });
     }])
     .controller("DeviceListController", ["$scope", "$http", "devices", function ($scope, $http, devices) {
         $scope.devices = devices;
@@ -683,4 +981,4 @@ angular.module("msgp", [])
             });
         };
     }]);
-//# sourceMappingURL=/js/app.js.map
+//# sourceMappingURL=app.js.map

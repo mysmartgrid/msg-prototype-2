@@ -56,7 +56,7 @@ module Directives {
 			}
 
 			this.$scope.sensorColors = this.store.getColors();
-			console.log(this.$scope.sensorColors);
+			//console.log(this.$scope.sensorColors);
 		}
 
 		public updateValues(deviceID : string, sensorID : string, timestamp : number, value: number) {

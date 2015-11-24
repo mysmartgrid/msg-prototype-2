@@ -95,12 +95,12 @@ module Msg2Socket {
 		}
 
 		private _callHandlers<U>(handlers : ((p : U) => void)[], param : U) {
-			for(var i in handlers) {
+			for(var handler of handlers) {
 				if(this.$rootScope.$$phase === "apply" || this.$rootScope.$$phase === "$digest") {
-					handlers[i](param);
+					handler(param);
 				} else {
 					this.$rootScope.$apply(function(scope : angular.IScope) : any {
-						handlers[i](param);
+						handler(param);
 					});
 				}
 			}

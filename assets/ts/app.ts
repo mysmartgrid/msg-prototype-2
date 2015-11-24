@@ -3,6 +3,7 @@
 /// <reference path="bootstrap.d.ts" />
 
 /// <reference path="msg2socket.ts" />
+/// <reference path="updatedispatcher.ts"/>
 /// <reference path="sensorvaluestore.ts" />
 
 /// <reference path="graphview.ts" />
@@ -24,6 +25,7 @@ angular.module("msgp", [])
 		throw "websocket support required";
 	return new Msg2Socket.Socket($rootScope);
 }])
+.factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
 .directive("sensorCollectionGraph", Directives.SensorCollectionGraphFactory())
 .directive("graphView", Directives.GraphViewFactory())
 .directive("deviceEditor", [function() {
@@ -148,8 +150,15 @@ angular.module("msgp", [])
 		}
 	};
 }])
-.controller("GraphPage", ["WSUserClient", "wsurl", "$http", function(wsclient, wsurl, $http) {
+.controller("GraphPage", ["WSUserClient", "wsurl", "$http", "UpdateDispatcher", function(wsclient, wsurl, $http, dispatcher) {
 	wsclient.connect(wsurl);
+
+	dispatcher.onInitialMetadata(() => dispatcher.subscribeSensor("99a1f8639246d5ae3c3c4b24026ab20b",
+																	"010bd04b2dda7fe0823e1759906e5c56",
+																	"raw",
+																	0,
+																	null,
+																	new  UpdateDispatcher.DummySubscriber()))
 }])
 .controller("DeviceListController", ["$scope", "$http", "devices", function($scope, $http, devices) {
 	$scope.devices = devices;

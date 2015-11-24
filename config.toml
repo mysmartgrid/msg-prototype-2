@@ -7,9 +7,9 @@ db-dir        = "./"
 motherlode = true
 
 [postgres]
-user     = "msgp"
-password = "msgp"
-database = "msgp"
+user     = "msgpd"
+password = "msgpd"
+database = "msgpd"
 address  = "localhost"
 port     = "5432"
 

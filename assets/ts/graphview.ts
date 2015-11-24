@@ -33,7 +33,7 @@ module Directives {
 
 		private realtimeUpdateTimeout : ng.IPromise<any>;
 
-		constructor(private $scope : GraphViewScope, private $timeout : ng.ITimeoutService, private wsclient : Msg2Socket.Socket) {
+		constructor(private $scope : GraphViewScope, private $timeout : ng.ITimeoutService, private wsclient : Msg2Socket.Socket, updateDispatcher : any) {
 			this.$scope.sensors = {};
 
 			this.realtimeUpdateTimeout = null;
@@ -145,7 +145,7 @@ module Directives {
 
 		public registerGraph(unit : string, graph : SensorCollectionGraphController) : void {
 			this.graphs[unit] = graph;
-			console.log(this.graphs);
+			//console.log(this.graphs);
 		}
 
 
@@ -168,7 +168,7 @@ module Directives {
 
 		constructor() {};
 
-		public controller =	["$scope", "$timeout", "WSUserClient", GraphViewController];
+		public controller =	["$scope", "$timeout", "WSUserClient", "UpdateDispatcher", GraphViewController];
 	}
 
 

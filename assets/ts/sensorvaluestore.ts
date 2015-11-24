@@ -64,6 +64,7 @@ module Store {
 					return point[0] >= oldest;
 				});
 
+				//Series should not start or end with null after clamping
 				if(series.data.length > 0) {
 					if(series.data[0][1] === null) {
 						series.data.splice(0,1);

@@ -3,14 +3,16 @@
       "out": "../js/app.js",
       "target": "es5",
        "sourceMap": true,
-       "sourceRoot": "/ts/",
-       "mapRoot": "/js/"
+       "sourceRoot": "/ts/"
     },
     "files": [
       "app.ts",
       "graphview.ts",
       "sensorcollectiongraph",
       "msg2socket.ts",
-      "sensorvaluestore.ts"
+      "sensorvaluestore.ts",
+      "updatedispatcher.ts",
+      "common.ts",
+      "utils.ts"
     ]
 }
