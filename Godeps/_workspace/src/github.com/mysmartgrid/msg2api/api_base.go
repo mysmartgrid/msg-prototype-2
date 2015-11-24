@@ -11,7 +11,7 @@ const (
 	upgradeTimeout = 10 * time.Second
 
 	deviceApiProtocolV1 = "v1.device.msg"
-	userApiProtocolV1   = "v2.user.msg"
+	userApiProtocolV3   = "v3.user.msg"
 )
 
 var protocolNegotiationFailed = errors.New("protocol negotiation failed")

@@ -199,19 +199,19 @@ func (d *db) benchAddReadings(sensors map[User]map[Device][]Sensor, duration tim
 	return float64(count) / duration.Seconds()
 }
 
-func (d *db) RunBenchmark(usr_cnt, dev_cnt, sns_cnt int, duration time.Duration) {
+func (d *db) RunBenchmark(usrCnt, devCnt, snsCnt int, duration time.Duration) {
 	defer measureTime(time.Now(), "Benchmark")
 	d.clearDb()
-	d.benchAddUsers(usr_cnt)
-	d.benchAddDevices(dev_cnt)
-	sensors := d.benchAddSensors(sns_cnt)
+	d.benchAddUsers(usrCnt)
+	d.benchAddDevices(devCnt)
+	sensors := d.benchAddSensors(snsCnt)
 	rate := d.benchAddReadings(sensors, duration, time.Second*1)
 
 	log.Printf("==== Result ====")
-	log.Printf("Simulated %d users having %d devices having %d sensors", usr_cnt, dev_cnt, sns_cnt)
-	log.Printf("Total of %d sensors", usr_cnt*dev_cnt*sns_cnt)
+	log.Printf("Simulated %d users having %d devices having %d sensors", usrCnt, devCnt, snsCnt)
+	log.Printf("Total of %d sensors", usrCnt*devCnt*snsCnt)
 	log.Printf("Wrote %.2f values per second", rate)
-	log.Printf("%.2f v/s per device", rate/float64(usr_cnt*dev_cnt))
-	log.Printf("%.2f v/s per sensor", rate/float64(usr_cnt*dev_cnt*sns_cnt))
+	log.Printf("%.2f v/s per device", rate/float64(usrCnt*devCnt))
+	log.Printf("%.2f v/s per sensor", rate/float64(usrCnt*devCnt*snsCnt))
 
 }

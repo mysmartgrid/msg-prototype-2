@@ -15,6 +15,9 @@ const (
 var (
 	InvalidId = errors.New("id invalid")
 	IdExists  = errors.New("id exists")
+
+	noSensor            = errors.New("sensor not found")
+	deviceNotRegistered = errors.New("device not registered")
 )
 
 type db struct {
@@ -27,8 +30,9 @@ type db struct {
 	bufferAdd   chan uint64
 	bufferKill  chan uint64
 
-	realtimeSensors map[Device]map[string]map[Sensor]realtimeEntry
-	realtimeHandler func(values map[Device]map[string]map[Sensor][]Value)
+	realtimeSensors      map[string]map[uint64]*realtimeEntry
+	realtimeHandler      func(values map[string]map[string]map[string]map[string][]Value)
+	realtimeSensorsInput chan map[string][]Sensor
 }
 
 type bufferValue struct {
@@ -37,6 +41,7 @@ type bufferValue struct {
 }
 
 type realtimeEntry struct {
+	sensor                  Sensor
 	lastRequest, lastUpdate time.Time
 }
 
@@ -53,39 +58,39 @@ func (db *db) flushBuffer() {
 	db.bufferedValueCount = 0
 }
 
-func (d *db) manageBuffer() {
+func (db *db) manageBuffer() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer func() {
 		ticker.Stop()
-		d.flushBuffer()
+		db.flushBuffer()
 	}()
 
 	for {
 		select {
-		case bval, ok := <-d.bufferInput:
+		case bval, ok := <-db.bufferInput:
 			if !ok {
 				return
 			}
-			slice, found := d.bufferedValues[bval.key]
+			slice, found := db.bufferedValues[bval.key]
 			if !found {
 				log.Printf("adding value to bad key %v", bval.key)
 				continue
 			}
-			d.bufferedValues[bval.key] = append(slice, bval.value)
-			d.bufferedValueCount++
+			db.bufferedValues[bval.key] = append(slice, bval.value)
+			db.bufferedValueCount++
 
-			if d.bufferedValueCount >= bufferSize {
-				d.flushBuffer()
+			if db.bufferedValueCount >= bufferSize {
+				db.flushBuffer()
 			}
 
-		case key := <-d.bufferKill:
-			delete(d.bufferedValues, key)
+		case key := <-db.bufferKill:
+			delete(db.bufferedValues, key)
 
-		case key := <-d.bufferAdd:
-			d.bufferedValues[key] = make([]Value, 0, 4)
+		case key := <-db.bufferAdd:
+			db.bufferedValues[key] = make([]Value, 0, 4)
 
 		case <-ticker.C:
-			d.flushBuffer()
+			db.flushBuffer()
 		}
 	}
 }
@@ -111,7 +116,8 @@ func OpenDb(sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
 		bufferKill:     make(chan uint64),
 		bufferAdd:      make(chan uint64),
 
-		realtimeSensors: make(map[Device]map[string]map[Sensor]realtimeEntry),
+		realtimeSensors:      make(map[string]map[uint64]*realtimeEntry),
+		realtimeSensorsInput: make(chan map[string][]Sensor),
 	}
 
 	go result.manageBuffer()
@@ -137,13 +143,13 @@ func OpenDb(sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
 	return result, nil
 }
 
-func (d *db) Close() {
-	close(d.bufferInput)
-	d.sqldb.db.Close()
+func (db *db) Close() {
+	close(db.bufferInput)
+	db.sqldb.db.Close()
 }
 
-func (d *db) View(fn func(Tx) error) error {
-	t, err := d.sqldb.db.Begin()
+func (db *db) View(fn func(Tx) error) error {
+	t, err := db.sqldb.db.Begin()
 	if err != nil {
 		return err
 	}
@@ -154,7 +160,7 @@ func (d *db) View(fn func(Tx) error) error {
 		}
 	}()
 
-	err = fn(&tx{d, t})
+	err = fn(&tx{db, t})
 
 	if err != nil {
 		_ = t.Rollback()
@@ -166,8 +172,8 @@ func (d *db) View(fn func(Tx) error) error {
 	return nil
 }
 
-func (d *db) Update(fn func(Tx) error) error {
-	t, err := d.sqldb.db.Begin()
+func (db *db) Update(fn func(Tx) error) error {
+	t, err := db.sqldb.db.Begin()
 	if err != nil {
 		return err
 	}
@@ -178,7 +184,7 @@ func (d *db) Update(fn func(Tx) error) error {
 		}
 	}()
 
-	err = fn(&tx{d, t})
+	err = fn(&tx{db, t})
 
 	if err != nil {
 		_ = t.Rollback()
@@ -187,77 +193,117 @@ func (d *db) Update(fn func(Tx) error) error {
 	return t.Commit()
 }
 
-func (d *db) AddReading(sensor Sensor, time time.Time, value float64) error {
-	d.bufferInput <- bufferValue{sensor.DbId(), Value{time, value}}
+func (db *db) AddReading(sensor Sensor, time time.Time, value float64) error {
+	db.bufferInput <- bufferValue{sensor.DbId(), Value{time, value}}
 	return nil
 }
 
-func (d *db) SetRealtimeHandler(handler func(values map[Device]map[string]map[Sensor][]Value)) {
-	d.realtimeHandler = handler
+func (db *db) SetRealtimeHandler(handler func(values map[string]map[string]map[string]map[string][]Value)) {
+	db.realtimeHandler = handler
 }
 
-func (d *db) RequestRealtimeUpdates(sensors map[Device]map[string][]Sensor) {
-	for device, resolutions := range sensors {
-		for resolution, sens := range resolutions {
-			for _, sensor := range sens {
-				entry, ok := d.realtimeSensors[device][resolution][sensor]
-				if !ok {
-					d.realtimeSensors[device][resolution][sensor] = realtimeEntry{time.Now(), time.Now()}
-				} else {
-					entry.lastRequest = time.Now()
-				}
-			}
-		}
-	}
-}
-
-func (d *db) doRealtimeUpdates(resolution string) {
-	var interval time.Duration
-
-	switch resolution {
-	case "minute":
-		interval = time.Minute
-	case "hour":
-		interval = time.Hour
-	case "day", "week", "month", "year":
-		interval = time.Hour * 24
-	default:
-		return
-	}
+func (db *db) manageRealtimeSensors() {
+	lifetimeTicker := time.NewTicker(30 * time.Second)
+	updateTicker := time.NewTicker(1 * time.Minute)
+	defer func() {
+		lifetimeTicker.Stop()
+		updateTicker.Stop()
+	}()
 
 	for {
-		result := make(map[Device]map[string]map[Sensor][]Value)
-
-		for device, resolutions := range d.realtimeSensors {
-			for sensor, entry := range resolutions[resolution] {
-				values, err := d.sqldb.loadValuesSingle(entry.lastUpdate, time.Now(), resolution, sensor.DbId())
-				if err == nil {
-					result[device][resolution][sensor] = values
-					entry.lastUpdate = time.Now()
-				}
+		select {
+		case sensors, ok := <-db.realtimeSensorsInput:
+			if !ok {
+				return
 			}
-		}
-		d.realtimeHandler(result)
-		time.Sleep(interval)
-	}
-}
-
-func (d *db) Run() {
-	go func() {
-		for _, resolutions := range d.realtimeSensors {
-			for _, sensors := range resolutions {
-				for sensor, entry := range sensors {
-					if !entry.lastRequest.Add(time.Second * 30).After(time.Now()) {
-						delete(sensors, sensor)
+			for resolution, senses := range sensors {
+				if _, ok := db.realtimeSensors[resolution]; !ok {
+					db.realtimeSensors[resolution] = make(map[uint64]*realtimeEntry)
+				}
+				for _, sens := range senses {
+					if _, ok := db.realtimeSensors[resolution][sens.DbId()]; !ok {
+						db.realtimeSensors[resolution][sens.DbId()] = &realtimeEntry{sens, time.Now(), time.Now()}
+					} else {
+						db.realtimeSensors[resolution][sens.DbId()].lastRequest = time.Now()
 					}
 				}
 			}
-		}
-	}()
 
-	resolutions := [...]string{"minute", "hour", "day", "week", "month", "year"}
-	for _, res := range resolutions {
-		go d.doRealtimeUpdates(res)
+		case <-lifetimeTicker.C:
+			for _, sensorids := range db.realtimeSensors {
+				for sensorid, entry := range sensorids {
+					if entry.lastRequest.Add(time.Second * 40).Before(time.Now()) {
+						delete(sensorids, sensorid)
+					}
+				}
+			}
+
+		case <-updateTicker.C:
+			db.doRealtimeUpdates()
+		}
+	}
+}
+
+func (db *db) doRealtimeUpdates() {
+	result := make(map[string]map[string]map[string]map[string][]Value)
+	for resolution, sensorids := range db.realtimeSensors {
+		for sensorid, entry := range sensorids {
+			devvalues, err := db.sqldb.loadValues(entry.lastUpdate, time.Now(), resolution, []uint64{sensorid})
+			values := devvalues[sensorid]
+			if err == nil {
+				entry.lastUpdate = time.Now()
+				if len(values) > 0 {
+					user := entry.sensor.Device().User().Id()
+					device := entry.sensor.Device().Id()
+					if _, ok := result[user]; !ok {
+						result[user] = make(map[string]map[string]map[string][]Value)
+					}
+					if _, ok := result[user][device]; !ok {
+						result[user][device] = make(map[string]map[string][]Value)
+					}
+					if _, ok := result[user][device][resolution]; !ok {
+						result[user][device][resolution] = make(map[string][]Value)
+					}
+					result[user][device][resolution][entry.sensor.Id()] = values
+				}
+			}
+		}
+	}
+	db.realtimeHandler(result)
+}
+
+func (db *db) RequestRealtimeUpdates(user, device, resolution string, sensors []string) error {
+	senses := make([]Sensor, len(sensors))
+	err := db.View(func(tx Tx) error {
+		usr := tx.User(user)
+		if usr == nil {
+			return deviceNotRegistered
+		}
+		dev := usr.Device(device)
+		if dev == nil {
+			return deviceNotRegistered
+		}
+		for idx, sensor := range sensors {
+			sens := dev.Sensor(sensor)
+			if sens == nil {
+				return noSensor
+			}
+			senses[idx] = sens
+		}
+		return nil
+	})
+
+	if err != nil {
+		return err
 	}
 
+	result := make(map[string][]Sensor)
+	result[resolution] = senses
+	db.realtimeSensorsInput <- result
+
+	return err
+}
+
+func (db *db) Run() {
+	go db.manageRealtimeSensors()
 }

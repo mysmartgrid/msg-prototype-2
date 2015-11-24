@@ -20,12 +20,12 @@ type Db interface {
 	View(func(Tx) error) error
 
 	AddReading(sensor Sensor, time time.Time, value float64) error
-	SetRealtimeHandler(handler func(values map[Device]map[string]map[Sensor][]Value))
-	RequestRealtimeUpdates(sensors map[Device]map[string][]Sensor)
+	SetRealtimeHandler(handler func(values map[string]map[string]map[string]map[string][]Value))
+	RequestRealtimeUpdates(user, device, resolution string, sensors []string) error
 
 	Run()
 
-	RunBenchmark(usr_cnt, dev_cnt, sns_cnt int, duration time.Duration)
+	RunBenchmark(usrCount, devCnt, snsCnt int, duration time.Duration)
 }
 
 type User interface {
@@ -39,7 +39,7 @@ type User interface {
 	SetAdmin(b bool) error
 
 	Groups() map[string]Group
-	IsGroupAdmin(group_id string) bool
+	IsGroupAdmin(groupId string) bool
 
 	Id() string
 
@@ -69,7 +69,7 @@ type Device interface {
 	RemoveSensor(id string) error
 
 	Id() string
-	User() string
+	User() User
 	Key() []byte
 
 	Name() string
@@ -79,6 +79,7 @@ type Device interface {
 type Sensor interface {
 	Id() string
 	DbId() uint64
+	Device() Device
 
 	Name() string
 	SetName(string) error

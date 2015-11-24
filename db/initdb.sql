@@ -4,7 +4,7 @@
 
 -- Dumped from database version 9.3.9
 -- Dumped by pg_dump version 9.3.9
--- Started on 2015-11-05 11:39:50 CET
+-- Started on 2015-11-05 11:47:52 CET
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -22,18 +22,18 @@ CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 
 
 --
--- TOC entry 2068 (class 0 OID 0)
+-- TOC entry 2067 (class 0 OID 0)
 -- Dependencies: 185
 -- Name: EXTENSION plpgsql; Type: COMMENT; Schema: -; Owner: -
 --
 
-COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
+-- COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
 
 
 SET search_path = public, pg_catalog;
 
 --
--- TOC entry 199 (class 1255 OID 17846)
+-- TOC entry 198 (class 1255 OID 17846)
 -- Name: do_aggregate(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -55,8 +55,8 @@ CREATE FUNCTION do_aggregate() RETURNS bigint
 	)
 	where m.sensor is null
 ), insert_s as (
-	insert into measure_aggregated_seconds 
-	select 
+	insert into measure_aggregated_seconds
+	select
 		ts, 0, 0,sensor, 0
 	from non_exist_s
 	returning
@@ -77,8 +77,8 @@ CREATE FUNCTION do_aggregate() RETURNS bigint
 	)
 	where m.sensor is null
 ), insert_m as (
-	insert into measure_aggregated_minutes 
-	select 
+	insert into measure_aggregated_minutes
+	select
 		ts, 0, 0,sensor, 1
 	from non_exist_m
 	returning
@@ -99,8 +99,8 @@ CREATE FUNCTION do_aggregate() RETURNS bigint
 	)
 	where m.sensor is null
 ), insert_h as (
-	insert into measure_aggregated_hours 
-	select 
+	insert into measure_aggregated_hours
+	select
 		ts, 0, 0,sensor, 2
 	from non_exist_h
 	returning
@@ -122,10 +122,10 @@ CREATE FUNCTION do_aggregate() RETURNS bigint
 	where m.sensor is null
 ), insert_d as (
 	insert into measure_aggregated_days
-	select 
+	select
 		ts, 0, 0,sensor, 3
 	from non_exist_d
-	returning 
+	returning
 		"timestamp", sensor
 ),timestamps_w as (
 	select distinct
@@ -144,10 +144,10 @@ CREATE FUNCTION do_aggregate() RETURNS bigint
 	where m.sensor is null
 ), insert_w as (
 	insert into measure_aggregated_weeks
-	select 
+	select
 		ts, 0, 0,sensor, 4
 	from non_exist_w
-	returning 
+	returning
 		"timestamp", sensor
 ), timestamps_mo as (
 	select distinct
@@ -166,7 +166,7 @@ CREATE FUNCTION do_aggregate() RETURNS bigint
 	where m.sensor is null
 ), insert_mo as (
 	insert into measure_aggregated_months
-	select 
+	select
 		ts, 0, 0,sensor, 5
 	from non_exist_mo
 	returning
@@ -188,7 +188,7 @@ CREATE FUNCTION do_aggregate() RETURNS bigint
 	where m.sensor is null
 ), insert_y as (
 	insert into measure_aggregated_years
-	select 
+	select
 		ts, 0, 0,sensor, 6
 	from non_exist_y
 	returning 1
@@ -325,7 +325,7 @@ select count(*) from do_update_y;$$;
 
 
 --
--- TOC entry 200 (class 1255 OID 18086)
+-- TOC entry 199 (class 1255 OID 18086)
 -- Name: do_remove_old_values(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -371,30 +371,13 @@ WHERE sensor = s.sensor_seq
 END;$$;
 
 
---
--- TOC entry 198 (class 1255 OID 18591)
--- Name: measure_raw_insert_trigger(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION measure_raw_insert_trigger() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF NOT EXISTS(SELECT 1 FROM measure_updates WHERE sensor = NEW.sensor AND date_trunc('minute', NEW.timestamp) = timestamp) THEN
-	INSERT INTO measure_updates VALUES (date_trunc('minute',NEW.timestamp), NEW.sensor, true);
-    END IF;
-    RETURN NULL;
-END;
-$$;
-
-
 SET default_tablespace = '';
 
 SET default_with_oids = false;
 
 --
 -- TOC entry 171 (class 1259 OID 16633)
--- Name: devices; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: devices; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE devices (
@@ -407,7 +390,7 @@ CREATE TABLE devices (
 
 --
 -- TOC entry 175 (class 1259 OID 18087)
--- Name: groups; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: groups; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE groups (
@@ -417,7 +400,7 @@ CREATE TABLE groups (
 
 --
 -- TOC entry 179 (class 1259 OID 18358)
--- Name: measure_aggregated_days; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: measure_aggregated_days; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_days (
@@ -431,7 +414,7 @@ CREATE UNLOGGED TABLE measure_aggregated_days (
 
 --
 -- TOC entry 178 (class 1259 OID 18350)
--- Name: measure_aggregated_hours; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: measure_aggregated_hours; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_hours (
@@ -445,7 +428,7 @@ CREATE UNLOGGED TABLE measure_aggregated_hours (
 
 --
 -- TOC entry 177 (class 1259 OID 18342)
--- Name: measure_aggregated_minutes; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: measure_aggregated_minutes; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_minutes (
@@ -459,7 +442,7 @@ CREATE UNLOGGED TABLE measure_aggregated_minutes (
 
 --
 -- TOC entry 181 (class 1259 OID 18375)
--- Name: measure_aggregated_months; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: measure_aggregated_months; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_months (
@@ -473,7 +456,7 @@ CREATE UNLOGGED TABLE measure_aggregated_months (
 
 --
 -- TOC entry 176 (class 1259 OID 18334)
--- Name: measure_aggregated_seconds; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: measure_aggregated_seconds; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_seconds (
@@ -487,7 +470,7 @@ CREATE UNLOGGED TABLE measure_aggregated_seconds (
 
 --
 -- TOC entry 180 (class 1259 OID 18366)
--- Name: measure_aggregated_weeks; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: measure_aggregated_weeks; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_weeks (
@@ -501,7 +484,7 @@ CREATE UNLOGGED TABLE measure_aggregated_weeks (
 
 --
 -- TOC entry 182 (class 1259 OID 18383)
--- Name: measure_aggregated_years; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: measure_aggregated_years; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE UNLOGGED TABLE measure_aggregated_years (
@@ -515,7 +498,7 @@ CREATE UNLOGGED TABLE measure_aggregated_years (
 
 --
 -- TOC entry 174 (class 1259 OID 18054)
--- Name: measure_raw; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: measure_raw; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE UNLOGGED TABLE measure_raw (
@@ -527,7 +510,7 @@ CREATE UNLOGGED TABLE measure_raw (
 
 --
 -- TOC entry 184 (class 1259 OID 18506)
--- Name: sensor_groups; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: sensor_groups; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE sensor_groups (
@@ -538,7 +521,7 @@ CREATE TABLE sensor_groups (
 
 --
 -- TOC entry 172 (class 1259 OID 16646)
--- Name: sensors; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: sensors; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE sensors (
@@ -567,7 +550,7 @@ CREATE SEQUENCE sensors_sensor_seq_seq
 
 
 --
--- TOC entry 2069 (class 0 OID 0)
+-- TOC entry 2068 (class 0 OID 0)
 -- Dependencies: 173
 -- Name: sensors_sensor_seq_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
@@ -577,7 +560,7 @@ ALTER SEQUENCE sensors_sensor_seq_seq OWNED BY sensors.sensor_seq;
 
 --
 -- TOC entry 183 (class 1259 OID 18433)
--- Name: user_groups; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: user_groups; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE user_groups (
@@ -589,7 +572,7 @@ CREATE TABLE user_groups (
 
 --
 -- TOC entry 170 (class 1259 OID 16625)
--- Name: users; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+-- Name: users; Type: TABLE; Schema: public; Owner: -; Tablespace:
 --
 
 CREATE TABLE users (
@@ -601,7 +584,7 @@ CREATE TABLE users (
 
 
 --
--- TOC entry 1924 (class 2604 OID 16661)
+-- TOC entry 1923 (class 2604 OID 16661)
 -- Name: sensor_seq; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -609,8 +592,8 @@ ALTER TABLE ONLY sensors ALTER COLUMN sensor_seq SET DEFAULT nextval('sensors_se
 
 
 --
--- TOC entry 1930 (class 2606 OID 16640)
--- Name: device_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- TOC entry 1929 (class 2606 OID 16640)
+-- Name: device_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY devices
@@ -618,8 +601,8 @@ ALTER TABLE ONLY devices
 
 
 --
--- TOC entry 1936 (class 2606 OID 18094)
--- Name: groups_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- TOC entry 1935 (class 2606 OID 18094)
+-- Name: groups_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY groups
@@ -627,8 +610,8 @@ ALTER TABLE ONLY groups
 
 
 --
--- TOC entry 1940 (class 2606 OID 18513)
--- Name: sensor_groups_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- TOC entry 1939 (class 2606 OID 18513)
+-- Name: sensor_groups_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY sensor_groups
@@ -636,8 +619,8 @@ ALTER TABLE ONLY sensor_groups
 
 
 --
--- TOC entry 1932 (class 2606 OID 16685)
--- Name: sensor_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- TOC entry 1931 (class 2606 OID 16685)
+-- Name: sensor_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY sensors
@@ -645,8 +628,8 @@ ALTER TABLE ONLY sensors
 
 
 --
--- TOC entry 1934 (class 2606 OID 16670)
--- Name: seq_unique; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- TOC entry 1933 (class 2606 OID 16670)
+-- Name: seq_unique; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY sensors
@@ -654,8 +637,8 @@ ALTER TABLE ONLY sensors
 
 
 --
--- TOC entry 1938 (class 2606 OID 18440)
--- Name: user_group_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- TOC entry 1937 (class 2606 OID 18440)
+-- Name: user_group_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY user_groups
@@ -663,8 +646,8 @@ ALTER TABLE ONLY user_groups
 
 
 --
--- TOC entry 1928 (class 2606 OID 16632)
--- Name: users_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- TOC entry 1927 (class 2606 OID 16632)
+-- Name: users_pk; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace:
 --
 
 ALTER TABLE ONLY users
@@ -672,7 +655,7 @@ ALTER TABLE ONLY users
 
 
 --
--- TOC entry 1942 (class 2606 OID 16654)
+-- TOC entry 1941 (class 2606 OID 16654)
 -- Name: device_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -681,7 +664,7 @@ ALTER TABLE ONLY sensors
 
 
 --
--- TOC entry 1953 (class 2606 OID 18514)
+-- TOC entry 1952 (class 2606 OID 18514)
 -- Name: group_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -690,7 +673,7 @@ ALTER TABLE ONLY sensor_groups
 
 
 --
--- TOC entry 1952 (class 2606 OID 18456)
+-- TOC entry 1951 (class 2606 OID 18456)
 -- Name: groups_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -699,7 +682,7 @@ ALTER TABLE ONLY user_groups
 
 
 --
--- TOC entry 1943 (class 2606 OID 18057)
+-- TOC entry 1942 (class 2606 OID 18057)
 -- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -708,7 +691,7 @@ ALTER TABLE ONLY measure_raw
 
 
 --
--- TOC entry 1944 (class 2606 OID 18337)
+-- TOC entry 1943 (class 2606 OID 18337)
 -- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -717,7 +700,7 @@ ALTER TABLE ONLY measure_aggregated_seconds
 
 
 --
--- TOC entry 1945 (class 2606 OID 18345)
+-- TOC entry 1944 (class 2606 OID 18345)
 -- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -726,7 +709,7 @@ ALTER TABLE ONLY measure_aggregated_minutes
 
 
 --
--- TOC entry 1946 (class 2606 OID 18353)
+-- TOC entry 1945 (class 2606 OID 18353)
 -- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -735,7 +718,7 @@ ALTER TABLE ONLY measure_aggregated_hours
 
 
 --
--- TOC entry 1947 (class 2606 OID 18361)
+-- TOC entry 1946 (class 2606 OID 18361)
 -- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -744,7 +727,7 @@ ALTER TABLE ONLY measure_aggregated_days
 
 
 --
--- TOC entry 1948 (class 2606 OID 18369)
+-- TOC entry 1947 (class 2606 OID 18369)
 -- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -753,7 +736,7 @@ ALTER TABLE ONLY measure_aggregated_weeks
 
 
 --
--- TOC entry 1949 (class 2606 OID 18378)
+-- TOC entry 1948 (class 2606 OID 18378)
 -- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -762,7 +745,7 @@ ALTER TABLE ONLY measure_aggregated_months
 
 
 --
--- TOC entry 1950 (class 2606 OID 18386)
+-- TOC entry 1949 (class 2606 OID 18386)
 -- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -771,7 +754,7 @@ ALTER TABLE ONLY measure_aggregated_years
 
 
 --
--- TOC entry 1954 (class 2606 OID 18519)
+-- TOC entry 1953 (class 2606 OID 18519)
 -- Name: sensor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -780,7 +763,7 @@ ALTER TABLE ONLY sensor_groups
 
 
 --
--- TOC entry 1941 (class 2606 OID 16641)
+-- TOC entry 1940 (class 2606 OID 16641)
 -- Name: user_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -789,7 +772,7 @@ ALTER TABLE ONLY devices
 
 
 --
--- TOC entry 1951 (class 2606 OID 18451)
+-- TOC entry 1950 (class 2606 OID 18451)
 -- Name: users_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -797,7 +780,7 @@ ALTER TABLE ONLY user_groups
     ADD CONSTRAINT users_fk FOREIGN KEY (user_id) REFERENCES users(user_id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 
--- Completed on 2015-11-05 11:39:50 CET
+-- Completed on 2015-11-05 11:47:52 CET
 
 --
 -- PostgreSQL database dump complete

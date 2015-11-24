@@ -25,13 +25,13 @@ func (u *user) init(password string) error {
 }
 
 func (u *user) HasPassword(pw string) bool {
-	var pw_hash []byte
-	err := u.tx.QueryRow(`SELECT pw_hash FROM users WHERE user_id = $1`, u.id).Scan(&pw_hash)
+	var pwHash []byte
+	err := u.tx.QueryRow(`SELECT pw_hash FROM users WHERE user_id = $1`, u.id).Scan(&pwHash)
 	if err != nil {
 		return false
 	}
 
-	err = bcrypt.CompareHashAndPassword(pw_hash, []byte(pw))
+	err = bcrypt.CompareHashAndPassword(pwHash, []byte(pw))
 	return err == nil
 }
 
@@ -52,8 +52,8 @@ func (u *user) RemoveDevice(id string) error {
 }
 
 func (u *user) Device(id string) Device {
-	var device_id string
-	err := u.tx.QueryRow(`SELECT device_id FROM devices WHERE user_id = $1 and device_id = $2`, u.id, id).Scan(&device_id)
+	var deviceId string
+	err := u.tx.QueryRow(`SELECT device_id FROM devices WHERE user_id = $1 and device_id = $2`, u.id, id).Scan(&deviceId)
 	if err != nil {
 		return nil
 	}
@@ -114,24 +114,22 @@ func (u *user) Groups() map[string]Group {
 	return result
 }
 
-func (u *user) IsGroupAdmin(group_id string) bool {
-	var is_admin bool
-	err := u.tx.QueryRow(`SELECT is_admin FROM user_groups WHERE user_id = $1 AND group_id = $2`, u.id, group_id).Scan(&is_admin)
+func (u *user) IsGroupAdmin(groupId string) bool {
+	var isAdmin bool
+	err := u.tx.QueryRow(`SELECT is_admin FROM user_groups WHERE user_id = $1 AND group_id = $2`, u.id, groupId).Scan(&isAdmin)
 	if err == nil {
-		return is_admin
-	} else {
-		return false
+		return isAdmin
 	}
+	return false
 }
 
 func (u *user) IsAdmin() bool {
-	var is_admin bool
-	err := u.tx.QueryRow(`SELECT is_admin FROM users WHERE user_id = $1`, u.id).Scan(&is_admin)
+	var isAdmin bool
+	err := u.tx.QueryRow(`SELECT is_admin FROM users WHERE user_id = $1`, u.id).Scan(&isAdmin)
 	if err == nil {
-		return is_admin
-	} else {
-		return false
+		return isAdmin
 	}
+	return false
 }
 
 func (u *user) SetAdmin(b bool) error {

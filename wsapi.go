@@ -20,7 +20,6 @@ import (
 var (
 	notAuthorized    = errors.New("not authorized")
 	apiNotAuthorized = &msg2api.Error{Code: notAuthorized.Error()}
-	noSensor         = errors.New("sensor not found")
 
 	deviceNotRegistered     = errors.New("device not registered")
 	deviceAlreadyRegistered = errors.New("device already registered")
@@ -44,12 +43,14 @@ type WsApiContext struct {
 }
 
 func NewWsApiContext(d db.Db, hub *hub.Hub) *WsApiContext {
-	d.SetRealtimeHandler(func(values map[db.Device]map[string]map[db.Sensor][]db.Value) {
-		for dev, reses := range values {
-			for res, sensors := range reses {
-				for sensor, vals := range sensors {
-					for _, val := range vals {
-						hub.Publish(dev.User(), measurementWithMetadata{dev.Id(), sensor.Id(), val.Time, val.Value, res})
+	d.SetRealtimeHandler(func(values map[string]map[string]map[string]map[string][]db.Value) {
+		for user, devs := range values {
+			for dev, reses := range devs {
+				for res, sensors := range reses {
+					for sensor, vals := range sensors {
+						for _, val := range vals {
+							hub.Publish(user, measurementWithMetadata{dev, sensor, val.Time, val.Value, res})
+						}
 					}
 				}
 			}
@@ -255,7 +256,7 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 	}
 
 	return api.viewDevice(func(tx db.Tx, user db.User, device db.Device) *msg2api.Error {
-		for name, _ := range values {
+		for name := range values {
 			if device.Sensor(name) == nil {
 				return &msg2api.Error{Code: "no sensor", Extra: name}
 			}
@@ -280,8 +281,6 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 
 		return nil
 	})
-
-	return nil
 }
 
 func (api *WsDevApi) doAddSensor(name, unit string, port int32) *msg2api.Error {
@@ -407,6 +406,7 @@ func (api *WsUserApi) Run() error {
 	}
 
 	api.server = server
+	api.server.GetMetadata = api.doGetMetadata
 	api.server.GetValues = api.doGetValues
 	api.server.RequestRealtimeUpdates = api.doRequestRealtimeUpdates
 	return api.server.Run()
@@ -418,7 +418,7 @@ func (api *WsUserApi) Close() {
 	}
 }
 
-func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, withMetadata bool) error {
+func (api *WsUserApi) doGetMetadata() error {
 	return api.Ctx.Db.View(func(tx db.Tx) error {
 		user := tx.User(api.User)
 		if user == nil {
@@ -433,30 +433,45 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, wit
 			}
 			sensors[dev] = slist
 		}
-		if withMetadata {
-			meta := make(map[string]msg2api.DeviceMetadata)
-			for did, dev := range user.Devices() {
-				meta[did] = msg2api.DeviceMetadata{
-					Name:    dev.Name(),
-					Sensors: make(map[string]msg2api.SensorMetadata),
-				}
-				for sid, sensor := range dev.Sensors() {
-					name := sensor.Name()
-					unit := sensor.Unit()
-					port := sensor.Port()
-					meta[dev.Id()].Sensors[sid] = msg2api.SensorMetadata{
-						Name: &name,
-						Unit: &unit,
-						Port: &port,
-					}
+
+		meta := make(map[string]msg2api.DeviceMetadata)
+		for did, dev := range user.Devices() {
+			meta[did] = msg2api.DeviceMetadata{
+				Name:    dev.Name(),
+				Sensors: make(map[string]msg2api.SensorMetadata),
+			}
+			for sid, sensor := range dev.Sensors() {
+				name := sensor.Name()
+				unit := sensor.Unit()
+				port := sensor.Port()
+				meta[dev.Id()].Sensors[sid] = msg2api.SensorMetadata{
+					Name: &name,
+					Unit: &unit,
+					Port: &port,
 				}
 			}
-			if err := api.server.SendMetadata(msg2api.UserEventMetadataArgs{meta}); err != nil {
-				return err
+		}
+		return api.server.SendMetadata(msg2api.UserEventMetadataArgs{Devices: meta})
+	})
+}
+
+func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, sensors map[string][]string) error {
+	return api.Ctx.Db.View(func(tx db.Tx) error {
+		user := tx.User(api.User)
+		if user == nil {
+			return notAuthorized
+		}
+
+		dbsensors := make(map[db.Device][]db.Sensor)
+		for device, sensors := range sensors {
+			dbdevice := user.Device(device)
+			dbsensors[dbdevice] = make([]db.Sensor, len(sensors))
+			for idx, sensor := range sensors {
+				dbsensors[dbdevice][idx] = dbdevice.Sensor(sensor)
 			}
 		}
 
-		readings, err := user.LoadReadings(since, until, resolution, sensors)
+		readings, err := user.LoadReadings(since, until, resolution, dbsensors)
 		if err != nil {
 			return err
 		}
@@ -465,53 +480,60 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, wit
 		update.Resolution = resolution
 		update.Values = make(map[string]map[string][]msg2api.Measurement)
 		for dev, svalues := range readings {
-			dupdate := make(map[string][]msg2api.Measurement, len(svalues))
-			update.Values[dev.Id()] = dupdate
+			update.Values[dev.Id()] = make(map[string][]msg2api.Measurement, len(svalues))
 			for sensor, values := range svalues {
 				supdate := make([]msg2api.Measurement, 0, len(values))
 				for _, val := range values {
-					supdate = append(supdate, msg2api.Measurement{val.Time, val.Value})
+					supdate = append(supdate, msg2api.Measurement{Time: val.Time, Value: val.Value})
 				}
-				dupdate[sensor.Id()] = supdate
+				update.Values[dev.Id()][sensor.Id()] = supdate
 			}
 		}
+
+		// Append already aggregated second values
+		if resolution == "raw" {
+			addReadings, err := user.LoadReadings(since, until, "second", dbsensors)
+			if err != nil {
+				return err
+			}
+
+			for dev, svalues := range addReadings {
+				if _, ok := update.Values[dev.Id()]; !ok {
+					update.Values[dev.Id()] = make(map[string][]msg2api.Measurement, len(svalues))
+				}
+				for sensor, values := range svalues {
+					supdate := make([]msg2api.Measurement, 0, len(values))
+					for _, val := range values {
+						supdate = append(supdate, msg2api.Measurement{Time: val.Time, Value: val.Value})
+					}
+					if _, ok := update.Values[dev.Id()][sensor.Id()]; ok {
+						update.Values[dev.Id()][sensor.Id()] = append(update.Values[dev.Id()][sensor.Id()], supdate...)
+					} else {
+						update.Values[dev.Id()][sensor.Id()] = supdate
+					}
+				}
+			}
+		}
+
 		return api.server.SendUpdate(update)
 	})
 }
 
 func (api *WsUserApi) doRequestRealtimeUpdates(sensors map[string]map[string][]string) error {
 	for dev, resolutions := range sensors {
-		err := api.Ctx.WithDevice(dev, func(dev *WsDevApi) error {
-			var err error = nil
-			for resolution, sensors := range resolutions {
-				if resolution == "raw" {
+		var err error
+		for resolution, sensors := range resolutions {
+			if resolution == "raw" {
+				err = api.Ctx.WithDevice(dev, func(dev *WsDevApi) error {
 					dev.RequestRealtimeUpdates(sensors)
-				} else if resolution == "second" {
-					err = noRealtime
-				} else {
-					dbsensors := make(map[db.Device]map[string][]db.Sensor)
-					err = api.Ctx.Db.View(func(tx db.Tx) error {
-						user := tx.User(api.User)
-						if user == nil {
-							return deviceNotRegistered
-						}
-						device := user.Device(dev.Device)
-						if user == nil {
-							return deviceNotRegistered
-						}
-						for idx, sensor := range sensors {
-							dbsensors[device][resolution][idx] = device.Sensor(sensor)
-							if dbsensors[device][resolution][idx] == nil {
-								return noSensor
-							}
-						}
-						return nil
-					})
-					dev.ctx.Db.RequestRealtimeUpdates(dbsensors)
-				}
+					return nil
+				})
+			} else if resolution == "second" {
+				err = noRealtime
+			} else {
+				err = api.Ctx.Db.RequestRealtimeUpdates(api.User, dev, resolution, sensors)
 			}
-			return err
-		})
+		}
 		if err != nil && err != deviceNotRegistered {
 			return err
 		}

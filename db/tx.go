@@ -29,8 +29,8 @@ func (tx *tx) AddUser(id, password string) (User, error) {
 }
 
 func (tx *tx) User(id string) User {
-	var user_id string
-	err := tx.QueryRow(`SELECT user_id FROM users WHERE user_id = $1`, id).Scan(&user_id)
+	var userId string
+	err := tx.QueryRow(`SELECT user_id FROM users WHERE user_id = $1`, id).Scan(&userId)
 	if err != nil {
 		return nil
 	}
@@ -92,8 +92,8 @@ func (tx *tx) RemoveGroup(id string) error {
 }
 
 func (tx *tx) Group(id string) Group {
-	var group_id string
-	err := tx.QueryRow(`SELECT group_id FROM groups WHERE group_id = $1`, id).Scan(&group_id)
+	var groupId string
+	err := tx.QueryRow(`SELECT group_id FROM groups WHERE group_id = $1`, id).Scan(&groupId)
 	if err != nil {
 		return nil
 	}
@@ -130,7 +130,7 @@ func (tx *tx) Groups() map[string]Group {
 }
 
 func (tx *tx) loadReadings(since, until time.Time, user User, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
-	keys := make([]uint64, 0)
+	var keys []uint64
 	for _, sensors := range sensors {
 		for _, sensor := range sensors {
 			keys = append(keys, sensor.DbId())

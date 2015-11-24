@@ -35,10 +35,10 @@ type DeviceCmdUpdateMetadataArgs DeviceMetadata
 type DeviceCmdRequestRealtimeUpdatesArgs []string
 
 type UserCmdGetValuesArgs struct {
-	SinceUnixMs    float64 `json:"since"`
-	UntilUnixMs    float64 `json:"until"`
-	TimeResolution string  `json:"resolution"`
-	WithMetadata   bool    `json:"withMetadata"`
+	SinceUnixMs    float64             `json:"since"`
+	UntilUnixMs    float64             `json:"until"`
+	TimeResolution string              `json:"resolution"`
+	Sensors        map[string][]string `json:"sensors"`
 }
 
 type UserCmdRequestRealtimeUpdatesArgs map[string]map[string][]string //[Device][Resolution][Sensor]
