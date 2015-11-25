@@ -87,6 +87,10 @@ func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]Value) error {
 }
 
 func (h *sqlHandler) loadValues(since, until time.Time, resolution string, sensorSeqs []uint64) (map[uint64][]Value, error) {
+	if len(sensorSeqs) < 1 {
+		return make(map[uint64][]Value), nil
+	}
+
 	var valueQuery string
 	var sensorSeqsList bytes.Buffer
 	for idx, seq := range sensorSeqs {
