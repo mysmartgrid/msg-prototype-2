@@ -856,6 +856,7 @@ var Directives;
             this.store = new Store.SensorValueStore();
             this.store.setSlidingWindowMode(true);
             this.store.setEnd(0);
+            this.$scope.devices = this._dispatcher.devices;
             $scope.$watch('maxAgeMs', function (start) { return _this.store.setStart(start); });
             $scope.$watch('assumeMissingAfterMs', function (timeout) { return _this.store.setTimeout(timeout); });
             $scope.$watch('sensors', function () { return _this.updateSensors(); });
