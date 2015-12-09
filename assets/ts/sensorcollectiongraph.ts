@@ -16,6 +16,7 @@ module Directives {
 		assumeMissingAfterMs : number;
 		sensors : Sensor[];
 		sensorColors : {[device : string] : {[sensor : string] : string}};
+		devices : UpdateDispatcher.DeviceMap;
 	}
 
 	export class SensorCollectionGraphController implements UpdateDispatcher.Subscriber{
@@ -31,6 +32,8 @@ module Directives {
 			this.store = new Store.SensorValueStore();
 			this.store.setSlidingWindowMode(true);
 			this.store.setEnd(0);
+
+			this.$scope.devices = this._dispatcher.devices;
 
 			$scope.$watch('maxAgeMs', (start : number) => this.store.setStart(start));
 

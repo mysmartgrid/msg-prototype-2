@@ -18,9 +18,9 @@
 			<td>
 				%%sensor.deviceID%% : %%sensor.sensorID%%
 			</td>
-			<td>%%sensor.name%%</td>
-			<td>%%sensor.deviceName%%</td>
-			<td>%%sensor.port%%</td>
+			<td>%%devices[sensor.deviceID].sensors[sensor.sensorID].name%%</td>
+			<td>%%devices[sensor.deviceID].name%%</td>
+			<td>%%devices[sensor.deviceID].sensors[sensor.sensorID].port%%</td>
 		</tr>
 	</table>
 </div>
