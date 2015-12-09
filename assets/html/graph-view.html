@@ -4,14 +4,14 @@
 
 <h3>%%title%%</h3>
 
-<div data-ng-repeat="(unit, sensorsForUnit) in sensors">
+<div data-ng-repeat="(unit, sensors) in sensorsByUnit">
 	<div>
 		<h4>Unit: %%unit%%</h4>
 		<div data-sensor-collection-graph=""
 			data-unit="unit"
-			data-sensors="sensorsForUnit"
+			data-sensors="sensors"
 			data-max-age-ms="2 * 60 * 1000"
-			data-assume-missing-after-ms="10 * 1000">
+			data-assume-missing-after-ms="60 * 1000">
 		</div>
 	</div>
 </div>

@@ -1,5 +1,6 @@
 /// <reference path="es6-shim.d.ts" />
 
+/// <reference path="common.ts"/>
 /// <reference path="msg2socket.ts" />
 
 "use strict";
@@ -17,8 +18,12 @@ module Store {
 		private _sensorMap: {[device : string] : {[sensor : string] : number}};
 		private _sensorLabels: {[device : string] : {[sensor : string] : string}};
 
-		private _interval : number;
+		private _start : number;
+		private _end : number;
+		private _slidingWindow : boolean;
+
 		private _timeout : number;
+
 
 		private _colorIndex : number;
 
@@ -28,7 +33,9 @@ module Store {
 			this._sensorLabels = {};
 
 			this._timeout = 2.5 * 60 * 1000;
-			this._interval = 5 * 60 * 1000;
+			this._start = 5 * 60 * 1000;
+			this._end = 0;
+			this._slidingWindow = true;
 
 			this._colorIndex = 0;
 		};
@@ -48,8 +55,16 @@ module Store {
 			return -1;
 		}
 
-		public setInterval(interval : number) : void {
-			this._interval = interval;
+		public setStart(start : number) : void {
+			this._start = start;
+		}
+
+		public setEnd(end : number) : void {
+			this._end = end;
+		}
+
+		public setSlidingWindowMode(mode : boolean) : void {
+			this._slidingWindow = mode;
 		}
 
 		public setTimeout(timeout : number) : void {
@@ -57,13 +72,20 @@ module Store {
 		}
 
 		public clampData() : void {
-			var oldest : number = (new Date()).getTime() - this._interval;
+			var oldest = this._start;
+			var newest = this._end;
+
+			if(this._slidingWindow) {
+				oldest = Common.now() - this._start;
+				newest = Common.now() - this._end;
+			}
 
 			this._series.forEach((series : TimeSeries) : void => {
 				series.data = series.data.filter((point : [number, number]) : boolean => {
-					return point[0] >= oldest;
+					return point[0] >= oldest && point[0] <= newest;
 				});
 
+				//Series should not start or end with null after clamping
 				if(series.data.length > 0) {
 					if(series.data[0][1] === null) {
 						series.data.splice(0,1);
@@ -151,12 +173,15 @@ module Store {
 				// Insert
 				data.splice(pos, 0, [timestamp, value]);
 
-				//Check if we need to remove a timeout in the past
+
+				//Check if we need to remove a null in the past
 				if(pos > 0 && data[pos - 1][1] === null && timestamp - data[pos - 1][0] < this._timeout) {
 					data.splice(pos - 1, 1);
+					// We delete something bevor pos, so we should move pos
+					pos -= 1;
 				}
 
-				//Check if we need to remove a timeout in the future
+				//Check if we need to remove a null in the future
 				if(pos < data.length - 1 && data[pos + 1][1] === null && data[pos + 1][0] - timestamp < this._timeout) {
 					data.splice(pos + 1, 1);
 				}
@@ -164,7 +189,6 @@ module Store {
 				//Check if a null in the past is needed
 				if(pos > 0 && data[pos - 1][1] !== null && timestamp - data[pos - 1][0] >= this._timeout) {
 					data.splice(pos, 0, [timestamp - 1, null]);
-					//console.log(JSON.stringify(data));
 				}
 
 				//Check if a null in the future is needed

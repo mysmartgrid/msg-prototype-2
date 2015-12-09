@@ -3,15 +3,13 @@
 /// <reference path="bootstrap.d.ts" />
 
 /// <reference path="msg2socket.ts" />
+/// <reference path="updatedispatcher.ts"/>
 /// <reference path="sensorvaluestore.ts" />
 
 /// <reference path="graphview.ts" />
 /// <reference path="sensorcollectiongraph.ts" />
 
 "use strict";
-
-
-declare var Dygraph : any;
 
 
 angular.module("msgp", [])
@@ -24,6 +22,7 @@ angular.module("msgp", [])
 		throw "websocket support required";
 	return new Msg2Socket.Socket($rootScope);
 }])
+.factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
 .directive("sensorCollectionGraph", Directives.SensorCollectionGraphFactory())
 .directive("graphView", Directives.GraphViewFactory())
 .directive("deviceEditor", [function() {
@@ -148,7 +147,7 @@ angular.module("msgp", [])
 		}
 	};
 }])
-.controller("GraphPage", ["WSUserClient", "wsurl", "$http", function(wsclient, wsurl, $http) {
+.controller("GraphPage", ["WSUserClient", "wsurl", "$http", "UpdateDispatcher", function(wsclient, wsurl, $http) {
 	wsclient.connect(wsurl);
 }])
 .controller("DeviceListController", ["$scope", "$http", "devices", function($scope, $http, devices) {
