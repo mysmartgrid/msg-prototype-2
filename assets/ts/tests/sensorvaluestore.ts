@@ -2,6 +2,7 @@
 
 /// <reference path="../sensorvaluestore.ts"/>
 /// <reference path="../msg2socket.ts"/>
+/// <reference path="../common.ts"/>
 
 "use strict";
 
@@ -9,10 +10,6 @@ function errorCompare(msg : string) : (error : Error) => boolean {
 	return function(error : Error) : boolean {
 		return error.message === msg;
 	};
-}
-
-function now() : number {
-	return (new Date()).getTime();
 }
 
 function rand(min : number, max : number) : number {
@@ -130,7 +127,7 @@ QUnit.test("Add single value", function(assert : QUnitAssert) : void {
 
 	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
 
-	var timestamp = now();
+	var timestamp = Common.now();
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
 
 	var data = store.getData();
@@ -144,7 +141,7 @@ QUnit.test("Add two values with different timestamps", function(assert : QUnitAs
 
 	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
 
-	var timestamp = now();
+	var timestamp = Common.now();
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
 	store.addValue("ADevice", "ASensor1", timestamp - 1000, 84);
 
@@ -158,7 +155,7 @@ QUnit.test("Add values with same imestamps", function(assert : QUnitAssert) : vo
 
 	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
 
-	var timestamp = now();
+	var timestamp = Common.now();
 
 	store.addValue("ADevice", "ASensor1", timestamp - 3000, 23);
 	store.addValue("ADevice", "ASensor1", timestamp - 1000, 666);
@@ -184,13 +181,40 @@ QUnit.test("Add values with same imestamps", function(assert : QUnitAssert) : vo
 					"The values and timestamps should match");
 });
 
-QUnit.test("Clamp data", function(assert : QUnitAssert) : void {
+QUnit.test("Clamp data - slinding window", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
 	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
 
-	var timestamp = now();
+	var timestamp = Common.now();
 	var oldTimestamp = timestamp - 6 * 60 * 1000;
+	store.addValue("ADevice", "ASensor1", oldTimestamp , 23);
+	store.addValue("ADevice", "ASensor1", timestamp, 42);
+
+	var data = store.getData();
+	assert.deepEqual(data[0].data,
+						[[oldTimestamp, 23], [timestamp - 1, null], [timestamp, 42]],
+						"Both values should be in the array");
+
+	store.clampData();
+
+	assert.deepEqual(data[0].data,
+						[[timestamp, 42]],
+						"The older value should no longer be in the array");
+
+});
+
+QUnit.test("Clamp data - fixed interval", function(assert : QUnitAssert) : void {
+	var store = new Store.SensorValueStore();
+
+	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+
+	store.setStart(630 * 1000);
+	store.setEnd(840 * 1000);
+	store.setSlidingWindowMode(false);
+
+	var timestamp = 840 * 1000;
+	var oldTimestamp = 420 * 1000;
 	store.addValue("ADevice", "ASensor1", oldTimestamp , 23);
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
 
@@ -212,7 +236,7 @@ QUnit.test("Test timeout past", function(assert : QUnitAssert) : void {
 
 	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
 
-	var timestamp = now();
+	var timestamp = Common.now();
 	var oldTimestamp = timestamp - 3 * 60 * 1000;
 	var middleTimestamp = timestamp - 1 * 60 * 1000;
 	store.addValue("ADevice", "ASensor1", oldTimestamp , 23);
@@ -237,7 +261,7 @@ QUnit.test("Test timeout future", function(assert : QUnitAssert) : void {
 
 	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
 
-	var timestamp = now();
+	var timestamp = Common.now();
 	var oldTimestamp = timestamp - 3 * 60 * 1000;
 	var middleTimestamp = timestamp - 1 * 60 * 1000;
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
@@ -267,8 +291,8 @@ QUnit.test("Remove past timeout, reinsert in future", function(assert : QUnitAss
 	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
 
 
-	var lastTimestamp = now();
-	var firstTimestamp = now() - 60 * 1000;
+	var lastTimestamp = Common.now();
+	var firstTimestamp = Common.now() - 60 * 1000;
 	var middleTimestamp = firstTimestamp + 9 * 1000;
 
 	store.addValue("ADevice", "ASensor1", lastTimestamp, 0);

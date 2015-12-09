@@ -2,7 +2,11 @@
 "use strict";
 
 module Msg2Socket {
-	const ApiVersion : string = "v2.user.msg";
+	const ApiVersion : string = "v3.user.msg";
+
+	/*
+	 * Handlers
+	 */
 
 	export interface OpenError {
 		error : string;
@@ -20,13 +24,18 @@ module Msg2Socket {
 		(e : Event) : void;
 	}
 
-	export interface UpdateData {
-		resolution: string;
-		values: {[deviceID : string] : {[sensorID : string] : [number, number][]}};
-	}
 
 	export interface UpdateHandler {
 		(update : UpdateData) : void;
+	}
+
+	/*
+	 * Messages
+	 */
+
+	export interface UpdateData {
+		resolution: string;
+		values: {[deviceID : string] : {[sensorID : string] : [number, number][]}};
 	}
 
 	export interface MetadataUpdate {
@@ -63,18 +72,23 @@ module Msg2Socket {
 
 	export interface UserCommand {
 		cmd : string;
-		args : RequestRealtimeUpdateArgs | GetValuesArgs;
+		args? : RequestRealtimeUpdateArgs | GetValuesArgs;
 	}
 
 	export interface RequestRealtimeUpdateArgs {
 		[deviceID : string] : {[resolution: string] : string[]};
 	}
 
+	export interface DeviceSensorList {
+		[deviceID : string] : string[]
+	}
+
+
 	export interface GetValuesArgs {
 		since : number;
 		until : number;
 		resolution : string;
-		withMetadata : boolean;
+		sensors : DeviceSensorList;
 	}
 
 	export class Socket {
@@ -214,14 +228,22 @@ module Msg2Socket {
 			}
 		};
 
-		public requestValues(since : number, until : number, resolution: string, withMetadata : boolean) : void {
+		public requestMetadata() {
+			var cmd = {
+				cmd: "getMetadata"
+			}
+
+			this._sendUserCommand(cmd);
+		}
+
+		public requestValues(since : number, until : number, resolution: string, sensors : DeviceSensorList) : void {
             var cmd = {
                 cmd: "getValues",
                 args: {
                     since: since,
 					until: until,
 					resolution: resolution,
-                    withMetadata: withMetadata
+					sensors: sensors
                 }
             };
             this._sendUserCommand(cmd);

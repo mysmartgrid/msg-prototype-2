@@ -1,3 +1,6 @@
+/**
+ * asasd
+ */
 module Common {
     export interface DeviceSensorMap<U> {
         [deviceId : string] : {
@@ -23,5 +26,9 @@ module Common {
         }
 
         return wasUpdated;
+    }
+
+    export function now() : number {
+        return (new Date()).getTime();
     }
 }

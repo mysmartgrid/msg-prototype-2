@@ -14,18 +14,25 @@ module Directives {
 		unit : string,
 		maxAgeMs : number;
 		assumeMissingAfterMs : number;
-		sensors : { [sensorKey: string]: Sensor; };
+		sensors : Sensor[];
 		sensorColors : {[device : string] : {[sensor : string] : string}};
 	}
 
-	export class SensorCollectionGraphController {
+	export class SensorCollectionGraphController implements UpdateDispatcher.Subscriber{
 		private store : Store.SensorValueStore
 		private graphOptions : any
 		private graphNode : HTMLElement
 
-		constructor(private $scope : SensorCollectionGraphScope, private $interval : ng.IIntervalService, private $timeout: ng.ITimeoutService) {
+		constructor(private $scope : SensorCollectionGraphScope,
+					private $interval : ng.IIntervalService,
+					private $timeout: ng.ITimeoutService,
+					private _dispatcher : UpdateDispatcher.UpdateDispatcher) {
+
 			this.store = new Store.SensorValueStore();
-			$scope.$watch('maxAgeMs', (interval : number) => this.store.setInterval(interval));
+			this.store.setSlidingWindowMode(true);
+			this.store.setEnd(0);
+
+			$scope.$watch('maxAgeMs', (start : number) => this.store.setStart(start));
 
 			$scope.$watch('assumeMissingAfterMs', (timeout : number) => this.store.setTimeout(timeout));
 
@@ -34,15 +41,31 @@ module Directives {
 			$interval(() => this.store.clampData(), 1000);
 		}
 
+
+		public updateValue(deviceID : string, sensorID : string, resolution : string, timestamp : number, value : number) : void {
+			this.store.addValue(deviceID, sensorID, timestamp, value);
+		}
+
+		public updateDeviceMetadata(deviceID : string) : void {};
+
+		public updateSensorMetadata(deviceID : string, sensorID : string) {};
+
+		public removeDevice(deviceID : string) {};
+
+		public removeSensor(deviceID : string, sensorID : string) {};
+
+
 		private updateSensors() : void {
 			var labels = this.store.getLabels();
-			for(var key in this.$scope.sensors) {
-				var sensor = this.$scope.sensors[key];
+			for(var sensor of this.$scope.sensors) {
+				var metadata = this._dispatcher.devices[sensor.deviceID].sensors[sensor.sensorID];
+
 				if(!this.store.hasSensor(sensor.deviceID, sensor.sensorID)) {
-					this.store.addSensor(sensor.deviceID, sensor.sensorID, sensor.name);
+					this.store.addSensor(sensor.deviceID, sensor.sensorID, metadata.name);
+					this._dispatcher.subscribeRealtimeSlidingWindow(sensor.deviceID, sensor.sensorID, "raw", this.$scope.maxAgeMs, this);
 				}
-				else if(labels[sensor.deviceID][sensor.sensorID] !== sensor.name) {
-					this.store.setLabel(sensor.deviceID, sensor.sensorID, sensor.name);
+				else if(labels[sensor.deviceID][sensor.sensorID] !== metadata.name) {
+					this.store.setLabel(sensor.deviceID, sensor.sensorID, metadata.name);
 				}
 				else {
 					delete labels[sensor.deviceID][sensor.sensorID];
@@ -52,17 +75,13 @@ module Directives {
 			for(var deviceID in labels) {
 				for(var sensorID in labels[deviceID]) {
 					this.store.removeSensor(deviceID, sensorID);
+					this._dispatcher.unsubscribeSensor(deviceID, sensorID, "raw", this);
 				}
 			}
 
 			this.$scope.sensorColors = this.store.getColors();
-			//console.log(this.$scope.sensorColors);
 		}
 
-		public updateValues(deviceID : string, sensorID : string, timestamp : number, value: number) {
-			//console.log("Update: " + deviceID + ":" + sensorID + " " + timestamp + " " + value);
-			this.store.addValue(deviceID, sensorID, timestamp, value);
-		}
 
 		public createGraph(element: ng.IAugmentedJQuery) {
 			this.graphOptions = {
@@ -90,8 +109,6 @@ module Directives {
 			this.graphOptions.xaxis.max = time - 1000;
 			this.graphOptions.xaxis.min = time - this.$scope.maxAgeMs + 1000;
 
-			//this.graphOptions.resolution = Math.max(1.0, window.devicePixelRatio);
-
 			var graph = Flotr.draw(this.graphNode, this.store.getData(), this.graphOptions);
 
 			var delay = (this.$scope.maxAgeMs - 2000) / graph.plotWidth;
@@ -110,7 +127,7 @@ module Directives {
 			assumeMissingAfterMs: "=",
 		}
 
-		public controller = ["$scope", "$interval", "$timeout", SensorCollectionGraphController];
+		public controller = ["$scope", "$interval", "$timeout", "UpdateDispatcher", SensorCollectionGraphController];
 
 		// Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
 		public link:Function  = ($scope : SensorCollectionGraphScope,
@@ -122,8 +139,6 @@ module Directives {
 			var sensorCollectionGraph : SensorCollectionGraphController = controllers[1];
 
 			sensorCollectionGraph.createGraph(element);
-
-			graphView.registerGraph($scope.unit, sensorCollectionGraph);
 		}
 	}
 
