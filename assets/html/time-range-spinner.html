@@ -1,0 +1,82 @@
+<table class="timeRangeSpinner">
+    <thead>
+        <tr>
+            <td>Years</td>
+            <td></td>
+            <td>Days</td>
+            <td></td>
+            <td>Hours</td>
+            <td></td>
+            <td>Minutes</td>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+                <a ng-click="increment('years')" class="btn btn-link">
+                    <span class="glyphicon glyphicon-chevron-up"></span>
+                </a>
+            </td>
+            <td></td>
+            <td>
+                <a ng-click="increment('days')" class="btn btn-link">
+                    <span class="glyphicon glyphicon-chevron-up"></span>
+                </a>
+            </td>
+            <td></td>
+            <td>
+                <a ng-click="increment('hours')" class="btn btn-link">
+                    <span class="glyphicon glyphicon-chevron-up"></span>
+                </a>
+            </td>
+            <td></td>
+            <td>
+                <a ng-click="increment('minutes')" class="btn btn-link">
+                    <span class="glyphicon glyphicon-chevron-up"></span>
+                </a>
+            </td>
+        </tr>
+        <tr>
+            <td class="form-group">
+                <input name="years" type="number" ng-model="time.years" class="form-control text-center" ng-change="change()">
+            </td>
+            <td>&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+            <td class="form-group">
+                <input name="days" type="number" ng-model="time.days" class="form-control text-center" ng-change="change()">
+            </td>
+            <td>&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+            <td class="form-group">
+                <input name="hours" type="number" ng-model="time.hours" class="form-control text-center" ng-change="change()">
+            </td>
+            <td>&nbsp;&nbsp;:&nbsp;&nbsp;</td>
+            <td class="form-group">
+                <input name="minutes" type="number" ng-model="time.minutes" class="form-control text-center" ng-change="change()">
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <a ng-click="decrement('years')" class="btn btn-link">
+                    <span class="glyphicon glyphicon-chevron-down"></span>
+                </a>
+            </td>
+            <td></td>
+            <td>
+                <a ng-click="decrement('days')" class="btn btn-link">
+                    <span class="glyphicon glyphicon-chevron-down"></span>
+                </a>
+            </td>
+            <td></td>
+            <td>
+                <a ng-click="decrement('hours')" class="btn btn-link">
+                    <span class="glyphicon glyphicon-chevron-down"></span>
+                </a>
+            </td>
+            <td></td>
+            <td>
+                <a ng-click="decrement('minutes')" class="btn btn-link">
+                    <span class="glyphicon glyphicon-chevron-down"></span>
+                </a>
+            </td>
+        </tr>
+    <tbody>
+</table>

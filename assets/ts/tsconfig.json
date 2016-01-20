@@ -8,11 +8,14 @@
     "files": [
       "app.ts",
       "graphview.ts",
-      "sensorcollectiongraph",
+      "sensorcollectiongraph.ts",
+      "sensorgraph.ts",
       "msg2socket.ts",
       "sensorvaluestore.ts",
       "updatedispatcher.ts",
       "common.ts",
-      "utils.ts"
+      "utils.ts",
+      "ui-elements/numberspinner.ts",
+      "ui-elements/timerangespinner.ts"
     ]
 }

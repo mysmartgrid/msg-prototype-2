@@ -29,6 +29,17 @@ module UpdateDispatcher  {
     // Type alias, so we can change the type without refactoring
     export interface SensorMetadata extends Msg2Socket.SensorMetadata {};
 
+
+    export interface SensorSpecifier {
+        sensorID : string;
+        deviceID : string;
+    }
+
+    export interface UnitSensorMap {
+        [unit : string] : SensorSpecifier[];
+    }
+
+
     // Interface for subscribers
     export interface Subscriber {
         // Called on new values and updates to old values
@@ -131,9 +142,25 @@ module UpdateDispatcher  {
         // Tree-Structure for storing device and sensor metadata
         private _devices : DeviceMap;
 
-        // Accesor to prevent write access to the metadata
+        // Device/Sensor Tuples sorted by Units
+        private _sensorsByUnit : UnitSensorMap;
+
+        // List of all avaiable units
+        private _units : string[];
+
+        // Accesor to prevent write access to the devices property
         public get devices() : DeviceMap {
             return this._devices;
+        }
+
+        // Pseudoproperty that contains all possible units
+        public get units() : string[] {
+            return this._units;
+        }
+
+        // Accesor for _sensorsByUnit
+        public get sensorsByUnit() : UnitSensorMap {
+            return this._sensorsByUnit;
         }
 
         /**
@@ -155,6 +182,9 @@ module UpdateDispatcher  {
             this._devices = {};
             this._subscribers = {};
             this._InitialCallbacks = new Array<() => void>();
+
+            this._sensorsByUnit = {};
+            this._units = [];
 
             _wsClient.onOpen((error : Msg2Socket.OpenError) => {
                 _wsClient.onMetadata((metadata : Msg2Socket.MetadataUpdate) : void => this._updateMetadata(metadata));
@@ -418,6 +448,7 @@ module UpdateDispatcher  {
                 if(deviceName !== undefined && this._devices[deviceID].name !== deviceName) {
                     this._devices[deviceID].name = deviceName;
                     this._emitDeviceMetadataUpdate(deviceID);
+                    console.log("Nameupdate: " + deviceName);
                 }
 
 
@@ -452,13 +483,37 @@ module UpdateDispatcher  {
                     this._emitRemoveSensor(deviceID, sensorID);
                     delete this._subscribers[deviceID][sensorID];
                 }
+
+                //TODO: Handle Device deletion as well
             }
+
+            this._updateSensorsByUnit();
 
             // Excute the callbacks if this is the initial metadata update
             if(!this._hasInitialMetadata) {
                 this._hasInitialMetadata = true;
                 for(var callback of this._InitialCallbacks) {
                     callback();
+                }
+            }
+        }
+
+        private _updateSensorsByUnit() : void {
+            for(var index in this._sensorsByUnit) {
+                delete this._sensorsByUnit[this._units[index]];
+                delete this._units[index];
+            }
+
+            for(var deviceID in this._devices) {
+                for(var sensorID in this._devices[deviceID].sensors) {
+                    var unit = this._devices[deviceID].sensors[sensorID].unit;
+
+                    if(this._sensorsByUnit[unit] === undefined) {
+                        this._units.push(unit);
+                        this._sensorsByUnit[unit] = [];
+                    }
+
+                    this._sensorsByUnit[unit].push({deviceID: deviceID, sensorID: sensorID});
                 }
             }
         }

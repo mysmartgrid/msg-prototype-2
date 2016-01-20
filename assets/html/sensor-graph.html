@@ -1,0 +1,123 @@
+<script type="text/ng-template" id="sensor-graph-settings.html">
+	<div class="modal-header">
+		<h3 class="modal-title">Sensor graph Configuration</h3>
+	</div>
+	<div class="modal-body">
+		<form class="form-horizontal">
+			<div class="form-group">
+				<label for="unit" class="col-sm-3 control-label">Unit</label>
+				<div class="col-sm-9">
+					<select id="unit" class="form-control" ng-options="sensorUnit as sensorUnit for sensorUnit in units" ng-model="config.unit"></select>
+				</div>
+			</div>
+
+			<div class="form-group">
+				<label for="resolution" class="col-sm-3 control-label">Resolution</label>
+				<div class="col-sm-9">
+					<select id="resoltion" class="form-control"  ng-options="res as res for res in resolutions" ng-model="config.resolution"></select>
+				</div>
+			</div>
+
+			<div class="form-group">
+				<label for="sensors" class="col-sm-3 control-label">Sensors</label>
+				<div class="col-sm-9">
+					<select class="form-control"
+						ng-options="devices[sensor.deviceID].name + ' : ' + devices[sensor.deviceID].sensors[sensor.sensorID].name for sensor in sensorsByUnit[config.unit]"
+						ng-model="config.sensors" multiple>
+					</select>
+				</div>
+			</div>
+
+			<div class="form-group">
+				<label for="mode" class="col-sm-3 control-label">Resolution</label>
+				<div class="col-sm-9">
+					<div class="btn-group" id="mode">
+						<label class="btn btn-primary" ng-model="config.mode" uib-btn-radio="'interval'">Interval</label>
+						<label class="btn btn-primary" ng-model="config.mode" uib-btn-radio="'slidingWindow'">Sliding Window</label>
+						<label class="btn btn-primary" ng-model="config.mode" uib-btn-radio="'realtime'">Realtime</label>
+					</div>
+				</div>
+			</div>
+
+			<div class="form-group" ng-show="config.mode === 'interval'">
+				<label for="intervalStart" class="col-sm-3 control-label">Interval start</label>
+				<div class="col-sm-9">
+					<p class="input-group">
+						<input class="form-control"
+							id="intervalStart"
+							type="date"
+							uib-datepicker-popup
+							is-open="intervalStartPickerOpen"
+							min-mode="pickerModes[config.resolution]"
+							datepicker-mode="pickerModes[config.resolution]"
+							ng-model="config.intervalStart"/>
+						<span class="input-group-btn">
+                			<button type="button" class="btn btn-default" ng-click="intervalStartPickerOpen = true"><i class="glyphicon glyphicon-calendar"></i></button>
+        				</span>
+					</p>
+				</div>
+			</div>
+
+			<div class="form-group" ng-show="config.mode === 'interval'">
+				<label for="intervalEnd" class="col-sm-3 control-label">Interval end</label>
+				<div class="col-sm-9">
+					<p class="input-group">
+						<input class="form-control" id="intervalEnd" type="date" uib-datepicker-popup is-open="intervalEndPickerOpen" datepicker-mode="pickerModes[config.resolution]"  ng-model="config.intervalEnd"/>
+						<span class="input-group-btn">
+							<button type="button" class="btn btn-default" ng-click="intervalEndPickerOpen = true"><i class="glyphicon glyphicon-calendar"></i></button>
+						</span>
+					</p>
+				</div>
+			</div>
+
+			<div class="form-group" ng-show="config.mode === 'slidingWindow' || config.mode === 'realtime'">
+				<label for="windowStart" class="col-sm-3 control-label">Window start</label>
+				<div class="col-sm-9">
+					<div time-range-spinner="" min="0" max="31536000000"></div>
+				</div>
+				%% config.windowStart | json %%
+			</div>
+
+			<div class="form-group" ng-show="config.mode === 'slidingWindow'">
+				<label for="windowEnd" class="col-sm-3 control-label">Window end</label>
+				<div class="col-sm-9">
+					<uib-timepicker ng-model="windowEnd" hour-step="1" minute-step="1" show-meridian="false"></uib-timepicker>
+				</div>
+			</div>
+
+		</form>
+	</div>
+    <div class="modal-footer">
+    	<button class="btn btn-primary" type="button" ng-click="ok()">Save</button>
+        <button class="btn btn-warning" type="button" ng-click="cancel()">Cancel</button>
+    </div>
+</script>
+
+<div style="width: 100%; height: 400px" class="sensor-graph">
+</div>
+
+<button class="btn btn-primary" ng-click="openSettings()">
+	<span class="glyphicon glyphicon-cog"></span>
+	Settings
+</button>
+<br/>
+<div class="table-responsive">
+	<table class="table">
+		<tr>
+			<th>Color</th>
+			<th>Id</th>
+			<th>Name</th>
+			<th>Device</th>
+			<th>Port<th>
+		</tr>
+		<tr data-ng-repeat="sensor in sensors">
+			<td data-ng-style="{color: sensorColors[sensor.deviceID][sensor.sensorID]}">&#x25a0;</td>
+			<td>
+				%%sensor.deviceID%% : %%sensor.sensorID%%
+			</td>
+			<td>%%devices[sensor.deviceID].sensors[sensor.sensorID].name%%</td>
+			<td>%%devices[sensor.deviceID].name%%</td>
+			<td>%%devices[sensor.deviceID].sensors[sensor.sensorID].port%%</td>
+		</tr>
+	</table>
+</div>

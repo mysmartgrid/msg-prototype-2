@@ -6,13 +6,16 @@
 /// <reference path="updatedispatcher.ts"/>
 /// <reference path="sensorvaluestore.ts" />
 
+/// <reference path="ui-elements/numberspinner.ts"/>
+/// <reference path="ui-elements/timerangespinner.ts"/>
+/// <reference path="sensorgraph.ts"/>
 /// <reference path="graphview.ts" />
 /// <reference path="sensorcollectiongraph.ts" />
 
 "use strict";
 
 
-angular.module("msgp", [])
+angular.module("msgp", ['ui.bootstrap'])
 .config(function($interpolateProvider) {
 	$interpolateProvider.startSymbol("%%");
 	$interpolateProvider.endSymbol("%%");
@@ -23,8 +26,10 @@ angular.module("msgp", [])
 	return new Msg2Socket.Socket($rootScope);
 }])
 .factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
-.directive("sensorCollectionGraph", Directives.SensorCollectionGraphFactory())
+.directive("numberSpinner", Directives.UserInterface.NumberSpinnerFactory())
+.directive("timeRangeSpinner", Directives.UserInterface.TimeRangeSpinnerFactory())
 .directive("graphView", Directives.GraphViewFactory())
+.directive("sensorGraph", Directives.SensorGraphFactory())
 .directive("deviceEditor", [function() {
 	return {
 		restrict: "A",

@@ -22,8 +22,22 @@ module Utils {
                 var i = this.findIndex(pred);
             }
         }
+    }
 
+    export function deepCopyJSON<T>(src : T) : T {
+        var dst : any = {};
 
+        for(var key in src) {
+            if(src.hasOwnProperty(key)) {
+                if(typeof(src[key]) === "object") {
+                    dst[key] = deepCopyJSON(src[key]);
+                }
+                else {
+                    dst[key] = src[key];
+                }
+            }
+        }
 
+        return dst;
     }
 }

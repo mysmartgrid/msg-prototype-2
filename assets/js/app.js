@@ -174,6 +174,21 @@ var Utils;
         return ExtArray;
     })(Array);
     Utils.ExtArray = ExtArray;
+    function deepCopyJSON(src) {
+        var dst = {};
+        for (var key in src) {
+            if (src.hasOwnProperty(key)) {
+                if (typeof (src[key]) === "object") {
+                    dst[key] = deepCopyJSON(src[key]);
+                }
+                else {
+                    dst[key] = src[key];
+                }
+            }
+        }
+        return dst;
+    }
+    Utils.deepCopyJSON = deepCopyJSON;
 })(Utils || (Utils = {}));
 /**
  * asasd
@@ -265,6 +280,8 @@ var UpdateDispatcher;
             this._devices = {};
             this._subscribers = {};
             this._InitialCallbacks = new Array();
+            this._sensorsByUnit = {};
+            this._units = [];
             _wsClient.onOpen(function (error) {
                 _wsClient.onMetadata(function (metadata) { return _this._updateMetadata(metadata); });
                 _wsClient.onUpdate(function (data) { return _this._updateValues(data); });
@@ -274,9 +291,25 @@ var UpdateDispatcher;
             });
         }
         Object.defineProperty(UpdateDispatcher.prototype, "devices", {
-            // Accesor to prevent write access to the metadata
+            // Accesor to prevent write access to the devices property
             get: function () {
                 return this._devices;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(UpdateDispatcher.prototype, "units", {
+            // Pseudoproperty that contains all possible units
+            get: function () {
+                return this._units;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(UpdateDispatcher.prototype, "sensorsByUnit", {
+            // Accesor for _sensorsByUnit
+            get: function () {
+                return this._sensorsByUnit;
             },
             enumerable: true,
             configurable: true
@@ -464,6 +497,7 @@ var UpdateDispatcher;
                 if (deviceName !== undefined && this._devices[deviceID].name !== deviceName) {
                     this._devices[deviceID].name = deviceName;
                     this._emitDeviceMetadataUpdate(deviceID);
+                    console.log("Nameupdate: " + deviceName);
                 }
                 // Add or update sensors
                 for (var sensorID in metadata.devices[deviceID].sensors) {
@@ -492,12 +526,29 @@ var UpdateDispatcher;
                     delete this._subscribers[deviceID][sensorID];
                 }
             }
+            this._updateSensorsByUnit();
             // Excute the callbacks if this is the initial metadata update
             if (!this._hasInitialMetadata) {
                 this._hasInitialMetadata = true;
                 for (var _i = 0, _a = this._InitialCallbacks; _i < _a.length; _i++) {
                     var callback = _a[_i];
                     callback();
+                }
+            }
+        };
+        UpdateDispatcher.prototype._updateSensorsByUnit = function () {
+            for (var index in this._sensorsByUnit) {
+                delete this._sensorsByUnit[this._units[index]];
+                delete this._units[index];
+            }
+            for (var deviceID in this._devices) {
+                for (var sensorID in this._devices[deviceID].sensors) {
+                    var unit = this._devices[deviceID].sensors[sensorID].unit;
+                    if (this._sensorsByUnit[unit] === undefined) {
+                        this._units.push(unit);
+                        this._sensorsByUnit[unit] = [];
+                    }
+                    this._sensorsByUnit[unit].push({ deviceID: deviceID, sensorID: sensorID });
                 }
             }
         };
@@ -839,6 +890,216 @@ var Store;
     })();
     Store.SensorValueStore = SensorValueStore;
 })(Store || (Store = {}));
+/// <reference path="../angular.d.ts" />
+var Directives;
+(function (Directives) {
+    var UserInterface;
+    (function (UserInterface) {
+        var NumberSpinnerController = (function () {
+            function NumberSpinnerController($scope) {
+                var _this = this;
+                this.$scope = $scope;
+                $scope.change = function () {
+                    _this._enforceLimits();
+                    $scope.ngChange();
+                };
+                $scope.increment = function () {
+                    $scope.ngModel++;
+                    $scope.change();
+                };
+                $scope.decrement = function () {
+                    $scope.ngModel--;
+                    $scope.change();
+                };
+            }
+            NumberSpinnerController.prototype._enforceLimits = function () {
+                if (this.$scope.ngModel !== undefined && this.$scope.ngModel !== null) {
+                    console.log("Enforcing limits");
+                    // Normalize to integer
+                    if (this.$scope.ngModel !== Math.round(this.$scope.ngModel)) {
+                        this.$scope.ngModel = Math.round(this.$scope.ngModel);
+                    }
+                    if (this.$scope.ngModel > this.$scope.max) {
+                        this.$scope.ngModel = this.$scope.max;
+                        console.log("Overflow");
+                        this.$scope.overflow();
+                    }
+                    if (this.$scope.ngModel < this.$scope.min) {
+                        this.$scope.ngModel = this.$scope.min;
+                        this.$scope.underflow();
+                    }
+                    console.log("Limits enforced");
+                }
+            };
+            NumberSpinnerController.prototype._onMouseWheel = function (event) {
+                if (event.originalEvent !== undefined) {
+                    event = event.originalEvent;
+                }
+                var delta = event.wheelDelta;
+                if (delta === undefined) {
+                    delta = -event.deltaY;
+                }
+                if (Math.abs(delta) > 10) {
+                    if (delta > 0) {
+                        this.$scope.increment();
+                    }
+                    else {
+                        this.$scope.decrement();
+                    }
+                }
+                event.preventDefault();
+            };
+            NumberSpinnerController.prototype.setupEvents = function (element) {
+                var _this = this;
+                var input = element.find(".numberSpinner");
+                input.bind("mouse wheel", function (event) { return _this._onMouseWheel(event); });
+            };
+            return NumberSpinnerController;
+        })();
+        UserInterface.NumberSpinnerController = NumberSpinnerController;
+        function NumberSpinnerFactory() {
+            return function () { return new NumberSpinnerDirective(); };
+        }
+        UserInterface.NumberSpinnerFactory = NumberSpinnerFactory;
+        var NumberSpinnerDirective = (function () {
+            function NumberSpinnerDirective() {
+                this.require = "numberSpinner";
+                this.restrict = "A";
+                this.templateUrl = "/html/number-spinner.html";
+                this.scope = {
+                    ngModel: '=',
+                    ngChange: '&',
+                    overflow: '&',
+                    underflow: '&',
+                    min: '=',
+                    max: '='
+                };
+                this.controller = ["$scope", NumberSpinnerController];
+                // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
+                this.link = function ($scope, element, attrs, numberSpinner) {
+                    numberSpinner.setupEvents(element);
+                };
+            }
+            return NumberSpinnerDirective;
+        })();
+    })(UserInterface = Directives.UserInterface || (Directives.UserInterface = {}));
+})(Directives || (Directives = {}));
+/// <reference path="../angular.d.ts" />
+var Directives;
+(function (Directives) {
+    var UserInterface;
+    (function (UserInterface) {
+        var TimeUnits = ["years", "days", "hours", "minutes"];
+        var UnitsToMillisecs = {
+            "years": 365 * 24 * 60 * 60 * 1000,
+            "days": 24 * 60 * 60 * 1000,
+            "hours": 60 * 60 * 1000,
+            "minutes": 60 * 1000
+        };
+        var TimeRangeSpinnerController = (function () {
+            function TimeRangeSpinnerController($scope) {
+                var _this = this;
+                this.$scope = $scope;
+                $scope.time = {
+                    years: 0,
+                    days: 0,
+                    hours: 0,
+                    minutes: 0
+                };
+                $scope.change = function () { return _this._change(); };
+                $scope.increment = function (unit) { return _this._increment(unit); };
+                $scope.decrement = function (unit) { return _this._decrement(unit); };
+            }
+            TimeRangeSpinnerController.prototype._increment = function (unit) {
+                if (this.$scope.time[unit] !== undefined) {
+                    this.$scope.time[unit] += 1;
+                }
+                this.$scope.change();
+            };
+            TimeRangeSpinnerController.prototype._decrement = function (unit) {
+                if (this.$scope.time[unit] !== undefined) {
+                    this.$scope.time[unit] -= 1;
+                }
+                this.$scope.change();
+            };
+            TimeRangeSpinnerController.prototype._change = function () {
+                var _this = this;
+                // because otherwise empty field become 0 during edit, which is a real pain
+                var editDone = TimeUnits.every(function (unit) { return (_this.$scope.time[unit] !== null && _this.$scope.time[unit] !== undefined); });
+                if (editDone) {
+                    var milliseconds = 0;
+                    for (var _i = 0; _i < TimeUnits.length; _i++) {
+                        var unit = TimeUnits[_i];
+                        milliseconds += this.$scope.time[unit] * UnitsToMillisecs[unit];
+                    }
+                    if (this.$scope.min !== undefined) {
+                        milliseconds = Math.max(this.$scope.min, milliseconds);
+                    }
+                    if (this.$scope.max !== undefined) {
+                        milliseconds = Math.min(this.$scope.max, milliseconds);
+                    }
+                    var remainder = milliseconds;
+                    for (var _a = 0; _a < TimeUnits.length; _a++) {
+                        var unit = TimeUnits[_a];
+                        this.$scope.time[unit] = Math.floor(remainder / UnitsToMillisecs[unit]);
+                        remainder = remainder % UnitsToMillisecs[unit];
+                    }
+                    if (this.$scope.ngModel !== undefined) {
+                        this.$scope.ngModel = milliseconds;
+                    }
+                    this.$scope.ngChange();
+                }
+            };
+            TimeRangeSpinnerController.prototype.setupScrollEvents = function (element) {
+                var _this = this;
+                element.find("input[type='number']").each(function (index, element) {
+                    var field = $(element);
+                    field.bind("mouse wheel", function (jqEvent) {
+                        if (jqEvent.originalEvent === undefined) {
+                            return;
+                        }
+                        var event = jqEvent.originalEvent;
+                        var delta = event.wheelDelta;
+                        if (delta === undefined) {
+                            delta = -event.deltaY;
+                        }
+                        if (delta > 0) {
+                            _this.$scope.increment(field.attr('name'));
+                        }
+                        else {
+                            _this.$scope.decrement(field.attr('name'));
+                        }
+                        jqEvent.preventDefault();
+                    });
+                });
+            };
+            return TimeRangeSpinnerController;
+        })();
+        UserInterface.TimeRangeSpinnerController = TimeRangeSpinnerController;
+        function TimeRangeSpinnerFactory() {
+            return function () { return new TimeRangeSpinnerDirective(); };
+        }
+        UserInterface.TimeRangeSpinnerFactory = TimeRangeSpinnerFactory;
+        var TimeRangeSpinnerDirective = (function () {
+            function TimeRangeSpinnerDirective() {
+                this.restrict = "A";
+                this.templateUrl = "/html/time-range-spinner.html";
+                this.scope = {
+                    ngModel: '=',
+                    ngChange: '&',
+                    min: '=',
+                    max: '='
+                };
+                this.controller = ["$scope", TimeRangeSpinnerController];
+                // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
+                this.link = function ($scope, element, attrs, controller) {
+                    controller.setupScrollEvents(element);
+                };
+            }
+            return TimeRangeSpinnerDirective;
+        })();
+    })(UserInterface = Directives.UserInterface || (Directives.UserInterface = {}));
+})(Directives || (Directives = {}));
 /// <reference path="angular.d.ts" />
 /// <reference path="msg2socket.ts" />
 /// <reference path="sensorvaluestore.ts" />
@@ -1009,16 +1270,252 @@ var Directives;
     }
     Directives.GraphViewFactory = GraphViewFactory;
 })(Directives || (Directives = {}));
+/// <reference path="angular.d.ts" />
+/// <reference path="angular-ui-bootstrap.d.ts" />
+/// <reference path="common.ts"/>
+/// <reference path="msg2socket.ts" />
+/// <reference path="sensorvaluestore.ts" />
+/// <reference path="graphview.ts" />
+"use strict";
+var Directives;
+(function (Directives) {
+    var SensorGraphSettingsFactory = ["$scope", "$uibModalInstance", "UpdateDispatcher", "config",
+        function ($scope, $uibModalInstance, dispatcher, config) {
+            return new SensorGraphSettingsController($scope, $uibModalInstance, dispatcher, config);
+        }];
+    var SensorGraphSettingsController = (function () {
+        function SensorGraphSettingsController($scope, $uibModalInstance, _dispatcher, config) {
+            this.$scope = $scope;
+            this.$uibModalInstance = $uibModalInstance;
+            this._dispatcher = _dispatcher;
+            this.$scope.devices = _dispatcher.devices;
+            this.$scope.resolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
+            this.$scope.units = _dispatcher.units;
+            this.$scope.sensorsByUnit = _dispatcher.sensorsByUnit;
+            this._configToScope(config);
+            $scope.pickerModes = {
+                raw: 'day',
+                second: 'day',
+                minute: 'day',
+                hour: 'day',
+                day: 'day',
+                week: 'day',
+                month: 'month',
+                year: 'year'
+            };
+            $scope.ok = function () {
+                $uibModalInstance.close();
+            };
+            $scope.cancel = function () {
+                $uibModalInstance.dismiss('cancel');
+            };
+        }
+        SensorGraphSettingsController.prototype._configToScope = function (config) {
+            this.$scope.config = {
+                unit: config.unit,
+                resolution: config.resolution,
+                sensors: config.sensors,
+                mode: config.mode,
+                windowStart: 0,
+                windowEnd: 0,
+                intervalStart: 0,
+                intervalEnd: 0,
+            };
+        };
+        return SensorGraphSettingsController;
+    })();
+    var SensorGraphController = (function () {
+        function SensorGraphController($scope, $interval, $timeout, $uibModal, _dispatcher) {
+            var _this = this;
+            this.$scope = $scope;
+            this.$interval = $interval;
+            this.$timeout = $timeout;
+            this.$uibModal = $uibModal;
+            this._dispatcher = _dispatcher;
+            this._store = new Store.SensorValueStore();
+            this._store.setSlidingWindowMode(true);
+            this._store.setEnd(0);
+            this.$scope.devices = this._dispatcher.devices;
+            this._dispatcher.onInitialMetadata(function () {
+                //TODO: Add on config callback here
+                _this._setDefaultConfig();
+                _this._redrawGraph();
+            });
+            this.$scope.openSettings = function () {
+                var modalInstance = $uibModal.open({
+                    controller: SensorGraphSettingsFactory,
+                    size: "lg",
+                    templateUrl: 'sensor-graph-settings.html',
+                    resolve: {
+                        config: function () {
+                            return _this._config;
+                        }
+                    }
+                });
+                modalInstance.result.then(function (config) {
+                    console.log(config);
+                    _this.$scope.sensors = config.sensors;
+                });
+            };
+            $interval(function () { return _this._store.clampData(); }, 1000);
+        }
+        Object.defineProperty(SensorGraphController.prototype, "graphNode", {
+            set: function (element) {
+                this._graphNode = element.find(".sensor-graph").get(0);
+            },
+            enumerable: true,
+            configurable: true
+        });
+        SensorGraphController.prototype.updateValue = function (deviceID, sensorID, resolution, timestamp, value) {
+            this._store.addValue(deviceID, sensorID, timestamp, value);
+        };
+        SensorGraphController.prototype.updateDeviceMetadata = function (deviceID) { };
+        ;
+        SensorGraphController.prototype.updateSensorMetadata = function (deviceID, sensorID) {
+        };
+        ;
+        SensorGraphController.prototype.removeDevice = function (deviceID) { };
+        ;
+        SensorGraphController.prototype.removeSensor = function (deviceID, sensorID) { };
+        ;
+        SensorGraphController.prototype._setDefaultConfig = function () {
+            this._config = {
+                unit: this._dispatcher.units[0],
+                resolution: UpdateDispatcher.SupportedResolutions.values().next().value,
+                sensors: [],
+                mode: 'realtime',
+                intervalStart: 0,
+                intervalEnd: 0,
+                windowStart: 5 * 60 * 1000,
+                windowEnd: 0
+            };
+        };
+        /*private _updateSettings() {
+            var map = {
+                raw: 1000,
+                second: 1000,
+                minute: 60 * 1000,
+                hour: 60 * 60 * 1000,
+                day: 24 * 60 * 60 * 1000,
+                week: 7 * 24 * 60 * 60 * 1000,
+                month: 31 * 24 * 60 * 60 * 1000,
+                year: 365 * 24 * 60 * 60 * 1000
+            };
+
+            this._timeResolution = map[this.$scope.resolution];
+
+            if(this.$scope.slidingWindow) {
+                this._intervalEnd = this.$scope.intervalEnd * this._timeResolution;
+                this._intervalStart = this.$scope.intervalStart * this._timeResolution;
+
+                this._store.setSlidingWindowMode(true);
+
+            }
+            else {
+                this._store.setSlidingWindowMode(false);
+            }
+
+            this._store.setStart(this._intervalStart);
+            this._store.setEnd(this._intervalEnd);
+
+            this._dispatcher.unsubscribeAll(this);
+
+            if(this.$scope.sensorsByUnit !== undefined && this.$scope.sensorsByUnit[this.$scope.unit] !== undefined) {
+                for(var sensor of this.$scope.sensorsByUnit[this.$scope.unit]) {
+                    if(this._store.hasSensor(sensor.deviceID, sensor.sensorID)) {
+                        this._store.removeSensor(sensor.deviceID, sensor.sensorID);
+                    }
+                }
+            }
+
+            if(this.$scope.sensors !== undefined) {
+                for(var sensor of this.$scope.sensors) {
+                    this._store.addSensor(sensor.deviceID, sensor.sensorID, sensor.sensorID);
+                    if(this.$scope.slidingWindow && this._intervalEnd === 0) {
+                        this._dispatcher.subscribeRealtimeSlidingWindow(sensor.deviceID, sensor.sensorID, this.$scope.resolution, this._intervalStart, this);
+                    }
+                    else if(this.$scope.slidingWindow) {
+                        this._dispatcher.subscribeSlidingWindow(sensor.deviceID, sensor.sensorID, this.$scope.resolution, this._intervalStart, this._intervalEnd, this);
+                    }
+                    else {
+                        this._dispatcher.subscribeInterval(sensor.deviceID, sensor.sensorID, this.$scope.resolution, this._intervalStart, this._intervalEnd, this);
+                    }
+                }
+            }
+        }*/
+        SensorGraphController.prototype._redrawGraph = function () {
+            var _this = this;
+            var time = Common.now();
+            var graphOptions = {
+                xaxis: {
+                    mode: 'time',
+                    timeMode: 'local',
+                    title: 'Uhrzeit'
+                },
+                HtmlText: false,
+                preventDefault: false,
+                title: 'Messwerte',
+                shadowSize: 0,
+                lines: {
+                    lineWidth: 2,
+                }
+            };
+            graphOptions.title = 'Messwerte [' + this._config.unit + ']';
+            var delay;
+            if (this._config.mode === "slidingWindow" || this._config.mode === "realtime") {
+                graphOptions.xaxis.min = time - this._config.windowStart;
+                if (this._config.mode === "realtime") {
+                    graphOptions.xaxis.max = time;
+                    delay = this._config.windowStart;
+                }
+                else {
+                    graphOptions.xaxis.max = time - this._config.windowEnd;
+                    delay = this._config.windowStart - this._config.windowEnd;
+                }
+            }
+            else {
+                graphOptions.xaxis.min = this._config.intervalStart;
+                graphOptions.xaxis.max = this._config.intervalEnd;
+                delay = this._config.intervalStart - this._config.intervalEnd;
+            }
+            var graph = Flotr.draw(this._graphNode, this._store.getData(), graphOptions);
+            this.$timeout(function () { return _this._redrawGraph(); }, delay / graph.plotWidth);
+        };
+        return SensorGraphController;
+    })();
+    Directives.SensorGraphController = SensorGraphController;
+    var SensorGraphDirective = (function () {
+        function SensorGraphDirective() {
+            this.require = "sensorGraph";
+            this.restrict = "A";
+            this.templateUrl = "/html/sensor-graph.html";
+            this.scope = {};
+            this.controller = ["$scope", "$interval", "$timeout", "$uibModal", "UpdateDispatcher", SensorGraphController];
+            // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
+            this.link = function ($scope, element, attrs, sensorGraph) {
+                sensorGraph.graphNode = element;
+            };
+        }
+        return SensorGraphDirective;
+    })();
+    function SensorGraphFactory() {
+        return function () { return new SensorGraphDirective(); };
+    }
+    Directives.SensorGraphFactory = SensorGraphFactory;
+})(Directives || (Directives = {}));
 /// <reference path="jquery.d.ts" />
 /// <reference path="angular.d.ts" />
 /// <reference path="bootstrap.d.ts" />
 /// <reference path="msg2socket.ts" />
 /// <reference path="updatedispatcher.ts"/>
 /// <reference path="sensorvaluestore.ts" />
+/// <reference path="ui-elements/numberspinner.ts"/>
+/// <reference path="ui-elements/timerangespinner.ts"/>
+/// <reference path="sensorgraph.ts"/>
 /// <reference path="graphview.ts" />
 /// <reference path="sensorcollectiongraph.ts" />
 "use strict";
-angular.module("msgp", [])
+angular.module("msgp", ['ui.bootstrap'])
     .config(function ($interpolateProvider) {
     $interpolateProvider.startSymbol("%%");
     $interpolateProvider.endSymbol("%%");
@@ -1029,8 +1526,10 @@ angular.module("msgp", [])
         return new Msg2Socket.Socket($rootScope);
     }])
     .factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
-    .directive("sensorCollectionGraph", Directives.SensorCollectionGraphFactory())
+    .directive("numberSpinner", Directives.UserInterface.NumberSpinnerFactory())
+    .directive("timeRangeSpinner", Directives.UserInterface.TimeRangeSpinnerFactory())
     .directive("graphView", Directives.GraphViewFactory())
+    .directive("sensorGraph", Directives.SensorGraphFactory())
     .directive("deviceEditor", [function () {
         return {
             restrict: "A",
