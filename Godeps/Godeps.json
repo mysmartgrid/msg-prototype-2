@@ -2,7 +2,10 @@
 	"ImportPath": "github.com/mysmartgrid/msg-prototype-2",
 	"GoVersion": "go1.5.1",
 	"Packages": [
-		"./..."
+		".",
+		"./cmd/msgpd",
+		"./cmd/msgpdevd",
+		"./cmd/msgpc"
 	],
 	"Deps": [
 		{
@@ -76,6 +79,10 @@
 		{
 			"ImportPath": "golang.org/x/crypto/blowfish",
 			"Rev": "4d48e5fa3d62b5e6e71260571bf76c767198ca02"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "833a04a10549a95dc34458c195cbad61bbb6cb4d"
 		}
 	]
 }
