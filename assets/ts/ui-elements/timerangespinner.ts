@@ -1,4 +1,5 @@
 /// <reference path="../angular.d.ts" />
+/// <reference path="../common.ts"/>
 
 
 module Directives.UserInterface {
@@ -20,6 +21,11 @@ module Directives.UserInterface {
                 minutes: 0
             }
 
+            if($scope.ngModel !== undefined) {
+                $scope.$watch("ngModel", () : void => this._setFromMilliseconds($scope.ngModel));
+            }
+
+            console.log($scope);
 
             $scope.change = () : void => this._change();
             $scope.increment = (unit) : void => this._increment(unit);
@@ -58,17 +64,21 @@ module Directives.UserInterface {
                     milliseconds = Math.min(this.$scope.max, milliseconds);
                 }
 
-                var remainder = milliseconds;
-                for(var unit of TimeUnits) {
-                    this.$scope.time[unit] = Math.floor(remainder / UnitsToMillisecs[unit]);
-                    remainder = remainder %  UnitsToMillisecs[unit];
-                }
+                this._setFromMilliseconds(milliseconds);
 
                 if(this.$scope.ngModel !== undefined) {
                     this.$scope.ngModel = milliseconds;
                 }
 
                 this.$scope.ngChange();
+            }
+        }
+
+        private _setFromMilliseconds(milliseconds : number) : void {
+            var remainder = milliseconds;
+            for(var unit of TimeUnits) {
+                this.$scope.time[unit] = Math.floor(remainder / UnitsToMillisecs[unit]);
+                remainder = remainder %  UnitsToMillisecs[unit];
             }
         }
 

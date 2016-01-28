@@ -4,13 +4,25 @@
 /// <reference path="common.ts"/>
 /// <reference path="msg2socket.ts" />
 /// <reference path="sensorvaluestore.ts" />
-/// <reference path="graphview.ts" />
 
 "use strict";
 
 declare var Flotr : any;
 
 module Directives {
+	export interface Sensor {
+		deviceID : string;
+		sensorID : string;
+	}
+
+	export function sensorEqual(a : Sensor, b : Sensor) : boolean {
+		return a.deviceID === b.deviceID && a.sensorID === b.sensorID;
+	}
+
+	interface SensorUnitMap {
+		[unit : string] : Sensor[];
+	}
+
 
 	interface SensorGraphConfig {
 		unit : string,
@@ -48,12 +60,12 @@ module Directives {
 					private _dispatcher : UpdateDispatcher.UpdateDispatcher,
 					config : SensorGraphConfig) {
 
-			this.$scope.devices = _dispatcher.devices;
-			this.$scope.resolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
-			this.$scope.units = _dispatcher.units;
-			this.$scope.sensorsByUnit = _dispatcher.sensorsByUnit;
+			$scope.devices = _dispatcher.devices;
+			$scope.resolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
+			$scope.units = _dispatcher.units;
+			$scope.sensorsByUnit = _dispatcher.sensorsByUnit;
 
-			this._configToScope(config);
+			$scope.config = config;
 
 			$scope.pickerModes = {
 				raw : 'day',
@@ -66,10 +78,9 @@ module Directives {
 				year : 'year'
 			}
 
-
 			$scope.ok = () : void => {
 
-				$uibModalInstance.close();
+				$uibModalInstance.close($scope.config);
 			};
 
 			$scope.cancel = () : void => {
@@ -77,22 +88,6 @@ module Directives {
 			};
 		}
 
-		private _configToScope(config : SensorGraphConfig) {
-
-
-
-			this.$scope.config = {
-				unit : config.unit,
-				resolution : config.resolution,
-				sensors : config.sensors,
-				mode : config.mode,
-				windowStart : 0,
-				windowEnd : 0,
-				intervalStart: 0,
-				intervalEnd: 0,
-			};
-
-		}
 	}
 
 	interface SensorGraphScope  extends ng.IScope {
@@ -104,9 +99,11 @@ module Directives {
 	}
 
 	export class SensorGraphController implements UpdateDispatcher.Subscriber{
-		private _store : Store.SensorValueStore
+		private _store : Store.SensorValueStore;
 		private _config : SensorGraphConfig;
-		private _graphNode : HTMLElement
+		private _graphNode : HTMLElement;
+		private _timeout : ng.IPromise<any>;
+		private _redrawRequests: number;
 
 		public set graphNode(element: ng.IAugmentedJQuery) {
 			this._graphNode = element.find(".sensor-graph").get(0);
@@ -117,6 +114,8 @@ module Directives {
 					private $timeout: ng.ITimeoutService,
 					private $uibModal : angular.ui.bootstrap.IModalService,
 					private _dispatcher : UpdateDispatcher.UpdateDispatcher) {
+
+			this._redrawRequests = 0;
 
 			this._store = new Store.SensorValueStore();
 			this._store.setSlidingWindowMode(true);
@@ -138,15 +137,13 @@ module Directives {
 				    templateUrl: 'sensor-graph-settings.html',
 					resolve: {
   						config: () : SensorGraphConfig => {
-							return this._config;
+							return Utils.deepCopyJSON(this._config);
   						}
 					}
 				});
 
 				modalInstance.result.then((config : SensorGraphConfig) : void => {
-					console.log(config);
-
-					this.$scope.sensors = config.sensors;
+					this._applyConfig(config);
 				});
 			};
 
@@ -156,6 +153,7 @@ module Directives {
 
 		public updateValue(deviceID : string, sensorID : string, resolution : string, timestamp : number, value : number) : void {
 			this._store.addValue(deviceID, sensorID, timestamp, value);
+			this._requestRedraw();
 		}
 
 		public updateDeviceMetadata(deviceID : string) : void {};
@@ -168,7 +166,7 @@ module Directives {
 		public removeSensor(deviceID : string, sensorID : string) {};
 
 		private _setDefaultConfig() {
-			this._config = {
+			this._applyConfig({
 				unit : this._dispatcher.units[0],
 				resolution : UpdateDispatcher.SupportedResolutions.values().next().value,
 				sensors : [],
@@ -177,66 +175,147 @@ module Directives {
 				intervalEnd : 0,
 				windowStart : 5 * 60 * 1000,
 				windowEnd : 0
-			};
+			});
+		}
+
+		private _subscribeSensor(config : SensorGraphConfig, deviceID: string, sensorID : string) {
+			if(config.mode === 'realtime') {
+				this._dispatcher.subscribeRealtimeSlidingWindow(deviceID,
+																sensorID,
+																config.resolution,
+																config.windowStart,
+																this);
+			}
+			else if(config.mode === 'slidingWindow'){
+				this._dispatcher.subscribeSlidingWindow(deviceID,
+															sensorID,
+															config.resolution,
+															config.windowStart,
+															config.windowEnd,
+															this);
+			}
+			else if(config.mode === 'interval') {
+				this._dispatcher.subscribeInterval(deviceID,
+													sensorID,
+													config.resolution,
+													config.intervalStart,
+													config.intervalEnd,
+													this);
+			}
+			else {
+				throw new Error("Unknown mode:" + config.mode);
+			}
+		}
+
+		private _unsubscribeSensor(config : SensorGraphConfig, deviceID: string, sensorID : string) {
+			if(config.mode === 'realtime') {
+				this._dispatcher.unsubscribeRealtimeSlidingWindow(deviceID,
+																sensorID,
+																config.resolution,
+																config.windowStart,
+																this);
+			}
+			else if(config.mode === 'slidingWindow'){
+				this._dispatcher.unsubscribeSlidingWindow(deviceID,
+															sensorID,
+															config.resolution,
+															config.windowStart,
+															config.windowEnd,
+															this);
+			}
+			else if(config.mode === 'interval') {
+				this._dispatcher.unsubscribeInterval(deviceID,
+													sensorID,
+													config.resolution,
+													config.intervalStart,
+													config.intervalEnd,
+													this);
+			}
+			else {
+				throw new Error("Unknown mode:" + config.mode);
+			}
 		}
 
 
-		/*private _updateSettings() {
-			var map = {
-				raw: 1000,
-				second: 1000,
-				minute: 60 * 1000,
-				hour: 60 * 60 * 1000,
-				day: 24 * 60 * 60 * 1000,
-				week: 7 * 24 * 60 * 60 * 1000,
-				month: 31 * 24 * 60 * 60 * 1000,
-				year: 365 * 24 * 60 * 60 * 1000
-			};
+		private _applyConfig(config : SensorGraphConfig) {
 
-			this._timeResolution = map[this.$scope.resolution];
+			// Only sensors changed so no need to redo everything
+			if(this._config !== undefined &&
+				config.mode === this._config.mode &&
+				config.resolution == this._config.resolution &&
+				config.unit === this._config.unit &&
+				config.windowStart === this._config.windowStart &&
+				config.windowEnd === this._config.windowEnd &&
+				config.intervalStart === this._config.intervalStart &&
+				config.intervalEnd === this._config.intervalEnd) {
 
-			if(this.$scope.slidingWindow) {
-				this._intervalEnd = this.$scope.intervalEnd * this._timeResolution;
-				this._intervalStart = this.$scope.intervalStart * this._timeResolution;
+				var addedSensors = Utils.difference(config.sensors, this._config.sensors, sensorEqual);
+				var	removedSensors = Utils.difference(this._config.sensors, config.sensors, sensorEqual);
 
-				this._store.setSlidingWindowMode(true);
+				for(var {deviceID: deviceID, sensorID: sensorID} of addedSensors) {
+					this._subscribeSensor(config, deviceID, sensorID);
+					this._store.addSensor(deviceID,
+										sensorID,
+										this._dispatcher.devices[deviceID].sensors[sensorID].name);
+				}
 
-			}
+				for(var {deviceID: deviceID, sensorID: sensorID} of removedSensors) {
+					this._unsubscribeSensor(this._config, deviceID, sensorID);
+					this._store.removeSensor(deviceID, sensorID);
+				}
+
+			} //Redo all the things !
 			else {
-				this._store.setSlidingWindowMode(false);
-			}
+				this._dispatcher.unsubscribeAll(this);
+				this._store = new Store.SensorValueStore();
 
-			this._store.setStart(this._intervalStart);
-			this._store.setEnd(this._intervalEnd);
+				if(config.mode === 'realtime') {
+					this._store.setSlidingWindowMode(true);
+					this._store.setStart(config.windowStart);
+					this._store.setEnd(0);
+				}
+				else if(config.mode === 'slidingWindow') {
+					this._store.setSlidingWindowMode(true);
+					this._store.setStart(config.windowStart);
+					this._store.setEnd(config.windowEnd);
+				}
+				else if(config.mode === 'interval') {
+					this._store.setSlidingWindowMode(false);
+					this._store.setStart(config.intervalStart);
+					this._store.setEnd(config.intervalEnd);
+				}
 
-			this._dispatcher.unsubscribeAll(this);
+				for(var {deviceID: deviceID, sensorID: sensorID} of config.sensors) {
+					this._subscribeSensor(config, deviceID, sensorID);
 
-			if(this.$scope.sensorsByUnit !== undefined && this.$scope.sensorsByUnit[this.$scope.unit] !== undefined) {
-				for(var sensor of this.$scope.sensorsByUnit[this.$scope.unit]) {
-					if(this._store.hasSensor(sensor.deviceID, sensor.sensorID)) {
-						this._store.removeSensor(sensor.deviceID, sensor.sensorID);
-					}
+					this._store.addSensor(deviceID,
+										sensorID,
+										this._dispatcher.devices[deviceID].sensors[sensorID].name);
 				}
 			}
 
-			if(this.$scope.sensors !== undefined) {
-				for(var sensor of this.$scope.sensors) {
-					this._store.addSensor(sensor.deviceID, sensor.sensorID, sensor.sensorID);
-					if(this.$scope.slidingWindow && this._intervalEnd === 0) {
-						this._dispatcher.subscribeRealtimeSlidingWindow(sensor.deviceID, sensor.sensorID, this.$scope.resolution, this._intervalStart, this);
-					}
-					else if(this.$scope.slidingWindow) {
-						this._dispatcher.subscribeSlidingWindow(sensor.deviceID, sensor.sensorID, this.$scope.resolution, this._intervalStart, this._intervalEnd, this);
-					}
-					else {
-						this._dispatcher.subscribeInterval(sensor.deviceID, sensor.sensorID, this.$scope.resolution, this._intervalStart, this._intervalEnd, this);
-					}
-				}
+			this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 1.5);
+
+			this._config = config;
+			this.$scope.sensorColors = this._store.getColors();
+			this.$scope.sensors = config.sensors;
+
+			this._redrawGraph();
+		}
+
+
+		private _requestRedraw() {
+			this._redrawRequests += 1;
+			if(this._redrawRequests > 1000) {
+				this._redrawGraph();
 			}
-		}*/
+		}
 
 
 		private _redrawGraph() {
+			console.log("Redraw Requests was: " + this._redrawRequests);
+			this.$timeout.cancel(this._timeout);
+			this._redrawRequests = 0;
 
 			var time = Common.now();
 
@@ -244,7 +323,7 @@ module Directives {
 				xaxis: {
 					mode: 'time',
 					timeMode : 'local',
-					title: 'Uhrzeit'
+					title: 'Time'
 				},
 				HtmlText: false,
 				preventDefault : false,
@@ -255,7 +334,7 @@ module Directives {
 				}
 			}
 
-			graphOptions.title = 'Messwerte [' + this._config.unit + ']';
+			graphOptions.title = 'Values [' + this._config.unit + ']';
 
 			var delay;
 
@@ -278,7 +357,7 @@ module Directives {
 
 			var graph = Flotr.draw(this._graphNode, this._store.getData(), graphOptions);
 
-			this.$timeout(() => this._redrawGraph(), delay / graph.plotWidth);
+			this._timeout = this.$timeout(() => this._redrawGraph(), delay / graph.plotWidth * 4);
 		}
 	}
 

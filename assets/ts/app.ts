@@ -9,8 +9,6 @@
 /// <reference path="ui-elements/numberspinner.ts"/>
 /// <reference path="ui-elements/timerangespinner.ts"/>
 /// <reference path="sensorgraph.ts"/>
-/// <reference path="graphview.ts" />
-/// <reference path="sensorcollectiongraph.ts" />
 
 "use strict";
 
@@ -28,7 +26,6 @@ angular.module("msgp", ['ui.bootstrap'])
 .factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
 .directive("numberSpinner", Directives.UserInterface.NumberSpinnerFactory())
 .directive("timeRangeSpinner", Directives.UserInterface.TimeRangeSpinnerFactory())
-.directive("graphView", Directives.GraphViewFactory())
 .directive("sensorGraph", Directives.SensorGraphFactory())
 .directive("deviceEditor", [function() {
 	return {

@@ -96,6 +96,17 @@ module UpdateDispatcher  {
     // Set of all supported time resolutions for faster sanity checks
     export const SupportedResolutions = new Set(["raw", "second", "minute", "hour", "day", "week", "month", "year"]);
 
+    export const ResoltuionToMillisecs = {
+        raw: 1000,
+        second: 1000,
+        minute: 60 * 1000,
+        hour: 60 * 60 * 1000,
+        day: 24 * 60 * 60 * 1000,
+        week: 7 * 24 * 60 * 60 * 1000,
+        month: 31 * 24 * 60 * 60 * 1000,
+        year: 365 * 24 * 60 * 60 * 1000
+    };
+
     // Angular factory function with injected dependencies
     export const UpdateDispatcherFactory = ["WSUserClient", "$interval",
                                             (wsClient : Msg2Socket.Socket, $interval : ng.IIntervalService) =>
@@ -176,7 +187,7 @@ module UpdateDispatcher  {
          * Initalizes private members
          * Registers _updateMetadata and _updateValues as callbacks for the Msg2Socket
          * Requests initial metadata as soon as the socket is connected
-         * Sets up an $interval instance for polling historical data usinf _pollHistoryData
+         * Sets up an $interval instance for polling historical data using _pollHistoryData
          */
         constructor(private _wsClient : Msg2Socket.Socket, private $interval : ng.IIntervalService) {
             this._devices = {};
@@ -194,7 +205,7 @@ module UpdateDispatcher  {
 
                 this._wsClient.requestMetadata();
 
-                $interval(() => this._pollHistoryData(), 5 * 60 * 1000);
+                $interval(() => this._pollHistoryData(), 1 * 60 * 1000);
             });
         }
 
@@ -650,7 +661,9 @@ module UpdateDispatcher  {
             var notified = new Set<Subscriber>();
 
             // Make sure we have subscribsers for this sensor
-            if(this._subscribers[deviceID][sensorID][resolution] !== undefined) {
+            if(this._subscribers[deviceID] !== undefined
+                && this._subscribers[deviceID][sensorID] !== undefined
+                && this._subscribers[deviceID][sensorID][resolution] !== undefined) {
                 for(var {start: start, end: end, slidingWindow: slidingWindow, subscriber: subscriber} of this._subscribers[deviceID][sensorID][resolution]) {
 
                     if(slidingWindow) {

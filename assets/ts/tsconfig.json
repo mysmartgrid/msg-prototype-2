@@ -7,8 +7,6 @@
     },
     "files": [
       "app.ts",
-      "graphview.ts",
-      "sensorcollectiongraph.ts",
       "sensorgraph.ts",
       "msg2socket.ts",
       "sensorvaluestore.ts",

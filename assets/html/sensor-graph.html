@@ -39,7 +39,8 @@
 				</div>
 			</div>
 
-			<div class="form-group" ng-show="config.mode === 'interval'">
+			<!-- config.mode === 'interval' -->
+			<div class="form-group" ng-show="false">
 				<label for="intervalStart" class="col-sm-3 control-label">Interval start</label>
 				<div class="col-sm-9">
 					<p class="input-group">
@@ -58,7 +59,8 @@
 				</div>
 			</div>
 
-			<div class="form-group" ng-show="config.mode === 'interval'">
+			<!-- config.mode === 'interval' -->
+			<div class="form-group" ng-show="false">
 				<label for="intervalEnd" class="col-sm-3 control-label">Interval end</label>
 				<div class="col-sm-9">
 					<p class="input-group">
@@ -73,15 +75,14 @@
 			<div class="form-group" ng-show="config.mode === 'slidingWindow' || config.mode === 'realtime'">
 				<label for="windowStart" class="col-sm-3 control-label">Window start</label>
 				<div class="col-sm-9">
-					<div time-range-spinner="" min="0" max="31536000000"></div>
+					<div id="windowStart" time-range-spinner="" min="0" max="31536000000" ng-model="config.windowStart"></div>
 				</div>
-				%% config.windowStart | json %%
 			</div>
 
 			<div class="form-group" ng-show="config.mode === 'slidingWindow'">
 				<label for="windowEnd" class="col-sm-3 control-label">Window end</label>
 				<div class="col-sm-9">
-					<uib-timepicker ng-model="windowEnd" hour-step="1" minute-step="1" show-meridian="false"></uib-timepicker>
+					<div id="windowEnd" time-range-spinner="" min="0" max="31536000000" ng-model="config.windowEnd"></div>
 				</div>
 			</div>
 
@@ -100,6 +101,7 @@
 	<span class="glyphicon glyphicon-cog"></span>
 	Settings
 </button>
+<br/>
 <br/>
 <div class="table-responsive">
 	<table class="table">

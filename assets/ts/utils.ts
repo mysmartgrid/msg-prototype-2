@@ -27,6 +27,10 @@ module Utils {
     export function deepCopyJSON<T>(src : T) : T {
         var dst : any = {};
 
+        if(Array.isArray(src)) {
+            dst = [];
+        }
+
         for(var key in src) {
             if(src.hasOwnProperty(key)) {
                 if(typeof(src[key]) === "object") {
@@ -39,5 +43,9 @@ module Utils {
         }
 
         return dst;
+    }
+
+    export function difference<T>(a : T[], b : T[], equals : (x : T, y : T) => boolean) : T[] {
+        return a.filter((a_element) => b.findIndex((b_element) => equals(a_element , b_element)) === -1);
     }
 }
