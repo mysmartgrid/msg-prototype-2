@@ -29,10 +29,11 @@ type Db interface {
 }
 
 type User interface {
-	AddDevice(id string, key []byte) (Device, error)
+	AddDevice(id string, key []byte, isVirtual bool) (Device, error)
 	RemoveDevice(id string) error
 	Device(id string) Device
 	Devices() map[string]Device
+	VirtualDevices() map[string]Device
 	HasPassword(pw string) bool
 
 	IsAdmin() bool
@@ -66,6 +67,7 @@ type Device interface {
 	AddSensor(id, unit string, port int32) (Sensor, error)
 	Sensor(id string) Sensor
 	Sensors() map[string]Sensor
+	VirtualSensors() map[string]Sensor
 	RemoveSensor(id string) error
 
 	Id() string
@@ -74,6 +76,7 @@ type Device interface {
 
 	Name() string
 	SetName(string) error
+	IsVirtual() bool
 }
 
 type Sensor interface {
@@ -88,6 +91,7 @@ type Sensor interface {
 
 	Port() int32
 	Unit() string
+	IsVirtual() bool
 }
 
 type Value struct {

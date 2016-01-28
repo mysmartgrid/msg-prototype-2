@@ -619,7 +619,7 @@ func api_User_Devices_Add(w http.ResponseWriter, r *http.Request) {
 
 			apiAbortIf(400, dev.LinkTo(user.Id()))
 
-			_, err := user.AddDevice(dev.Id(), dev.Key())
+			_, err := user.AddDevice(dev.Id(), dev.Key(), false)
 			apiAbortIf(500, err)
 
 			data := map[string]interface{}{

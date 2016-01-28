@@ -1,6 +1,8 @@
 package db
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"golang.org/x/crypto/bcrypt"
 	"time"
 )
@@ -21,7 +23,15 @@ func (u *user) init(password string) error {
 		return err
 	}
 
-	return nil
+	//Generate dummy device for virtual sensors
+	var buf [32]byte
+	_, err = rand.Read(buf[:])
+	if err != nil {
+		return err
+	}
+
+	_, err = u.AddDevice(hex.EncodeToString(buf[0:16]), buf[16:32], true)
+	return err
 }
 
 func (u *user) HasPassword(pw string) bool {
@@ -35,14 +45,14 @@ func (u *user) HasPassword(pw string) bool {
 	return err == nil
 }
 
-func (u *user) AddDevice(id string, key []byte) (Device, error) {
-	_, err := u.tx.Exec(`INSERT INTO devices(device_id, name, key, user_id) VALUES($1, $2, $3, $4)`,
+func (u *user) AddDevice(id string, key []byte, isVirtual bool) (Device, error) {
+	_, err := u.tx.Exec(`INSERT INTO devices(device_id, name, key, user_id, is_virtual) VALUES($1, $2, $3, $4, $5)`,
 		id, id, key, u.id)
 	if err != nil {
 		return nil, err
 	}
 
-	result := &device{u, id}
+	result := &device{u, id, isVirtual}
 	return result, nil
 }
 
@@ -53,18 +63,45 @@ func (u *user) RemoveDevice(id string) error {
 
 func (u *user) Device(id string) Device {
 	var deviceId string
-	err := u.tx.QueryRow(`SELECT device_id FROM devices WHERE user_id = $1 and device_id = $2`, u.id, id).Scan(&deviceId)
+	var isVirtual bool
+	err := u.tx.QueryRow(`SELECT device_id, is_virtual FROM devices WHERE user_id = $1 and device_id = $2`, u.id, id).Scan(&deviceId, &isVirtual)
 	if err != nil {
 		return nil
 	}
 
-	result := &device{u, id}
+	result := &device{u, id, isVirtual}
 
 	return result
 }
 
 func (u *user) Devices() map[string]Device {
-	rows, err := u.tx.Query(`SELECT device_id FROM devices WHERE user_id = $1`, u.id)
+	rows, err := u.tx.Query(`SELECT device_id, is_virtual FROM devices WHERE user_id = $1`, u.id)
+	if err != nil {
+		return nil
+	}
+
+	result := make(map[string]Device)
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var isVirtual bool
+		err = rows.Scan(&id, &isVirtual)
+		if err != nil {
+			return nil
+		}
+
+		result[id] = &device{u, id, isVirtual}
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil
+	}
+
+	return result
+}
+
+func (u *user) VirtualDevices() map[string]Device {
+	rows, err := u.tx.Query(`SELECT device_id FROM devices WHERE user_id = $1 AND is_virtual = $2`, u.id, true)
 	if err != nil {
 		return nil
 	}
@@ -78,7 +115,7 @@ func (u *user) Devices() map[string]Device {
 			return nil
 		}
 
-		result[id] = &device{u, id}
+		result[id] = &device{u, id, true}
 	}
 	err = rows.Err()
 	if err != nil {

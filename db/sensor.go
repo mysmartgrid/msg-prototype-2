@@ -1,9 +1,10 @@
 package db
 
 type sensor struct {
-	device *device
-	id     string
-	seq    uint64
+	device    *device
+	id        string
+	seq       uint64
+	isVirtual bool
 }
 
 func (s *sensor) Id() string {
@@ -74,4 +75,8 @@ func (s *sensor) Unit() string {
 		return ""
 	}
 	return unit
+}
+
+func (s *sensor) IsVirtual() bool {
+	return s.isVirtual
 }
