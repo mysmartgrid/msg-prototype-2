@@ -47,7 +47,7 @@ func (u *user) HasPassword(pw string) bool {
 
 func (u *user) AddDevice(id string, key []byte, isVirtual bool) (Device, error) {
 	_, err := u.tx.Exec(`INSERT INTO devices(device_id, name, key, user_id, is_virtual) VALUES($1, $2, $3, $4, $5)`,
-		id, id, key, u.id)
+		id, id, key, u.id, isVirtual)
 	if err != nil {
 		return nil, err
 	}
