@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	bufferSize = 10000
+	bufferSize = 100000
 )
 
 var (

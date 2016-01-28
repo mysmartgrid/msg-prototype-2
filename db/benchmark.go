@@ -91,7 +91,7 @@ func (d *db) benchAddDevices(count int) map[User][]Device {
 		users := tx.Users()
 		for _, user := range users {
 			for i := 0; i < count; i++ {
-				device, err := user.AddDevice(names[i], nil)
+				device, err := user.AddDevice(names[i], nil, false)
 				if err != nil {
 					return err
 				}

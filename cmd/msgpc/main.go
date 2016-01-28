@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	sdm630 "github.com/mysmartgrid/gosdm630"
 	msgp "github.com/mysmartgrid/msg2api"
 	"io/ioutil"
 	"log"
@@ -29,9 +30,10 @@ var tlsConfig tls.Config
 var dev *Device
 
 type Sensor struct {
-	Name string
-	Unit string
-	Port int32
+	Name                string
+	Unit                string
+	Port                int32
+	LastRealtimeRequest time.Time
 }
 
 type Device struct {
@@ -50,6 +52,32 @@ type Device struct {
 
 var deviceNotRegistered = errors.New("device not registered")
 
+var sensorDefinitons = [...]Sensor{
+	Sensor{Name: "Voltage L1", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Voltage L2", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Voltage L3", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+
+	Sensor{Name: "Current L1", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Current L2", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Current L3", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+
+	Sensor{Name: "Power L1", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Power L2", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Power L3", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+
+	Sensor{Name: "Import L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Import L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Import L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+
+	Sensor{Name: "Export L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Export L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Export L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+
+	Sensor{Name: "Power Factor L1", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Power Factor L2", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	Sensor{Name: "Power Factor L3", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+}
+
 func (dev *Device) client() *msgp.DeviceClient {
 	if dev.client_ == nil {
 		client, err := msgp.NewDeviceClient(dev.api+"/"+dev.User+"/"+dev.Id, dev.Key, &tlsConfig)
@@ -59,6 +87,11 @@ func (dev *Device) client() *msgp.DeviceClient {
 
 		client.RequestRealtimeUpdates = func(sensors []string) {
 			log.Printf("server requested realtime updates for %v", sensors)
+			for _, sensor := range sensors {
+				if s, ok := dev.Sensors[sensor]; ok {
+					s.LastRealtimeRequest = time.Now()
+				}
+			}
 		}
 
 		dev.client_ = client
@@ -81,6 +114,39 @@ func newRandomDevice() *Device {
 	}
 }
 
+func newSDM630Device() *Device {
+	var buf [32]byte
+
+	_, err := crand.Read(buf[:])
+	if err != nil {
+		log.Fatalf("rand read: %v", err.Error())
+	}
+
+	device := Device{
+		Id:      hex.EncodeToString(buf[0:16]),
+		Key:     buf[16:32],
+		Sensors: make(map[string]Sensor),
+	}
+
+	for _, sensor := range sensorDefinitons {
+		var raw [16]byte
+
+		if _, err := crand.Read(raw[:]); err != nil {
+			log.Fatalf("rand read: %v", err.Error())
+		}
+
+		for {
+			id := hex.EncodeToString(raw[:])
+			if _, ok := device.Sensors[id]; !ok {
+				device.Sensors[id] = sensor
+				break
+			}
+		}
+	}
+
+	return &device
+}
+
 func (dev *Device) GenerateRandomSensors(count int64) {
 	if dev.Sensors == nil {
 		dev.Sensors = make(map[string]Sensor)
@@ -90,7 +156,7 @@ func (dev *Device) GenerateRandomSensors(count int64) {
 		var raw [16]byte
 
 		if _, err := crand.Read(raw[:]); err != nil {
-			log.Fatal("rand read: %v", err.Error())
+			log.Fatalf("rand read: %v", err.Error())
 		}
 
 		id := hex.EncodeToString(raw[:])
@@ -306,11 +372,91 @@ func (dev *Device) UpdateSensors() error {
 	return nil
 }
 
-func (dev *Device) SendUpdates(interval time.Duration, count int64) error {
+func (dev *Device) SendRandomUpdates(interval time.Duration, count int64) error {
 	for ; count != 0; count-- {
 		for id, _ := range dev.Sensors {
 			values := make(map[string][]msgp.Measurement, len(dev.Sensors))
 			values[id] = []msgp.Measurement{{time.Now(), rand.Float64()}}
+			if err := dev.client().Update(values); err != nil {
+				return err
+			}
+		}
+
+		time.Sleep(interval)
+	}
+
+	return nil
+}
+
+func initSDM639(serialDevice string, interval int) *sdm630.MeasurementCache {
+	var rc = make(sdm630.ReadingChannel)
+	qe := sdm630.NewQueryEngine(
+		serialDevice,
+		interval,
+		true,
+		rc,
+	)
+	go qe.Produce()
+	mc := sdm630.NewMeasurementCache(
+		rc,
+		interval,
+		true,
+	)
+	go mc.ConsumeData()
+
+	return mc
+}
+
+func (dev *Device) SendSDM630Updates(interval time.Duration, count int64, serialDevice string) error {
+	mc := initSDM639(serialDevice, int(interval.Seconds()))
+
+	for ; count != 0; count-- {
+
+		r := mc.GetLast()
+		for id, sensor := range dev.Sensors {
+			values := make(map[string][]msgp.Measurement, len(dev.Sensors))
+			var val float32
+			switch sensor.Name {
+			case "Voltage L1":
+				val = r.Voltage.L1
+			case "Voltage L2":
+				val = r.Voltage.L2
+			case "Voltage L3":
+				val = r.Voltage.L3
+			case "Current L1":
+				val = r.Current.L1
+			case "Current L2":
+				val = r.Current.L2
+			case "Current L3":
+				val = r.Current.L3
+			case "Power L1":
+				val = r.Power.L1
+			case "Power L2":
+				val = r.Power.L2
+			case "Power L3":
+				val = r.Power.L3
+			case "Import L1":
+				val = r.Import.L1
+			case "Import L2":
+				val = r.Import.L2
+			case "Import L3":
+				val = r.Import.L3
+			case "Export L1":
+				val = r.Export.L1
+			case "Export L2":
+				val = r.Export.L2
+			case "Export L3":
+				val = r.Export.L3
+			case "Power Factor L1":
+				val = r.Cosphi.L1
+			case "Power Factor L2":
+				val = r.Cosphi.L2
+			case "Power Factor L3":
+				val = r.Cosphi.L3
+			default:
+				continue
+			}
+			values[id] = []msgp.Measurement{{time.Now(), float64(val)}}
 			if err := dev.client().Update(values); err != nil {
 				return err
 			}
@@ -407,6 +553,11 @@ func main() {
 			dev.regdevApi = "http://[::1]:8080/api/regdev/v1"
 			bailIf(dev.Register())
 
+		case "newSDM630":
+			dev = newSDM630Device()
+			dev.regdevApi = "http://[::1]:8080/api/regdev/v1"
+			bailIf(dev.Register())
+
 		case "print":
 			data, err := json.MarshalIndent(dev, "", "  ")
 			bailIf(err)
@@ -442,14 +593,24 @@ func main() {
 		case "registerSensors":
 			bailIf(dev.RegisterSensors())
 
-		case "sendUpdates":
+		case "sendRandomUpdates":
 			next("interval")
 			interval, err := time.ParseDuration(os.Args[i])
 			bailIf(err)
 			next("count")
 			count, err := strconv.ParseInt(os.Args[i], 10, 32)
 			bailIf(err)
-			bailIf(dev.SendUpdates(interval, count))
+			bailIf(dev.SendRandomUpdates(interval, count))
+
+		case "sendSDM630Updates":
+			next("interval")
+			interval, err := time.ParseDuration(os.Args[i])
+			bailIf(err)
+			next("count")
+			count, err := strconv.ParseInt(os.Args[i], 10, 32)
+			bailIf(err)
+			next()
+			bailIf(dev.SendSDM630Updates(interval, count, os.Args[i]))
 
 		case "renameSensors":
 			bailIf(dev.RenameSensors())

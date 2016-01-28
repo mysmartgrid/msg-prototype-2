@@ -7,16 +7,16 @@ db-dir        = "./"
 motherlode = true
 
 [postgres]
-user     = "msgpd"
-password = "msgpd"
-database = "msgpd"
+user     = "msgdb"
+password = "msgdb"
+database = "msgdb"
 address  = "localhost"
 port     = "5432"
 
 [benchmark]
 # Caution: Benchmark empties database!
 do-benchmark = false
-users        = 10
-devices      = 100
-sensors      = 50
-duration     = 5 # in minutes
+users        = 20
+devices      = 1000
+sensors      = 10
+duration     = 1 # in minutes

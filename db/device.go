@@ -1,19 +1,20 @@
 package db
 
 type device struct {
-	user *user
-	id   string
+	user      *user
+	id        string
+	isVirtual bool
 }
 
 func (d *device) AddSensor(id, unit string, port int32) (Sensor, error) {
 	var seq uint64
-	err := d.user.tx.QueryRow(`INSERT INTO sensors(sensor_id, device_id, user_id, name, port, unit) VALUES($1, $2, $3, $4, $5, $6) RETURNING sensor_seq`,
-		id, d.id, d.user.id, id, port, unit).Scan(&seq)
+	err := d.user.tx.QueryRow(`INSERT INTO sensors(sensor_id, device_id, user_id, name, port, unit, is_virtual) VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING sensor_seq`,
+		id, d.id, d.user.id, id, port, unit, false).Scan(&seq)
 	if err != nil {
 		return nil, err
 	}
 
-	result := &sensor{d, id, seq}
+	result := &sensor{d, id, seq, false}
 
 	d.user.tx.db.bufferAdd <- seq
 
@@ -22,18 +23,46 @@ func (d *device) AddSensor(id, unit string, port int32) (Sensor, error) {
 
 func (d *device) Sensor(id string) Sensor {
 	var seq uint64
-	err := d.user.tx.QueryRow(`SELECT sensor_seq FROM sensors WHERE user_id = $1 AND device_id = $2 AND sensor_id = $3`, d.user.id, d.id, id).Scan(&seq)
+	var isVirtual bool
+	err := d.user.tx.QueryRow(`SELECT sensor_seq, is_virtual FROM sensors WHERE user_id = $1 AND device_id = $2 AND sensor_id = $3`, d.user.id, d.id, id).Scan(&seq, &isVirtual)
 	if err != nil {
 		return nil
 	}
 
-	result := &sensor{d, id, seq}
+	result := &sensor{d, id, seq, isVirtual}
 
 	return result
 }
 
 func (d *device) Sensors() map[string]Sensor {
-	rows, err := d.user.tx.Query(`SELECT sensor_id, sensor_seq FROM sensors WHERE user_id = $1 AND device_id = $2`, d.user.id, d.id)
+	rows, err := d.user.tx.Query(`SELECT sensor_id, sensor_seq, is_virtual FROM sensors WHERE user_id = $1 AND device_id = $2`, d.user.id, d.id)
+	if err != nil {
+		return nil
+	}
+
+	result := make(map[string]Sensor)
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var seq uint64
+		var isVirtual bool
+		err = rows.Scan(&id, &seq, &isVirtual)
+		if err != nil {
+			return nil
+		}
+
+		result[id] = &sensor{d, id, seq, isVirtual}
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil
+	}
+
+	return result
+}
+
+func (d *device) VirtualSensors() map[string]Sensor {
+	rows, err := d.user.tx.Query(`SELECT sensor_id, sensor_seq FROM sensors WHERE user_id = $1 AND device_id = $2 AND is_virtual = $3`, d.user.id, d.id, true)
 	if err != nil {
 		return nil
 	}
@@ -48,7 +77,7 @@ func (d *device) Sensors() map[string]Sensor {
 			return nil
 		}
 
-		result[id] = &sensor{d, id, seq}
+		result[id] = &sensor{d, id, seq, true}
 	}
 	err = rows.Err()
 	if err != nil {
@@ -92,4 +121,8 @@ func (d *device) Name() string {
 func (d *device) SetName(name string) error {
 	_, err := d.user.tx.Exec(`UPDATE devices SET name = $1 WHERE user_id = $2 AND device_id = $3`, name, d.user.id, d.id)
 	return err
+}
+
+func (d *device) IsVirtual() bool {
+	return d.isVirtual
 }
