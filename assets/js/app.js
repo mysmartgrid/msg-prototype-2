@@ -1180,7 +1180,6 @@ var Directives;
             this.$timeout = $timeout;
             this.$uibModal = $uibModal;
             this._dispatcher = _dispatcher;
-            this._redrawRequests = 0;
             this._store = new Store.SensorValueStore();
             this._store.setSlidingWindowMode(true);
             this._store.setEnd(0);
@@ -1216,7 +1215,6 @@ var Directives;
         });
         SensorGraphController.prototype.updateValue = function (deviceID, sensorID, resolution, timestamp, value) {
             this._store.addValue(deviceID, sensorID, timestamp, value);
-            this._requestRedraw();
         };
         SensorGraphController.prototype.updateDeviceMetadata = function (deviceID) { };
         ;
@@ -1314,23 +1312,15 @@ var Directives;
                     this._store.addSensor(deviceID, sensorID, this._dispatcher.devices[deviceID].sensors[sensorID].name);
                 }
             }
-            this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 1.5);
+            this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 25);
             this._config = config;
             this.$scope.sensorColors = this._store.getColors();
             this.$scope.sensors = config.sensors;
             this._redrawGraph();
         };
-        SensorGraphController.prototype._requestRedraw = function () {
-            this._redrawRequests += 1;
-            if (this._redrawRequests > 1000) {
-                this._redrawGraph();
-            }
-        };
         SensorGraphController.prototype._redrawGraph = function () {
             var _this = this;
-            console.log("Redraw Requests was: " + this._redrawRequests);
             this.$timeout.cancel(this._timeout);
-            this._redrawRequests = 0;
             var time = Common.now();
             var graphOptions = {
                 xaxis: {
@@ -1365,7 +1355,9 @@ var Directives;
                 delay = this._config.intervalStart - this._config.intervalEnd;
             }
             var graph = Flotr.draw(this._graphNode, this._store.getData(), graphOptions);
-            this._timeout = this.$timeout(function () { return _this._redrawGraph(); }, delay / graph.plotWidth * 4);
+            delay = delay / graph.plotWidth;
+            delay = Math.min(1000, delay);
+            this._timeout = this.$timeout(function () { return _this._redrawGraph(); }, delay);
         };
         return SensorGraphController;
     })();

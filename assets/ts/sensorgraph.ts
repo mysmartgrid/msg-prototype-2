@@ -103,7 +103,6 @@ module Directives {
 		private _config : SensorGraphConfig;
 		private _graphNode : HTMLElement;
 		private _timeout : ng.IPromise<any>;
-		private _redrawRequests: number;
 
 		public set graphNode(element: ng.IAugmentedJQuery) {
 			this._graphNode = element.find(".sensor-graph").get(0);
@@ -115,7 +114,6 @@ module Directives {
 					private $uibModal : angular.ui.bootstrap.IModalService,
 					private _dispatcher : UpdateDispatcher.UpdateDispatcher) {
 
-			this._redrawRequests = 0;
 
 			this._store = new Store.SensorValueStore();
 			this._store.setSlidingWindowMode(true);
@@ -153,7 +151,6 @@ module Directives {
 
 		public updateValue(deviceID : string, sensorID : string, resolution : string, timestamp : number, value : number) : void {
 			this._store.addValue(deviceID, sensorID, timestamp, value);
-			this._requestRedraw();
 		}
 
 		public updateDeviceMetadata(deviceID : string) : void {};
@@ -294,7 +291,7 @@ module Directives {
 				}
 			}
 
-			this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 1.5);
+			this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 25);
 
 			this._config = config;
 			this.$scope.sensorColors = this._store.getColors();
@@ -303,19 +300,8 @@ module Directives {
 			this._redrawGraph();
 		}
 
-
-		private _requestRedraw() {
-			this._redrawRequests += 1;
-			if(this._redrawRequests > 1000) {
-				this._redrawGraph();
-			}
-		}
-
-
 		private _redrawGraph() {
-			console.log("Redraw Requests was: " + this._redrawRequests);
 			this.$timeout.cancel(this._timeout);
-			this._redrawRequests = 0;
 
 			var time = Common.now();
 
@@ -357,7 +343,10 @@ module Directives {
 
 			var graph = Flotr.draw(this._graphNode, this._store.getData(), graphOptions);
 
-			this._timeout = this.$timeout(() => this._redrawGraph(), delay / graph.plotWidth * 4);
+			delay = delay / graph.plotWidth;
+			delay = Math.min(1000, delay);
+
+			this._timeout = this.$timeout(() => this._redrawGraph(), delay);
 		}
 	}
 
