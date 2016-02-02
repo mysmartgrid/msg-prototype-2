@@ -12,8 +12,26 @@ module Directives.UserInterface {
         "minutes" : 60 * 1000
     }
 
+    interface TimeRangeSpinnerScope extends ng.IScope {
+        time : {
+            years : number;
+            days : number;
+            hours : number;
+            minutes : number;
+        };
+
+        ngModel : number;
+        min : number;
+        max : number;
+        ngChange : () => void;
+
+        change : () => void;
+        increment : (unit : string) => void;
+        decrement : (unit : string) => void;
+    }
+
     export class TimeRangeSpinnerController {
-        constructor(private $scope : any) {
+        constructor(private $scope : TimeRangeSpinnerScope) {
             $scope.time = {
                 years : 0,
                 days : 0,
@@ -132,7 +150,7 @@ module Directives.UserInterface {
         public controller = ["$scope", TimeRangeSpinnerController];
 
         // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
-        public link:Function  = ($scope : any,
+        public link:Function  = ($scope : TimeRangeSpinnerScope,
                                     element : ng.IAugmentedJQuery,
                                     attrs : ng.IAttributes,
                                     controller : TimeRangeSpinnerController) : void => {
