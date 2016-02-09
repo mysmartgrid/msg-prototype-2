@@ -1,0 +1,27 @@
+<table>
+    <tr>
+        <td>
+            <p class="input-group" style="margin: 0px;">
+                <input class="form-control"
+                    id="intervalStart"
+                    type="date"
+                    uib-datepicker-popup
+                    is-open="pickerOpen"
+                    ng-model="date"
+                    ng-change="change()"/>
+                <span class="input-group-btn">
+                    <button type="button" class="btn btn-default" ng-click="pickerOpen = true"><i class="glyphicon glyphicon-calendar"></i></button>
+                </span>
+            </p>
+        </td>
+        <td>
+            <div class="col-sm-6">
+                <div uib-timepicker=""
+                    ng-model="date"
+                    ng-change="change()"
+                    show-meridian="false">
+                </div>
+            </div>
+        </td>
+    <tr/>
+</table>
