@@ -141,10 +141,10 @@ module Directives.UserInterface {
         public restrict : string = "A"
         public templateUrl : string = "/html/time-range-spinner.html"
         public scope = {
-            ngModel: '=',
+            ngModel: '=?',
             ngChange: '&',
-            min: '=',
-            max: '='
+            min: '=?',
+            max: '=?'
         }
 
         public controller = ["$scope", TimeRangeSpinnerController];
