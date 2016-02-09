@@ -1,8 +1,6 @@
 package db
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"golang.org/x/crypto/bcrypt"
 	"time"
 )
@@ -23,14 +21,6 @@ func (u *user) init(password string) error {
 		return err
 	}
 
-	//Generate dummy device for virtual sensors
-	var buf [32]byte
-	_, err = rand.Read(buf[:])
-	if err != nil {
-		return err
-	}
-
-	_, err = u.AddDevice(hex.EncodeToString(buf[0:16]), buf[16:32], true)
 	return err
 }
 
