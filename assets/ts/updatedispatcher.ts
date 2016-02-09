@@ -127,6 +127,9 @@ module UpdateDispatcher  {
      * and a sliding window from a point in the past to the current timestamp,
      * which will receive the latest values directly from the device using realtime updates.
      * Historical data will be updated by polling the backend in a regularl interval.
+     * The resolution 'raw' is special as it is only valid in the realtime sliding window mode.
+     * Since there is no historical data for raw there is no perdiocal polling for this resolution.
+     * The initial data which is provided upon subscribtion will be taken from the second resolution.
      *
      * It is ensured by the dispatcher that each subscribe only receives each update only once,
      * even if there are several overlapping subscriptions for the same sensor.
@@ -298,6 +301,10 @@ module UpdateDispatcher  {
                 throw new Error("End should be bigger then star for interval mode");
             }
 
+            if(resolution === 'raw' && (!slidingWindow || end !== 0)) {
+                throw new Error("Resoultion raw is only supported for realtime sliding windows")
+            }
+
             if(this._subscribers[deviceID][sensorID][resolution] === undefined) {
                 this._subscribers[deviceID][sensorID][resolution] = new ExtArray<SubscriberSettings>();
             }
@@ -323,7 +330,12 @@ module UpdateDispatcher  {
 
             var sensorsList : Msg2Socket.DeviceSensorList = {};
             sensorsList[deviceID] = [sensorID];
-            this._wsClient.requestValues(start, end, resolution, sensorsList);
+
+            var requestResolution = resolution;
+            if(resolution === 'raw') {
+                requestResolution = 'second';
+            }
+            this._wsClient.requestValues(start, end, requestResolution, sensorsList);
         }
 
         // Shorthand to remove all subscribtions for a given subscriber
@@ -593,31 +605,33 @@ module UpdateDispatcher  {
             // Gather start, end and sensors for each resolution
             Common.forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
                 for(var resolution in map) {
-                    for(var {start: start, end: end, slidingWindow: slidingWindow} of map[resolution]) {
+                    if(resolution !== 'raw') {
+                        for(var {start: start, end: end, slidingWindow: slidingWindow} of map[resolution]) {
 
-                        if(slidingWindow) {
-                            start = now - start;
-                            end = now - end;
+                            if(slidingWindow) {
+                                start = now - start;
+                                end = now - end;
+                            }
+
+                            if(requests[resolution] === undefined) {
+                                requests[resolution] = {
+                                    start: start,
+                                    end: end,
+                                    sensors: {}
+                                };
+                            }
+
+                            //Adjust start and end of interval
+                            requests[resolution].start = Math.min(start, requests[resolution].start);
+                            requests[resolution].end = Math.max(end, requests[resolution].end);
+
+
+                            if(requests[resolution].sensors[deviceID] === undefined) {
+                                requests[resolution].sensors[deviceID] = new Set<string>();
+                            }
+
+                            requests[resolution].sensors[deviceID].add(sensorID);
                         }
-
-                        if(requests[resolution] === undefined) {
-                            requests[resolution] = {
-                                start: start,
-                                end: end,
-                                sensors: {}
-                            };
-                        }
-
-                        //Adjust start and end of interval
-                        requests[resolution].start = Math.min(start, requests[resolution].start);
-                        requests[resolution].end = Math.max(end, requests[resolution].end);
-
-
-                        if(requests[resolution].sensors[deviceID] === undefined) {
-                            requests[resolution].sensors[deviceID] = new Set<string>();
-                        }
-
-                        requests[resolution].sensors[deviceID].add(sensorID);
                     }
                 }
             });
