@@ -145,6 +145,18 @@ module Store {
 			this._sensorLabels[deviceId][sensorId] = label;
 		}
 
+
+		private _findInsertionPos(data : [number, number][], timestamp: number) : number {
+			for(var pos = 0; pos < data.length; pos++) {
+				if(data[pos][0] > timestamp) {
+					return pos;
+				}
+			}
+
+			return data.length;
+		}
+
+
 		public addValue(deviceId : string, sensorId : string, timestamp : number, value : number) : void {
 			var seriesIndex : number = this._getSensorIndex(deviceId, sensorId);
 			if(seriesIndex === -1) {
@@ -153,12 +165,7 @@ module Store {
 
 			// Find position for inserting
 			var data = this._series[seriesIndex].data;
-			var pos = data.findIndex((point : [number, number]) : boolean => {
-				return point[0] > timestamp;
-			});
-			if(pos === -1) {
-				pos = data.length;
-			}
+			var pos = this._findInsertionPos(data, timestamp);
 
 			// Check if the value is an update for an existing timestamp
 			if(data.length > 0 && pos === 0 && data[0][0] === timestamp) {
