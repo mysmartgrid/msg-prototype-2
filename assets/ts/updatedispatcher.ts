@@ -127,9 +127,6 @@ module UpdateDispatcher  {
      * and a sliding window from a point in the past to the current timestamp,
      * which will receive the latest values directly from the device using realtime updates.
      * Historical data will be updated by polling the backend in a regularl interval.
-     * The resolution 'raw' is special as it is only valid in the realtime sliding window mode.
-     * Since there is no historical data for raw there is no perdiocal polling for this resolution.
-     * The initial data which is provided upon subscribtion will be taken from the second resolution.
      *
      * It is ensured by the dispatcher that each subscribe only receives each update only once,
      * even if there are several overlapping subscriptions for the same sensor.
@@ -301,10 +298,6 @@ module UpdateDispatcher  {
                 throw new Error("End should be bigger then star for interval mode");
             }
 
-            if(resolution === 'raw' && (!slidingWindow || end !== 0)) {
-                throw new Error("Resoultion raw is only supported for realtime sliding windows")
-            }
-
             if(this._subscribers[deviceID][sensorID][resolution] === undefined) {
                 this._subscribers[deviceID][sensorID][resolution] = new ExtArray<SubscriberSettings>();
             }
@@ -330,12 +323,7 @@ module UpdateDispatcher  {
 
             var sensorsList : Msg2Socket.DeviceSensorList = {};
             sensorsList[deviceID] = [sensorID];
-
-            var requestResolution = resolution;
-            if(resolution === 'raw') {
-                requestResolution = 'second';
-            }
-            this._wsClient.requestValues(start, end, requestResolution, sensorsList);
+            this._wsClient.requestValues(start, end, resolution, sensorsList);
         }
 
         // Shorthand to remove all subscribtions for a given subscriber
@@ -607,7 +595,6 @@ module UpdateDispatcher  {
                 for(var resolution in map) {
                     if(resolution !== 'raw') {
                         for(var {start: start, end: end, slidingWindow: slidingWindow} of map[resolution]) {
-
                             if(slidingWindow) {
                                 start = now - start;
                                 end = now - end;
