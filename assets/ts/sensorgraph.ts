@@ -145,7 +145,7 @@ module Directives {
 				});
 			};
 
-			$interval(() => this._store.clampData(), 1000);
+			$interval(() => this._store.clampData(), 60 * 1000);
 		}
 
 
@@ -168,8 +168,8 @@ module Directives {
 				resolution : UpdateDispatcher.SupportedResolutions.values().next().value,
 				sensors : [],
 				mode: 'realtime',
-				intervalStart : 0,
-				intervalEnd : 0,
+				intervalStart : Common.now() - 24 * 60 * 1000,
+				intervalEnd : Common.now(),
 				windowStart : 5 * 60 * 1000,
 				windowEnd : 0
 			});
@@ -341,7 +341,7 @@ module Directives {
 			var graph = Flotr.draw(this._graphNode, this._store.getData(), graphOptions);
 
 			delay = delay / graph.plotWidth;
-			delay = Math.min(1000, delay);
+			delay = Math.min(10000, delay);
 
 			this._timeout = this.$timeout(() => this._redrawGraph(), delay);
 		}

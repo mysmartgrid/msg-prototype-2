@@ -14,6 +14,7 @@
       "common.ts",
       "utils.ts",
       "ui-elements/numberspinner.ts",
-      "ui-elements/timerangespinner.ts"
+      "ui-elements/timerangespinner.ts",
+      "ui-elements/datetimepicker.ts"
     ]
 }

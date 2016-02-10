@@ -8,6 +8,7 @@
 
 /// <reference path="ui-elements/numberspinner.ts"/>
 /// <reference path="ui-elements/timerangespinner.ts"/>
+/// <reference path="ui-elements/datetimepicker.ts"/>
 /// <reference path="sensorgraph.ts"/>
 
 "use strict";
@@ -26,6 +27,7 @@ angular.module("msgp", ['ui.bootstrap'])
 .factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
 .directive("numberSpinner", Directives.UserInterface.NumberSpinnerFactory())
 .directive("timeRangeSpinner", Directives.UserInterface.TimeRangeSpinnerFactory())
+.directive("dateTimePicker", Directives.UserInterface.DateTimePickerFactory())
 .directive("sensorGraph", Directives.SensorGraphFactory())
 .directive("deviceEditor", [function() {
 	return {

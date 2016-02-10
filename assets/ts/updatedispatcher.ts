@@ -594,6 +594,7 @@ module UpdateDispatcher  {
             Common.forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
                 for(var resolution in map) {
                     if(resolution !== 'raw') {
+                        
                         for(var {start: start, end: end, slidingWindow: slidingWindow} of map[resolution]) {
                             if(slidingWindow) {
                                 start = now - start;
