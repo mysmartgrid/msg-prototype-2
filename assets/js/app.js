@@ -635,26 +635,28 @@ var UpdateDispatcher;
             // Gather start, end and sensors for each resolution
             Common.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
                 for (var resolution in map) {
-                    for (var _i = 0, _a = map[resolution]; _i < _a.length; _i++) {
-                        var _b = _a[_i], start = _b.start, end = _b.end, slidingWindow = _b.slidingWindow;
-                        if (slidingWindow) {
-                            start = now - start;
-                            end = now - end;
+                    if (resolution !== 'raw') {
+                        for (var _i = 0, _a = map[resolution]; _i < _a.length; _i++) {
+                            var _b = _a[_i], start = _b.start, end = _b.end, slidingWindow = _b.slidingWindow;
+                            if (slidingWindow) {
+                                start = now - start;
+                                end = now - end;
+                            }
+                            if (requests[resolution] === undefined) {
+                                requests[resolution] = {
+                                    start: start,
+                                    end: end,
+                                    sensors: {}
+                                };
+                            }
+                            //Adjust start and end of interval
+                            requests[resolution].start = Math.min(start, requests[resolution].start);
+                            requests[resolution].end = Math.max(end, requests[resolution].end);
+                            if (requests[resolution].sensors[deviceID] === undefined) {
+                                requests[resolution].sensors[deviceID] = new Set();
+                            }
+                            requests[resolution].sensors[deviceID].add(sensorID);
                         }
-                        if (requests[resolution] === undefined) {
-                            requests[resolution] = {
-                                start: start,
-                                end: end,
-                                sensors: {}
-                            };
-                        }
-                        //Adjust start and end of interval
-                        requests[resolution].start = Math.min(start, requests[resolution].start);
-                        requests[resolution].end = Math.max(end, requests[resolution].end);
-                        if (requests[resolution].sensors[deviceID] === undefined) {
-                            requests[resolution].sensors[deviceID] = new Set();
-                        }
-                        requests[resolution].sensors[deviceID].add(sensorID);
                     }
                 }
             });
@@ -747,7 +749,6 @@ var Store;
         function SensorValueStore() {
             this._series = [];
             this._sensorMap = {};
-            this._sensorLabels = {};
             this._timeout = 2.5 * 60 * 1000;
             this._start = 5 * 60 * 1000;
             this._end = 0;
@@ -800,17 +801,15 @@ var Store;
                 }
             });
         };
-        SensorValueStore.prototype.addSensor = function (deviceId, sensorId, label) {
+        SensorValueStore.prototype.addSensor = function (deviceId, sensorId) {
             if (this.hasSensor(deviceId, sensorId)) {
                 throw new Error("Sensor has been added already");
             }
             var index = this._series.length;
             if (this._sensorMap[deviceId] === undefined) {
                 this._sensorMap[deviceId] = {};
-                this._sensorLabels[deviceId] = {};
             }
             this._sensorMap[deviceId][sensorId] = index;
-            this._sensorLabels[deviceId][sensorId] = label;
             this._series.push({
                 line: {
                     color: this._pickColor(),
@@ -828,13 +827,14 @@ var Store;
             }
             this._series.splice(index, 1);
             delete this._sensorMap[deviceId][sensorId];
-            delete this._sensorLabels[deviceId][sensorId];
         };
-        SensorValueStore.prototype.setLabel = function (deviceId, sensorId, label) {
-            if (!this.hasSensor(deviceId, sensorId)) {
-                throw new Error("No such sensor");
+        SensorValueStore.prototype._findInsertionPos = function (data, timestamp) {
+            for (var pos = 0; pos < data.length; pos++) {
+                if (data[pos][0] > timestamp) {
+                    return pos;
+                }
             }
-            this._sensorLabels[deviceId][sensorId] = label;
+            return data.length;
         };
         SensorValueStore.prototype.addValue = function (deviceId, sensorId, timestamp, value) {
             var seriesIndex = this._getSensorIndex(deviceId, sensorId);
@@ -843,12 +843,7 @@ var Store;
             }
             // Find position for inserting
             var data = this._series[seriesIndex].data;
-            var pos = data.findIndex(function (point) {
-                return point[0] > timestamp;
-            });
-            if (pos === -1) {
-                pos = data.length;
-            }
+            var pos = this._findInsertionPos(data, timestamp);
             // Check if the value is an update for an existing timestamp
             if (data.length > 0 && pos === 0 && data[0][0] === timestamp) {
                 // Update for the first tuple
@@ -894,16 +889,6 @@ var Store;
                 }
             }
             return colors;
-        };
-        SensorValueStore.prototype.getLabels = function () {
-            var labels = {};
-            for (var deviceId in this._sensorLabels) {
-                labels[deviceId] = {};
-                for (var sensorId in this._sensorLabels[deviceId]) {
-                    labels[deviceId][sensorId] = this._sensorLabels[deviceId][sensorId];
-                }
-            }
-            return labels;
         };
         return SensorValueStore;
     })();
@@ -1112,10 +1097,10 @@ var Directives;
                 this.restrict = "A";
                 this.templateUrl = "/html/time-range-spinner.html";
                 this.scope = {
-                    ngModel: '=',
+                    ngModel: '=?',
                     ngChange: '&',
-                    min: '=',
-                    max: '='
+                    min: '=?',
+                    max: '=?'
                 };
                 this.controller = ["$scope", TimeRangeSpinnerController];
                 // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
@@ -1124,6 +1109,71 @@ var Directives;
                 };
             }
             return TimeRangeSpinnerDirective;
+        })();
+    })(UserInterface = Directives.UserInterface || (Directives.UserInterface = {}));
+})(Directives || (Directives = {}));
+/// <reference path="../angular.d.ts" />
+/// <reference path="../common.ts" />
+var Directives;
+(function (Directives) {
+    var UserInterface;
+    (function (UserInterface) {
+        var DateTimePickerController = (function () {
+            function DateTimePickerController($scope) {
+                var _this = this;
+                this.$scope = $scope;
+                if ($scope.ngModel !== undefined) {
+                    $scope.$watch("ngModel", function () {
+                        if (_this.$scope.ngModel !== _this._dateToMillisecs()) {
+                            _this._millisecsToDate($scope.ngModel);
+                        }
+                    });
+                }
+                $scope.change = function () { return _this._change(); };
+            }
+            DateTimePickerController.prototype._millisecsToDate = function (millisecs) {
+                this.$scope.date = new Date(millisecs);
+            };
+            DateTimePickerController.prototype._dateToMillisecs = function () {
+                var result = new Date(this.$scope.date);
+                return result.getTime();
+            };
+            DateTimePickerController.prototype._change = function () {
+                if (this.$scope.date !== null) {
+                    var millisecs = this._dateToMillisecs();
+                    if (this.$scope.min !== undefined) {
+                        millisecs = Math.max(millisecs, this.$scope.min);
+                    }
+                    if (this.$scope.max !== undefined) {
+                        millisecs = Math.min(millisecs, this.$scope.max);
+                    }
+                    this.$scope.ngModel = millisecs;
+                    this.$scope.ngChange();
+                }
+            };
+            return DateTimePickerController;
+        })();
+        UserInterface.DateTimePickerController = DateTimePickerController;
+        function DateTimePickerFactory() {
+            return function () { return new DateTimePickerDirective(); };
+        }
+        UserInterface.DateTimePickerFactory = DateTimePickerFactory;
+        var DateTimePickerDirective = (function () {
+            function DateTimePickerDirective() {
+                this.restrict = "A";
+                this.templateUrl = "/html/date-time-picker.html";
+                this.scope = {
+                    ngModel: '=?',
+                    ngChange: '&',
+                    min: '=?',
+                    max: '=?'
+                };
+                this.controller = ["$scope", DateTimePickerController];
+                // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
+                this.link = function ($scope, element, attrs, aateTimePicker) {
+                };
+            }
+            return DateTimePickerDirective;
         })();
     })(UserInterface = Directives.UserInterface || (Directives.UserInterface = {}));
 })(Directives || (Directives = {}));
@@ -1149,7 +1199,17 @@ var Directives;
             this.$uibModalInstance = $uibModalInstance;
             this._dispatcher = _dispatcher;
             $scope.devices = _dispatcher.devices;
-            $scope.resolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
+            var supportedResolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
+            $scope.resolutions = {};
+            $scope.resolutions['realtime'] = supportedResolutions.filter(function (res) { return res !== 'second'; });
+            $scope.resolutions['slidingWindow'] = supportedResolutions.filter(function (res) { return res !== 'raw'; });
+            $scope.resolutions['interval'] = supportedResolutions.filter(function (res) { return res !== 'raw'; });
+            $scope.$watch("config.mode", function () {
+                var mode = $scope.config.mode;
+                if ($scope.resolutions[mode].indexOf($scope.config.resolution) === -1) {
+                    $scope.config.resolution = $scope.resolutions[mode][0];
+                }
+            });
             $scope.units = _dispatcher.units;
             $scope.sensorsByUnit = _dispatcher.sensorsByUnit;
             $scope.config = config;
@@ -1204,7 +1264,7 @@ var Directives;
                     _this._applyConfig(config);
                 });
             };
-            $interval(function () { return _this._store.clampData(); }, 1000);
+            $interval(function () { return _this._store.clampData(); }, 60 * 1000);
         }
         Object.defineProperty(SensorGraphController.prototype, "graphNode", {
             set: function (element) {
@@ -1231,8 +1291,8 @@ var Directives;
                 resolution: UpdateDispatcher.SupportedResolutions.values().next().value,
                 sensors: [],
                 mode: 'realtime',
-                intervalStart: 0,
-                intervalEnd: 0,
+                intervalStart: Common.now() - 24 * 60 * 1000,
+                intervalEnd: Common.now(),
                 windowStart: 5 * 60 * 1000,
                 windowEnd: 0
             });
@@ -1280,7 +1340,7 @@ var Directives;
                 for (var _i = 0; _i < addedSensors.length; _i++) {
                     var _a = addedSensors[_i], deviceID = _a.deviceID, sensorID = _a.sensorID;
                     this._subscribeSensor(config, deviceID, sensorID);
-                    this._store.addSensor(deviceID, sensorID, this._dispatcher.devices[deviceID].sensors[sensorID].name);
+                    this._store.addSensor(deviceID, sensorID);
                 }
                 for (var _b = 0; _b < removedSensors.length; _b++) {
                     var _c = removedSensors[_b], deviceID = _c.deviceID, sensorID = _c.sensorID;
@@ -1309,7 +1369,7 @@ var Directives;
                 for (var _d = 0, _e = config.sensors; _d < _e.length; _d++) {
                     var _f = _e[_d], deviceID = _f.deviceID, sensorID = _f.sensorID;
                     this._subscribeSensor(config, deviceID, sensorID);
-                    this._store.addSensor(deviceID, sensorID, this._dispatcher.devices[deviceID].sensors[sensorID].name);
+                    this._store.addSensor(deviceID, sensorID);
                 }
             }
             this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 25);
@@ -1356,7 +1416,7 @@ var Directives;
             }
             var graph = Flotr.draw(this._graphNode, this._store.getData(), graphOptions);
             delay = delay / graph.plotWidth;
-            delay = Math.min(1000, delay);
+            delay = Math.min(10000, delay);
             this._timeout = this.$timeout(function () { return _this._redrawGraph(); }, delay);
         };
         return SensorGraphController;
@@ -1389,6 +1449,7 @@ var Directives;
 /// <reference path="sensorvaluestore.ts" />
 /// <reference path="ui-elements/numberspinner.ts"/>
 /// <reference path="ui-elements/timerangespinner.ts"/>
+/// <reference path="ui-elements/datetimepicker.ts"/>
 /// <reference path="sensorgraph.ts"/>
 "use strict";
 angular.module("msgp", ['ui.bootstrap'])
@@ -1404,6 +1465,7 @@ angular.module("msgp", ['ui.bootstrap'])
     .factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
     .directive("numberSpinner", Directives.UserInterface.NumberSpinnerFactory())
     .directive("timeRangeSpinner", Directives.UserInterface.TimeRangeSpinnerFactory())
+    .directive("dateTimePicker", Directives.UserInterface.DateTimePickerFactory())
     .directive("sensorGraph", Directives.SensorGraphFactory())
     .directive("deviceEditor", [function () {
         return {

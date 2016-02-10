@@ -39,7 +39,7 @@ module Directives {
 
 	interface SensorGraphSettingsScope extends SensorGraphScope {
 		pickerModes : {[resoltuion : string] : string};
-		resolutions : string[];
+		resolutions : {[mode : string] :string[]};
 		units : string[];
 		config : SensorGraphConfig;
 		sensorsByUnit : UpdateDispatcher.UnitSensorMap;
@@ -61,7 +61,20 @@ module Directives {
 					config : SensorGraphConfig) {
 
 			$scope.devices = _dispatcher.devices;
-			$scope.resolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
+
+			var supportedResolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
+			$scope.resolutions = {};
+			$scope.resolutions['realtime'] = supportedResolutions.filter((res) => res !== 'second');
+			$scope.resolutions['slidingWindow'] = supportedResolutions.filter((res) => res !== 'raw');
+			$scope.resolutions['interval'] = supportedResolutions.filter((res) => res !== 'raw');
+
+			$scope.$watch("config.mode", () : void => {
+				var mode = $scope.config.mode;
+				if($scope.resolutions[mode].indexOf($scope.config.resolution) === -1) {
+					$scope.config.resolution = $scope.resolutions[mode][0];
+				}
+			});
+
 			$scope.units = _dispatcher.units;
 			$scope.sensorsByUnit = _dispatcher.sensorsByUnit;
 
@@ -78,8 +91,8 @@ module Directives {
 				year : 'year'
 			}
 
-			$scope.ok = () : void => {
 
+			$scope.ok = () : void => {
 				$uibModalInstance.close($scope.config);
 			};
 
