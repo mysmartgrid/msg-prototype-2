@@ -252,8 +252,7 @@ module Directives {
 				for(var {deviceID: deviceID, sensorID: sensorID} of addedSensors) {
 					this._subscribeSensor(config, deviceID, sensorID);
 					this._store.addSensor(deviceID,
-										sensorID,
-										this._dispatcher.devices[deviceID].sensors[sensorID].name);
+										sensorID);
 				}
 
 				for(var {deviceID: deviceID, sensorID: sensorID} of removedSensors) {
@@ -285,9 +284,7 @@ module Directives {
 				for(var {deviceID: deviceID, sensorID: sensorID} of config.sensors) {
 					this._subscribeSensor(config, deviceID, sensorID);
 
-					this._store.addSensor(deviceID,
-										sensorID,
-										this._dispatcher.devices[deviceID].sensors[sensorID].name);
+					this._store.addSensor(deviceID, sensorID);
 				}
 			}
 

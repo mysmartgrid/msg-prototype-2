@@ -16,7 +16,6 @@ module Store {
 	export class SensorValueStore {
 		private _series : TimeSeries[];
 		private _sensorMap: {[device : string] : {[sensor : string] : number}};
-		private _sensorLabels: {[device : string] : {[sensor : string] : string}};
 
 		private _start : number;
 		private _end : number;
@@ -30,7 +29,6 @@ module Store {
 		constructor() {
 			this._series = [];
 			this._sensorMap = {};
-			this._sensorLabels = {};
 
 			this._timeout = 2.5 * 60 * 1000;
 			this._start = 5 * 60 * 1000;
@@ -97,7 +95,7 @@ module Store {
 			});
 		}
 
-		public addSensor(deviceId : string, sensorId : string, label : string) : void {
+		public addSensor(deviceId : string, sensorId : string) : void {
 			if(this.hasSensor(deviceId, sensorId)) {
 				throw new Error("Sensor has been added already");
 			}
@@ -106,11 +104,9 @@ module Store {
 
 			if(this._sensorMap[deviceId] === undefined) {
 				this._sensorMap[deviceId] = {};
-				this._sensorLabels[deviceId] = {};
 			}
 
 			this._sensorMap[deviceId][sensorId] = index;
-			this._sensorLabels[deviceId][sensorId] = label;
 
 			this._series.push({
 				line: {
@@ -133,16 +129,6 @@ module Store {
 
 			this._series.splice(index,1);
 			delete this._sensorMap[deviceId][sensorId];
-			delete this._sensorLabels[deviceId][sensorId];
-		}
-
-		public setLabel(deviceId : string, sensorId : string, label : string) {
-
-			if(!this.hasSensor(deviceId, sensorId)) {
-				throw new Error("No such sensor");
-			}
-
-			this._sensorLabels[deviceId][sensorId] = label;
 		}
 
 
@@ -226,19 +212,6 @@ module Store {
 			return colors;
 		}
 
-
-		public getLabels() : {[device: string]: {[sensor: string]: string}} {
-			var labels : {[device: string]: {[sensor: string]: string}} = {};
-
-			for(var deviceId in this._sensorLabels) {
-				labels[deviceId] = {};
-				for(var sensorId in this._sensorLabels[deviceId]) {
-					labels[deviceId][sensorId] = this._sensorLabels[deviceId][sensorId];
-				}
-			}
-
-			return labels;
-		}
 	}
 
 }
