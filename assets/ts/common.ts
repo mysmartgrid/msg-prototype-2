@@ -1,6 +1,3 @@
-/**
- * asasd
- */
 module Common {
     export interface DeviceSensorMap<U> {
         [deviceId : string] : {

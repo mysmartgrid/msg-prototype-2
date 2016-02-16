@@ -151,8 +151,29 @@ angular.module("msgp", ['ui.bootstrap'])
 		}
 	};
 }])
-.controller("GraphPage", ["WSUserClient", "wsurl", "$http", "UpdateDispatcher", function(wsclient, wsurl, $http) {
+.controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", function(wsclient, wsurl, $http, $timeout : ng.ITimeoutService, $uibModal) {
 	wsclient.connect(wsurl);
+
+	var modalInstance = null;
+
+	wsclient.onClose(() : void => {
+		if(modalInstance === null) {
+			modalInstance = $uibModal.open({
+				size: "lg",
+				keyboard: false,
+				backdrop : 'static',
+				templateUrl: 'connection-lost.html',
+			});
+		}
+
+		$timeout(() : void => wsclient.connect(wsurl), 1000);
+	});
+
+	wsclient.onOpen(() : void => {
+		if(modalInstance !== null) {
+			modalInstance.close();
+		}
+	});
 }])
 .controller("DeviceListController", ["$scope", "$http", "devices", function($scope, $http, devices) {
 	$scope.devices = devices;

@@ -197,11 +197,21 @@ module UpdateDispatcher  {
             this._sensorsByUnit = {};
             this._units = [];
 
+            this._hasInitialMetadata = false;
+
             _wsClient.onOpen((error : Msg2Socket.OpenError) => {
+                //Reset the dispatcher in case we lose connection
+                _wsClient.onClose(() : void =>{
+                    this._hasInitialMetadata = false;
+
+                    this._devices = {};
+                    this._subscribers = {};
+                    this._sensorsByUnit = {};
+                    this._units = [];
+                });
+
                 _wsClient.onMetadata((metadata : Msg2Socket.MetadataUpdate) : void => this._updateMetadata(metadata));
                 _wsClient.onUpdate((data : Msg2Socket.UpdateData) : void => this._updateValues(data));
-
-                this._hasInitialMetadata = false;
 
                 this._wsClient.requestMetadata();
 
@@ -594,7 +604,7 @@ module UpdateDispatcher  {
             Common.forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
                 for(var resolution in map) {
                     if(resolution !== 'raw') {
-                        
+
                         for(var {start: start, end: end, slidingWindow: slidingWindow} of map[resolution]) {
                             if(slidingWindow) {
                                 start = now - start;

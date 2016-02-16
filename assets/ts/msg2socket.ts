@@ -100,7 +100,6 @@ module Msg2Socket {
 			this._metadataHandlers = [];
 		};
 
-
 		private _socket : WebSocket;
 		private _isOpen : boolean;
 
@@ -187,9 +186,9 @@ module Msg2Socket {
                 break;
 
             default:
-                console.log("bad packet from server", data);
+				console.error("bad packet from server", data);
                 this.close();
-                break;
+				break;
             }
 
 
@@ -217,6 +216,10 @@ module Msg2Socket {
 		};
 
 		private _sendUserCommand(cmd : UserCommand) {
+			if(!this._isOpen) {
+				throw new Error("Websocket is not connected.");
+			}
+
 			this._socket.send(JSON.stringify(cmd));
 		}
 

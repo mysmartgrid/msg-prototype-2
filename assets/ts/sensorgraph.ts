@@ -68,6 +68,7 @@ module Directives {
 			$scope.resolutions['slidingWindow'] = supportedResolutions.filter((res) => res !== 'raw');
 			$scope.resolutions['interval'] = supportedResolutions.filter((res) => res !== 'raw');
 
+
 			$scope.$watch("config.mode", () : void => {
 				var mode = $scope.config.mode;
 				if($scope.resolutions[mode].indexOf($scope.config.resolution) === -1) {
@@ -301,7 +302,7 @@ module Directives {
 				}
 			}
 
-			this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 25);
+			this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 120);
 
 			this._config = config;
 			this.$scope.sensorColors = this._store.getColors();
