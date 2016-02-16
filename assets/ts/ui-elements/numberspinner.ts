@@ -3,8 +3,22 @@
 
 module Directives.UserInterface {
 
+    interface TimeRangeSpinnerScope extends ng.IScope {
+        ngModel : number;
+        min : number;
+        max : number;
+        ngChange : () => void;
+        overflow : () => void;
+        underflow : () => void;
+
+        change : () => void;
+        increment : () => void;
+        decrement : () => void;
+    }
+
+
     export class NumberSpinnerController {
-        constructor(private $scope : any) {
+        constructor(private $scope : TimeRangeSpinnerScope) {
 
             $scope.change = () : void => {
                 this._enforceLimits();
@@ -93,7 +107,7 @@ module Directives.UserInterface {
         public controller = ["$scope", NumberSpinnerController];
 
         // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
-        public link:Function  = ($scope : any,
+        public link:Function  = ($scope : TimeRangeSpinnerScope,
                                     element : ng.IAugmentedJQuery,
                                     attrs : ng.IAttributes,
                                     numberSpinner : NumberSpinnerController) : void => {

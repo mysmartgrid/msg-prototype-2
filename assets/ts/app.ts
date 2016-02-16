@@ -8,6 +8,7 @@
 
 /// <reference path="ui-elements/numberspinner.ts"/>
 /// <reference path="ui-elements/timerangespinner.ts"/>
+/// <reference path="ui-elements/datetimepicker.ts"/>
 /// <reference path="sensorgraph.ts"/>
 
 "use strict";
@@ -26,6 +27,7 @@ angular.module("msgp", ['ui.bootstrap'])
 .factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
 .directive("numberSpinner", Directives.UserInterface.NumberSpinnerFactory())
 .directive("timeRangeSpinner", Directives.UserInterface.TimeRangeSpinnerFactory())
+.directive("dateTimePicker", Directives.UserInterface.DateTimePickerFactory())
 .directive("sensorGraph", Directives.SensorGraphFactory())
 .directive("deviceEditor", [function() {
 	return {
@@ -149,8 +151,29 @@ angular.module("msgp", ['ui.bootstrap'])
 		}
 	};
 }])
-.controller("GraphPage", ["WSUserClient", "wsurl", "$http", "UpdateDispatcher", function(wsclient, wsurl, $http) {
+.controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", function(wsclient, wsurl, $http, $timeout : ng.ITimeoutService, $uibModal) {
 	wsclient.connect(wsurl);
+
+	var modalInstance = null;
+
+	wsclient.onClose(() : void => {
+		if(modalInstance === null) {
+			modalInstance = $uibModal.open({
+				size: "lg",
+				keyboard: false,
+				backdrop : 'static',
+				templateUrl: 'connection-lost.html',
+			});
+		}
+
+		$timeout(() : void => wsclient.connect(wsurl), 1000);
+	});
+
+	wsclient.onOpen(() : void => {
+		if(modalInstance !== null) {
+			modalInstance.close();
+		}
+	});
 }])
 .controller("DeviceListController", ["$scope", "$http", "devices", function($scope, $http, devices) {
 	$scope.devices = devices;

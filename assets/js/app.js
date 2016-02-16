@@ -76,7 +76,7 @@ var Msg2Socket;
                     this._emitMetadata(data.args);
                     break;
                 default:
-                    console.log("bad packet from server", data);
+                    console.error("bad packet from server", data);
                     this.close();
                     break;
             }
@@ -100,6 +100,9 @@ var Msg2Socket;
         };
         ;
         Socket.prototype._sendUserCommand = function (cmd) {
+            if (!this._isOpen) {
+                throw new Error("Websocket is not connected.");
+            }
             this._socket.send(JSON.stringify(cmd));
         };
         Socket.prototype.close = function () {
@@ -197,9 +200,6 @@ var Utils;
     }
     Utils.difference = difference;
 })(Utils || (Utils = {}));
-/**
- * asasd
- */
 var Common;
 (function (Common) {
     function forEachSensor(map, f) {
@@ -233,7 +233,6 @@ var ExtArray = Utils.ExtArray;
 var UpdateDispatcher;
 (function (UpdateDispatcher_1) {
     ;
-    // Set of all supported time resolutions for faster sanity checks
     UpdateDispatcher_1.SupportedResolutions = new Set(["raw", "second", "minute", "hour", "day", "week", "month", "year"]);
     UpdateDispatcher_1.ResoltuionToMillisecs = {
         raw: 1000,
@@ -245,51 +244,11 @@ var UpdateDispatcher;
         month: 31 * 24 * 60 * 60 * 1000,
         year: 365 * 24 * 60 * 60 * 1000
     };
-    // Angular factory function with injected dependencies
     UpdateDispatcher_1.UpdateDispatcherFactory = ["WSUserClient", "$interval",
         function (wsClient, $interval) {
             return new UpdateDispatcher(wsClient, $interval);
         }];
-    /**
-     * Update dispatcher class
-     *
-     * This class provides three functions.
-     *
-     * Firstly it keeps all device and sensor metadata in its device property.
-     * Device metadata can be accessed using devices[deviceID].
-     * Sensor metadata is stored in devices[deviceID].sensors[SensorID].
-     *
-     * Secondly it allows subscribtions to metadata changes and value updates.
-     * There are three types subscription a fixed interval in the past,
-     * a sliding window between two points relative to the current timestamp,
-     * and a sliding window from a point in the past to the current timestamp,
-     * which will receive the latest values directly from the device using realtime updates.
-     * Historical data will be updated by polling the backend in a regularl interval.
-     *
-     * It is ensured by the dispatcher that each subscribe only receives each update only once,
-     * even if there are several overlapping subscriptions for the same sensor.
-     * The dispatcher will also try to minimize the number of requests send to the backend,
-     * by requesting only one large interval covering all subscriptions for a resolution.
-     *
-     * All subscribers are notified of metdata data changes for sensors they subscribed to,
-     * as well as metdata changes for the devices these sensors are attached to.
-     * It is the up to the subscriber to check the devices property for the updated metadata and
-     * process it accordingly.
-     *
-     * Thirdly, since it is not possible to subscribe to any sensor before the dispatcher has received its initial metadata,
-     * it provides a callback mechanism using the onInitialMetadata method to execute inital subscriptions,
-     * as soon as the metadata is available.
-     */
     var UpdateDispatcher = (function () {
-        /**
-         * Construtor for UpdateDispatcher
-         * Should not be called directly, use the factory to register an angular service instead
-         *
-         * Initalizes private members
-         * Registers _updateMetadata and _updateValues as callbacks for the Msg2Socket
-         * Requests initial metadata as soon as the socket is connected
-         * Sets up an $interval instance for polling historical data using _pollHistoryData
-         */
         function UpdateDispatcher(_wsClient, $interval) {
             var _this = this;
             this._wsClient = _wsClient;
@@ -299,16 +258,23 @@ var UpdateDispatcher;
             this._InitialCallbacks = new Array();
             this._sensorsByUnit = {};
             this._units = [];
+            this._hasInitialMetadata = false;
             _wsClient.onOpen(function (error) {
+                _wsClient.onClose(function () {
+                    _this._hasInitialMetadata = false;
+                    _this._devices = {};
+                    _this._subscribers = {};
+                    _this._sensorsByUnit = {};
+                    _this._units = [];
+                });
                 _wsClient.onMetadata(function (metadata) { return _this._updateMetadata(metadata); });
                 _wsClient.onUpdate(function (data) { return _this._updateValues(data); });
-                _this._hasInitialMetadata = false;
                 _this._wsClient.requestMetadata();
                 $interval(function () { return _this._pollHistoryData(); }, 1 * 60 * 1000);
+                $interval(function () { return _this._renewRealtimeRequests(); }, 30 * 1000);
             });
         }
         Object.defineProperty(UpdateDispatcher.prototype, "devices", {
-            // Accesor to prevent write access to the devices property
             get: function () {
                 return this._devices;
             },
@@ -316,7 +282,6 @@ var UpdateDispatcher;
             configurable: true
         });
         Object.defineProperty(UpdateDispatcher.prototype, "units", {
-            // Pseudoproperty that contains all possible units
             get: function () {
                 return this._units;
             },
@@ -324,56 +289,23 @@ var UpdateDispatcher;
             configurable: true
         });
         Object.defineProperty(UpdateDispatcher.prototype, "sensorsByUnit", {
-            // Accesor for _sensorsByUnit
             get: function () {
                 return this._sensorsByUnit;
             },
             enumerable: true,
             configurable: true
         });
-        /**
-         * Subscribe for value updates with in a fixed interval from start to end.
-         * Start and end are millisecond timestamps.
-         */
         UpdateDispatcher.prototype.subscribeInterval = function (deviceID, sensorID, resolution, start, end, subscriber) {
             this._subscribeSensor(deviceID, sensorID, resolution, false, start, end, subscriber);
         };
-        /**
-         * Subscribe for value updates with in a slinding window from current_timestamp - start to current_timestamp  - end.
-         * Start and end are in milliseconds.
-         */
         UpdateDispatcher.prototype.subscribeSlidingWindow = function (deviceID, sensorID, resolution, start, end, subscriber) {
             this._subscribeSensor(deviceID, sensorID, resolution, true, start, end, subscriber);
         };
         ;
-        /**
-         * Subscribe for value updates with in a slinding window from current_timestamp - start to current_timestamp.
-         * Subscribers using this subscrition also get forwarded realtime updates from the metering device
-         * Start and end are in milliseconds.
-         */
         UpdateDispatcher.prototype.subscribeRealtimeSlidingWindow = function (deviceID, sensorID, resolution, start, subscriber) {
             this._subscribeSensor(deviceID, sensorID, resolution, true, start, 0, subscriber);
         };
         ;
-        /**
-         * Internal handler for all types of subscrition.
-         * There a three valid combinations of paramaters for this method.
-         * Fixed Interval:
-         *  slidingWindow: false,
-         *  start: timestamp start,
-         *  end: timestamp end
-         *
-         * Sliding window:
-         *  slidingWindow: true,
-         *  start: how many milliseconds back the window should start
-         *  end: how many milliseconds back the window should end
-         *
-         * Sliding window for realtime updates:
-         *  slidingWindow: true,
-         *  start: how many milliseconds back the window should start
-         *  end: 0 (window always end at the current timestamp)
-         *
-         */
         UpdateDispatcher.prototype._subscribeSensor = function (deviceID, sensorID, resolution, slidingWindow, start, end, subscriber) {
             if (this._devices[deviceID] === undefined) {
                 throw new Error("Unknown device");
@@ -403,7 +335,6 @@ var UpdateDispatcher;
                 request[deviceID][resolution] = [sensorID];
                 this._wsClient.requestRealtimeUpdates(request);
             }
-            // Request history
             var now = Common.now();
             if (slidingWindow) {
                 start = now - start;
@@ -413,7 +344,6 @@ var UpdateDispatcher;
             sensorsList[deviceID] = [sensorID];
             this._wsClient.requestValues(start, end, resolution, sensorsList);
         };
-        // Shorthand to remove all subscribtions for a given subscriber
         UpdateDispatcher.prototype.unsubscribeAll = function (subscriber) {
             var _this = this;
             Common.forEachSensor(this._subscribers, function (deviceID, sensorID, sensor) {
@@ -422,38 +352,20 @@ var UpdateDispatcher;
                 }
             });
         };
-        // Shorthand to remove all subscribtions to sensor and resoltion for a specific subscriber
         UpdateDispatcher.prototype.unsubscribeSensor = function (deviceID, sensorID, resolution, subscriber) {
             this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber);
         };
-        /**
-         * Unsubscribe for value updates with in a fixed interval from start to end.
-         * Start and end are millisecond timestamps.
-         */
         UpdateDispatcher.prototype.unsubscribeInterval = function (deviceID, sensorID, resolution, start, end, subscriber) {
             this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber, false, start, end);
         };
-        /**
-         * Unsubscribe for value updates with in a slinding window from current_timestamp - start to current_timestamp  - end.
-         * Start and end are in milliseconds.
-         */
         UpdateDispatcher.prototype.unsubscribeSlidingWindow = function (deviceID, sensorID, resolution, start, end, subscriber) {
             this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber, true, start, end);
         };
         ;
-        /**
-         * Unsubscribe for value updates with in a slinding window from current_timestamp - start to current_timestamp.
-         * Start and end are in milliseconds.
-         */
         UpdateDispatcher.prototype.unsubscribeRealtimeSlidingWindow = function (deviceID, sensorID, resolution, start, subscriber) {
             this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber, true, start, 0);
         };
         ;
-        /**
-         * Internal method to remove a subscribtion given by start, end, slidingWindow,
-         * resolution and sensor for a specific subscriber.
-         * If start, end and slidingWindow are missing all subscribtions for the sensor and resolution.
-         */
         UpdateDispatcher.prototype._unsubscribeSensor = function (deviceID, sensorID, resolution, subscriber, slidingWindow, start, end) {
             if (this._devices[deviceID] === undefined) {
                 throw new Error("Unknown device");
@@ -479,11 +391,6 @@ var UpdateDispatcher;
                 throw new Error("Either start or end missing");
             }
         };
-        /**
-         * Register callbacks which will be called as soon as metadata is avaiable.
-         * Usefull for doing inital subscriptions.
-         * If metadata is already avaiable the callback will be execute immediately.
-         */
         UpdateDispatcher.prototype.onInitialMetadata = function (callback) {
             if (!this._hasInitialMetadata) {
                 this._InitialCallbacks.push(callback);
@@ -492,37 +399,27 @@ var UpdateDispatcher;
                 callback();
             }
         };
-        /**
-         * Internal method which is called by the Msg2Socket in case of metadata updates.
-         * Updates _devices and calls subscribers accordingly using _emitDeviceMetadataUpdate amd _emitSensorMetadataUpdate.
-         */
         UpdateDispatcher.prototype._updateMetadata = function (metadata) {
             for (var deviceID in metadata.devices) {
-                // Create device if necessary
                 if (this._devices[deviceID] === undefined) {
                     this._devices[deviceID] = {
                         name: null,
                         sensors: {}
                     };
                 }
-                // Add space for subscribers if necessary
                 if (this._subscribers[deviceID] === undefined) {
                     this._subscribers[deviceID] = {};
                 }
                 var deviceName = metadata.devices[deviceID].name;
-                //TODO: Redo this check as soon as we have more device metadata
                 if (deviceName !== undefined && this._devices[deviceID].name !== deviceName) {
                     this._devices[deviceID].name = deviceName;
                     this._emitDeviceMetadataUpdate(deviceID);
                     console.log("Nameupdate: " + deviceName);
                 }
-                // Add or update sensors
                 for (var sensorID in metadata.devices[deviceID].sensors) {
-                    // Add space for subscribers
                     if (this._subscribers[deviceID][sensorID] === undefined) {
                         this._subscribers[deviceID][sensorID] = {};
                     }
-                    // Add empty entry to make updateProperties work
                     if (this._devices[deviceID].sensors[sensorID] === undefined) {
                         this._devices[deviceID].sensors[sensorID] = {
                             name: null,
@@ -530,13 +427,11 @@ var UpdateDispatcher;
                             port: null,
                         };
                     }
-                    // Update metatdata and inform subscribers
                     var wasUpdated = Common.updateProperties(this._devices[deviceID].sensors[sensorID], metadata.devices[deviceID].sensors[sensorID]);
                     if (wasUpdated) {
                         this._emitSensorMetadataUpdate(deviceID, sensorID);
                     }
                 }
-                // Delete sensors
                 for (var sensorID in metadata.devices[deviceID].deletedSensors) {
                     delete this._devices[deviceID].sensors[sensorID];
                     this._emitRemoveSensor(deviceID, sensorID);
@@ -544,7 +439,6 @@ var UpdateDispatcher;
                 }
             }
             this._updateSensorsByUnit();
-            // Excute the callbacks if this is the initial metadata update
             if (!this._hasInitialMetadata) {
                 this._hasInitialMetadata = true;
                 for (var _i = 0, _a = this._InitialCallbacks; _i < _a.length; _i++) {
@@ -569,12 +463,7 @@ var UpdateDispatcher;
                 }
             }
         };
-        /**
-         * Notify all subscribers to all sensors in all resolutions for this device of the update.
-         * A set is used to ensure each subscriber is notified exactly once.
-         */
         UpdateDispatcher.prototype._emitDeviceMetadataUpdate = function (deviceID) {
-            // Notify every subscriber to the devices sensors once
             var notified = new Set();
             for (var sensorID in this._subscribers[deviceID]) {
                 for (var resolution in this._subscribers[deviceID][sensorID]) {
@@ -588,12 +477,7 @@ var UpdateDispatcher;
                 }
             }
         };
-        /**
-         * Notify all subscribers to a sensors in all resolutions of the update.
-         * A set is used to ensure each subscriber is notified exactly once.
-         */
         UpdateDispatcher.prototype._emitSensorMetadataUpdate = function (deviceID, sensorID) {
-            // Notify every subscriber to the sensor once
             var notified = new Set();
             for (var resolution in this._subscribers[deviceID][sensorID]) {
                 for (var _i = 0, _a = this._subscribers[deviceID][sensorID][resolution]; _i < _a.length; _i++) {
@@ -605,12 +489,7 @@ var UpdateDispatcher;
                 }
             }
         };
-        /**
-         * Notify all subscribers to a sensors in all resolutions.
-         * A set is used to ensure each subscriber is notified exactly once.
-         */
         UpdateDispatcher.prototype._emitRemoveSensor = function (deviceID, sensorID) {
-            // Notify every subscriber to the sensor once
             var notified = new Set();
             for (var resolution in this._subscribers[deviceID][sensorID]) {
                 for (var _i = 0, _a = this._subscribers[deviceID][sensorID][resolution]; _i < _a.length; _i++) {
@@ -622,43 +501,36 @@ var UpdateDispatcher;
                 }
             }
         };
-        /**
-         * Request historical data for all subscriptions from the backend.
-         * In order to minimize the number of requests to the backend,
-         * only one reuqest per resoltion covering all subscribed sensors and intervals is generated.
-         * The _updateValues method takes care of dropping unecessary values and dispatching the rest to the subscribers.
-         */
         UpdateDispatcher.prototype._pollHistoryData = function () {
             var requests;
             requests = {};
             var now = Common.now();
-            // Gather start, end and sensors for each resolution
             Common.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
                 for (var resolution in map) {
-                    for (var _i = 0, _a = map[resolution]; _i < _a.length; _i++) {
-                        var _b = _a[_i], start = _b.start, end = _b.end, slidingWindow = _b.slidingWindow;
-                        if (slidingWindow) {
-                            start = now - start;
-                            end = now - end;
+                    if (resolution !== 'raw') {
+                        for (var _i = 0, _a = map[resolution]; _i < _a.length; _i++) {
+                            var _b = _a[_i], start = _b.start, end = _b.end, slidingWindow = _b.slidingWindow;
+                            if (slidingWindow) {
+                                start = now - start;
+                                end = now - end;
+                            }
+                            if (requests[resolution] === undefined) {
+                                requests[resolution] = {
+                                    start: start,
+                                    end: end,
+                                    sensors: {}
+                                };
+                            }
+                            requests[resolution].start = Math.min(start, requests[resolution].start);
+                            requests[resolution].end = Math.max(end, requests[resolution].end);
+                            if (requests[resolution].sensors[deviceID] === undefined) {
+                                requests[resolution].sensors[deviceID] = new Set();
+                            }
+                            requests[resolution].sensors[deviceID].add(sensorID);
                         }
-                        if (requests[resolution] === undefined) {
-                            requests[resolution] = {
-                                start: start,
-                                end: end,
-                                sensors: {}
-                            };
-                        }
-                        //Adjust start and end of interval
-                        requests[resolution].start = Math.min(start, requests[resolution].start);
-                        requests[resolution].end = Math.max(end, requests[resolution].end);
-                        if (requests[resolution].sensors[deviceID] === undefined) {
-                            requests[resolution].sensors[deviceID] = new Set();
-                        }
-                        requests[resolution].sensors[deviceID].add(sensorID);
                     }
                 }
             });
-            // Send out the requests
             for (var resolution in requests) {
                 var _a = requests[resolution], start = _a.start, end = _a.end, sensors = _a.sensors;
                 var sensorList = {};
@@ -669,10 +541,28 @@ var UpdateDispatcher;
                 this._wsClient.requestValues(start, end, resolution, sensorList);
             }
         };
-        /**
-         * Internal method which is called by the Msg2Socket in case of value updates.
-         * Simply unpacks the update and calls _emitValueUpdate for each value.
-         */
+        UpdateDispatcher.prototype._renewRealtimeRequests = function () {
+            var request = {};
+            Common.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
+                if (request[deviceID] === undefined) {
+                    request[deviceID] = {};
+                }
+                for (var resolution in map) {
+                    if (request[deviceID][resolution] === undefined) {
+                        request[deviceID][resolution] = [];
+                    }
+                    for (var _i = 0, _a = map[resolution]; _i < _a.length; _i++) {
+                        var _b = _a[_i], start = _b.start, end = _b.end, slidingWindow = _b.slidingWindow;
+                        if (end === 0 && slidingWindow) {
+                            if (request[deviceID][resolution].indexOf(sensorID) === -1) {
+                                request[deviceID][resolution].push(sensorID);
+                            }
+                        }
+                    }
+                }
+            });
+            this._wsClient.requestRealtimeUpdates(request);
+        };
         UpdateDispatcher.prototype._updateValues = function (data) {
             var resolution = data.resolution, values = data.values;
             for (var deviceID in values) {
@@ -684,15 +574,9 @@ var UpdateDispatcher;
                 }
             }
         };
-        /**
-         * Internal methode called once from _updateValues for each value timestamp pair.
-         * Matches the subscription interval of each subscripton for the sensor and resolution against the updates timestamps.
-         * Also maintains a set of already notified subscribers to avoid notifying a subscriber twices in case of overlapping subscriptons.
-         */
         UpdateDispatcher.prototype._emitValueUpdate = function (deviceID, sensorID, resolution, timestamp, value) {
             var now = Common.now();
             var notified = new Set();
-            // Make sure we have subscribsers for this sensor
             if (this._subscribers[deviceID] !== undefined
                 && this._subscribers[deviceID][sensorID] !== undefined
                 && this._subscribers[deviceID][sensorID][resolution] !== undefined) {
@@ -712,7 +596,6 @@ var UpdateDispatcher;
         return UpdateDispatcher;
     })();
     UpdateDispatcher_1.UpdateDispatcher = UpdateDispatcher;
-    // Dummy subscriber that dumps all updates to console.
     var DummySubscriber = (function () {
         function DummySubscriber() {
         }
@@ -747,7 +630,6 @@ var Store;
         function SensorValueStore() {
             this._series = [];
             this._sensorMap = {};
-            this._sensorLabels = {};
             this._timeout = 2.5 * 60 * 1000;
             this._start = 5 * 60 * 1000;
             this._end = 0;
@@ -789,7 +671,6 @@ var Store;
                 series.data = series.data.filter(function (point) {
                     return point[0] >= oldest && point[0] <= newest;
                 });
-                //Series should not start or end with null after clamping
                 if (series.data.length > 0) {
                     if (series.data[0][1] === null) {
                         series.data.splice(0, 1);
@@ -800,17 +681,15 @@ var Store;
                 }
             });
         };
-        SensorValueStore.prototype.addSensor = function (deviceId, sensorId, label) {
+        SensorValueStore.prototype.addSensor = function (deviceId, sensorId) {
             if (this.hasSensor(deviceId, sensorId)) {
                 throw new Error("Sensor has been added already");
             }
             var index = this._series.length;
             if (this._sensorMap[deviceId] === undefined) {
                 this._sensorMap[deviceId] = {};
-                this._sensorLabels[deviceId] = {};
             }
             this._sensorMap[deviceId][sensorId] = index;
-            this._sensorLabels[deviceId][sensorId] = label;
             this._series.push({
                 line: {
                     color: this._pickColor(),
@@ -828,54 +707,40 @@ var Store;
             }
             this._series.splice(index, 1);
             delete this._sensorMap[deviceId][sensorId];
-            delete this._sensorLabels[deviceId][sensorId];
         };
-        SensorValueStore.prototype.setLabel = function (deviceId, sensorId, label) {
-            if (!this.hasSensor(deviceId, sensorId)) {
-                throw new Error("No such sensor");
+        SensorValueStore.prototype._findInsertionPos = function (data, timestamp) {
+            for (var pos = 0; pos < data.length; pos++) {
+                if (data[pos][0] > timestamp) {
+                    return pos;
+                }
             }
-            this._sensorLabels[deviceId][sensorId] = label;
+            return data.length;
         };
         SensorValueStore.prototype.addValue = function (deviceId, sensorId, timestamp, value) {
             var seriesIndex = this._getSensorIndex(deviceId, sensorId);
             if (seriesIndex === -1) {
                 throw new Error("No such sensor");
             }
-            // Find position for inserting
             var data = this._series[seriesIndex].data;
-            var pos = data.findIndex(function (point) {
-                return point[0] > timestamp;
-            });
-            if (pos === -1) {
-                pos = data.length;
-            }
-            // Check if the value is an update for an existing timestamp
+            var pos = this._findInsertionPos(data, timestamp);
             if (data.length > 0 && pos === 0 && data[0][0] === timestamp) {
-                // Update for the first tuple
                 data[0][1] = value;
             }
             else if (data.length > 0 && pos > 0 && pos <= data.length && data[pos - 1][0] === timestamp) {
-                //Update any other tuple including the last one
                 data[pos - 1][1] = value;
             }
             else {
-                // Insert
                 data.splice(pos, 0, [timestamp, value]);
-                //Check if we need to remove a null in the past
                 if (pos > 0 && data[pos - 1][1] === null && timestamp - data[pos - 1][0] < this._timeout) {
                     data.splice(pos - 1, 1);
-                    // We delete something bevor pos, so we should move pos
                     pos -= 1;
                 }
-                //Check if we need to remove a null in the future
                 if (pos < data.length - 1 && data[pos + 1][1] === null && data[pos + 1][0] - timestamp < this._timeout) {
                     data.splice(pos + 1, 1);
                 }
-                //Check if a null in the past is needed
                 if (pos > 0 && data[pos - 1][1] !== null && timestamp - data[pos - 1][0] >= this._timeout) {
                     data.splice(pos, 0, [timestamp - 1, null]);
                 }
-                //Check if a null in the future is needed
                 if (pos < data.length - 1 && data[pos + 1][1] !== null && data[pos + 1][0] - timestamp >= this._timeout) {
                     data.splice(pos + 1, 0, [timestamp + 1, null]);
                 }
@@ -894,16 +759,6 @@ var Store;
                 }
             }
             return colors;
-        };
-        SensorValueStore.prototype.getLabels = function () {
-            var labels = {};
-            for (var deviceId in this._sensorLabels) {
-                labels[deviceId] = {};
-                for (var sensorId in this._sensorLabels[deviceId]) {
-                    labels[deviceId][sensorId] = this._sensorLabels[deviceId][sensorId];
-                }
-            }
-            return labels;
         };
         return SensorValueStore;
     })();
@@ -934,7 +789,6 @@ var Directives;
             NumberSpinnerController.prototype._enforceLimits = function () {
                 if (this.$scope.ngModel !== undefined && this.$scope.ngModel !== null) {
                     console.log("Enforcing limits");
-                    // Normalize to integer
                     if (this.$scope.ngModel !== Math.round(this.$scope.ngModel)) {
                         this.$scope.ngModel = Math.round(this.$scope.ngModel);
                     }
@@ -994,7 +848,6 @@ var Directives;
                     max: '='
                 };
                 this.controller = ["$scope", NumberSpinnerController];
-                // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
                 this.link = function ($scope, element, attrs, numberSpinner) {
                     numberSpinner.setupEvents(element);
                 };
@@ -1048,7 +901,6 @@ var Directives;
             };
             TimeRangeSpinnerController.prototype._change = function () {
                 var _this = this;
-                // because otherwise empty field become 0 during edit, which is a real pain
                 var editDone = TimeUnits.every(function (unit) { return (_this.$scope.time[unit] !== null && _this.$scope.time[unit] !== undefined); });
                 if (editDone) {
                     var milliseconds = 0;
@@ -1112,18 +964,81 @@ var Directives;
                 this.restrict = "A";
                 this.templateUrl = "/html/time-range-spinner.html";
                 this.scope = {
-                    ngModel: '=',
+                    ngModel: '=?',
                     ngChange: '&',
-                    min: '=',
-                    max: '='
+                    min: '=?',
+                    max: '=?'
                 };
                 this.controller = ["$scope", TimeRangeSpinnerController];
-                // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
                 this.link = function ($scope, element, attrs, controller) {
                     controller.setupScrollEvents(element);
                 };
             }
             return TimeRangeSpinnerDirective;
+        })();
+    })(UserInterface = Directives.UserInterface || (Directives.UserInterface = {}));
+})(Directives || (Directives = {}));
+/// <reference path="../angular.d.ts" />
+/// <reference path="../common.ts" />
+var Directives;
+(function (Directives) {
+    var UserInterface;
+    (function (UserInterface) {
+        var DateTimePickerController = (function () {
+            function DateTimePickerController($scope) {
+                var _this = this;
+                this.$scope = $scope;
+                if ($scope.ngModel !== undefined) {
+                    $scope.$watch("ngModel", function () {
+                        if (_this.$scope.ngModel !== _this._dateToMillisecs()) {
+                            _this._millisecsToDate($scope.ngModel);
+                        }
+                    });
+                }
+                $scope.change = function () { return _this._change(); };
+            }
+            DateTimePickerController.prototype._millisecsToDate = function (millisecs) {
+                this.$scope.date = new Date(millisecs);
+            };
+            DateTimePickerController.prototype._dateToMillisecs = function () {
+                var result = new Date(this.$scope.date);
+                return result.getTime();
+            };
+            DateTimePickerController.prototype._change = function () {
+                if (this.$scope.date !== null) {
+                    var millisecs = this._dateToMillisecs();
+                    if (this.$scope.min !== undefined) {
+                        millisecs = Math.max(millisecs, this.$scope.min);
+                    }
+                    if (this.$scope.max !== undefined) {
+                        millisecs = Math.min(millisecs, this.$scope.max);
+                    }
+                    this.$scope.ngModel = millisecs;
+                    this.$scope.ngChange();
+                }
+            };
+            return DateTimePickerController;
+        })();
+        UserInterface.DateTimePickerController = DateTimePickerController;
+        function DateTimePickerFactory() {
+            return function () { return new DateTimePickerDirective(); };
+        }
+        UserInterface.DateTimePickerFactory = DateTimePickerFactory;
+        var DateTimePickerDirective = (function () {
+            function DateTimePickerDirective() {
+                this.restrict = "A";
+                this.templateUrl = "/html/date-time-picker.html";
+                this.scope = {
+                    ngModel: '=?',
+                    ngChange: '&',
+                    min: '=?',
+                    max: '=?'
+                };
+                this.controller = ["$scope", DateTimePickerController];
+                this.link = function ($scope, element, attrs, aateTimePicker) {
+                };
+            }
+            return DateTimePickerDirective;
         })();
     })(UserInterface = Directives.UserInterface || (Directives.UserInterface = {}));
 })(Directives || (Directives = {}));
@@ -1149,7 +1064,17 @@ var Directives;
             this.$uibModalInstance = $uibModalInstance;
             this._dispatcher = _dispatcher;
             $scope.devices = _dispatcher.devices;
-            $scope.resolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
+            var supportedResolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
+            $scope.resolutions = {};
+            $scope.resolutions['realtime'] = supportedResolutions.filter(function (res) { return res !== 'second'; });
+            $scope.resolutions['slidingWindow'] = supportedResolutions.filter(function (res) { return res !== 'raw'; });
+            $scope.resolutions['interval'] = supportedResolutions.filter(function (res) { return res !== 'raw'; });
+            $scope.$watch("config.mode", function () {
+                var mode = $scope.config.mode;
+                if ($scope.resolutions[mode].indexOf($scope.config.resolution) === -1) {
+                    $scope.config.resolution = $scope.resolutions[mode][0];
+                }
+            });
             $scope.units = _dispatcher.units;
             $scope.sensorsByUnit = _dispatcher.sensorsByUnit;
             $scope.config = config;
@@ -1185,7 +1110,6 @@ var Directives;
             this._store.setEnd(0);
             this.$scope.devices = this._dispatcher.devices;
             this._dispatcher.onInitialMetadata(function () {
-                //TODO: Add on config callback here
                 _this._setDefaultConfig();
                 _this._redrawGraph();
             });
@@ -1204,7 +1128,7 @@ var Directives;
                     _this._applyConfig(config);
                 });
             };
-            $interval(function () { return _this._store.clampData(); }, 1000);
+            $interval(function () { return _this._store.clampData(); }, 60 * 1000);
         }
         Object.defineProperty(SensorGraphController.prototype, "graphNode", {
             set: function (element) {
@@ -1231,8 +1155,8 @@ var Directives;
                 resolution: UpdateDispatcher.SupportedResolutions.values().next().value,
                 sensors: [],
                 mode: 'realtime',
-                intervalStart: 0,
-                intervalEnd: 0,
+                intervalStart: Common.now() - 24 * 60 * 1000,
+                intervalEnd: Common.now(),
                 windowStart: 5 * 60 * 1000,
                 windowEnd: 0
             });
@@ -1266,7 +1190,6 @@ var Directives;
             }
         };
         SensorGraphController.prototype._applyConfig = function (config) {
-            // Only sensors changed so no need to redo everything
             if (this._config !== undefined &&
                 config.mode === this._config.mode &&
                 config.resolution == this._config.resolution &&
@@ -1280,14 +1203,14 @@ var Directives;
                 for (var _i = 0; _i < addedSensors.length; _i++) {
                     var _a = addedSensors[_i], deviceID = _a.deviceID, sensorID = _a.sensorID;
                     this._subscribeSensor(config, deviceID, sensorID);
-                    this._store.addSensor(deviceID, sensorID, this._dispatcher.devices[deviceID].sensors[sensorID].name);
+                    this._store.addSensor(deviceID, sensorID);
                 }
                 for (var _b = 0; _b < removedSensors.length; _b++) {
                     var _c = removedSensors[_b], deviceID = _c.deviceID, sensorID = _c.sensorID;
                     this._unsubscribeSensor(this._config, deviceID, sensorID);
                     this._store.removeSensor(deviceID, sensorID);
                 }
-            } //Redo all the things !
+            }
             else {
                 this._dispatcher.unsubscribeAll(this);
                 this._store = new Store.SensorValueStore();
@@ -1309,10 +1232,10 @@ var Directives;
                 for (var _d = 0, _e = config.sensors; _d < _e.length; _d++) {
                     var _f = _e[_d], deviceID = _f.deviceID, sensorID = _f.sensorID;
                     this._subscribeSensor(config, deviceID, sensorID);
-                    this._store.addSensor(deviceID, sensorID, this._dispatcher.devices[deviceID].sensors[sensorID].name);
+                    this._store.addSensor(deviceID, sensorID);
                 }
             }
-            this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 25);
+            this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 120);
             this._config = config;
             this.$scope.sensorColors = this._store.getColors();
             this.$scope.sensors = config.sensors;
@@ -1356,7 +1279,7 @@ var Directives;
             }
             var graph = Flotr.draw(this._graphNode, this._store.getData(), graphOptions);
             delay = delay / graph.plotWidth;
-            delay = Math.min(1000, delay);
+            delay = Math.min(10000, delay);
             this._timeout = this.$timeout(function () { return _this._redrawGraph(); }, delay);
         };
         return SensorGraphController;
@@ -1369,7 +1292,6 @@ var Directives;
             this.templateUrl = "/html/sensor-graph.html";
             this.scope = {};
             this.controller = ["$scope", "$interval", "$timeout", "$uibModal", "UpdateDispatcher", SensorGraphController];
-            // Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
             this.link = function ($scope, element, attrs, sensorGraph) {
                 sensorGraph.graphNode = element;
             };
@@ -1389,6 +1311,7 @@ var Directives;
 /// <reference path="sensorvaluestore.ts" />
 /// <reference path="ui-elements/numberspinner.ts"/>
 /// <reference path="ui-elements/timerangespinner.ts"/>
+/// <reference path="ui-elements/datetimepicker.ts"/>
 /// <reference path="sensorgraph.ts"/>
 "use strict";
 angular.module("msgp", ['ui.bootstrap'])
@@ -1404,6 +1327,7 @@ angular.module("msgp", ['ui.bootstrap'])
     .factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
     .directive("numberSpinner", Directives.UserInterface.NumberSpinnerFactory())
     .directive("timeRangeSpinner", Directives.UserInterface.TimeRangeSpinnerFactory())
+    .directive("dateTimePicker", Directives.UserInterface.DateTimePickerFactory())
     .directive("sensorGraph", Directives.SensorGraphFactory())
     .directive("deviceEditor", [function () {
         return {
@@ -1517,8 +1441,25 @@ angular.module("msgp", ['ui.bootstrap'])
             }
         };
     }])
-    .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "UpdateDispatcher", function (wsclient, wsurl, $http) {
+    .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", function (wsclient, wsurl, $http, $timeout, $uibModal) {
         wsclient.connect(wsurl);
+        var modalInstance = null;
+        wsclient.onClose(function () {
+            if (modalInstance === null) {
+                modalInstance = $uibModal.open({
+                    size: "lg",
+                    keyboard: false,
+                    backdrop: 'static',
+                    templateUrl: 'connection-lost.html',
+                });
+            }
+            $timeout(function () { return wsclient.connect(wsurl); }, 1000);
+        });
+        wsclient.onOpen(function () {
+            if (modalInstance !== null) {
+                modalInstance.close();
+            }
+        });
     }])
     .controller("DeviceListController", ["$scope", "$http", "devices", function ($scope, $http, devices) {
         $scope.devices = devices;

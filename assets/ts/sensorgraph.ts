@@ -39,7 +39,7 @@ module Directives {
 
 	interface SensorGraphSettingsScope extends SensorGraphScope {
 		pickerModes : {[resoltuion : string] : string};
-		resolutions : string[];
+		resolutions : {[mode : string] :string[]};
 		units : string[];
 		config : SensorGraphConfig;
 		sensorsByUnit : UpdateDispatcher.UnitSensorMap;
@@ -61,7 +61,21 @@ module Directives {
 					config : SensorGraphConfig) {
 
 			$scope.devices = _dispatcher.devices;
-			$scope.resolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
+
+			var supportedResolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
+			$scope.resolutions = {};
+			$scope.resolutions['realtime'] = supportedResolutions.filter((res) => res !== 'second');
+			$scope.resolutions['slidingWindow'] = supportedResolutions.filter((res) => res !== 'raw');
+			$scope.resolutions['interval'] = supportedResolutions.filter((res) => res !== 'raw');
+
+
+			$scope.$watch("config.mode", () : void => {
+				var mode = $scope.config.mode;
+				if($scope.resolutions[mode].indexOf($scope.config.resolution) === -1) {
+					$scope.config.resolution = $scope.resolutions[mode][0];
+				}
+			});
+
 			$scope.units = _dispatcher.units;
 			$scope.sensorsByUnit = _dispatcher.sensorsByUnit;
 
@@ -78,8 +92,8 @@ module Directives {
 				year : 'year'
 			}
 
-			$scope.ok = () : void => {
 
+			$scope.ok = () : void => {
 				$uibModalInstance.close($scope.config);
 			};
 
@@ -145,7 +159,7 @@ module Directives {
 				});
 			};
 
-			$interval(() => this._store.clampData(), 1000);
+			$interval(() => this._store.clampData(), 60 * 1000);
 		}
 
 
@@ -168,8 +182,8 @@ module Directives {
 				resolution : UpdateDispatcher.SupportedResolutions.values().next().value,
 				sensors : [],
 				mode: 'realtime',
-				intervalStart : 0,
-				intervalEnd : 0,
+				intervalStart : Common.now() - 24 * 60 * 1000,
+				intervalEnd : Common.now(),
 				windowStart : 5 * 60 * 1000,
 				windowEnd : 0
 			});
@@ -252,8 +266,7 @@ module Directives {
 				for(var {deviceID: deviceID, sensorID: sensorID} of addedSensors) {
 					this._subscribeSensor(config, deviceID, sensorID);
 					this._store.addSensor(deviceID,
-										sensorID,
-										this._dispatcher.devices[deviceID].sensors[sensorID].name);
+										sensorID);
 				}
 
 				for(var {deviceID: deviceID, sensorID: sensorID} of removedSensors) {
@@ -285,13 +298,11 @@ module Directives {
 				for(var {deviceID: deviceID, sensorID: sensorID} of config.sensors) {
 					this._subscribeSensor(config, deviceID, sensorID);
 
-					this._store.addSensor(deviceID,
-										sensorID,
-										this._dispatcher.devices[deviceID].sensors[sensorID].name);
+					this._store.addSensor(deviceID, sensorID);
 				}
 			}
 
-			this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 25);
+			this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 120);
 
 			this._config = config;
 			this.$scope.sensorColors = this._store.getColors();
@@ -344,7 +355,7 @@ module Directives {
 			var graph = Flotr.draw(this._graphNode, this._store.getData(), graphOptions);
 
 			delay = delay / graph.plotWidth;
-			delay = Math.min(1000, delay);
+			delay = Math.min(10000, delay);
 
 			this._timeout = this.$timeout(() => this._redrawGraph(), delay);
 		}

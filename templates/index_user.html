@@ -1,18 +1,29 @@
 {{define "index_user"}}
 {{template "head" "home:logged-in"}}
+
+
 <div class="container-fluid">
 	<div class="row" data-ng-app="msgp">
 		<div class="col-md-12">
 		<div data-ng-controller="GraphPage">
+			<script type="text/ng-template" id="connection-lost.html">
+				<div class="modal-header">
+					<h3 class="modal-title">Connection to server has been lost</h3>
+				</div>
+				<div class="modal-body">
+					Please wait while the connection is reastablished ...
+				</div>
+			    <div class="modal-footer">
+			    </div>
+			</script>
 			<div data-sensor-graph="">
 			</div>
 		</div>
 		</div>
-
-		<script>
-			angular.module("msgp").value("wsurl", {{.Ws}});
-		</script>
 	</div>
 </div>
+<script>
+	angular.module("msgp").value("wsurl", {{.Ws}});
+</script>
 {{template "tail"}}
 {{end}}

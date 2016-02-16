@@ -65,6 +65,7 @@ module UpdateDispatcher  {
     }
 
     //IDEA: Rename to Subscription
+    //IDEA: Implement as class (for isRealtime() and others)
     // Setting for a subscription
     interface SubscriberSettings {
         // True if start and end denote timestamps relative to the current timestamp
@@ -197,15 +198,26 @@ module UpdateDispatcher  {
             this._sensorsByUnit = {};
             this._units = [];
 
+            this._hasInitialMetadata = false;
+
             _wsClient.onOpen((error : Msg2Socket.OpenError) => {
+                //Reset the dispatcher in case we lose connection
+                _wsClient.onClose(() : void =>{
+                    this._hasInitialMetadata = false;
+
+                    this._devices = {};
+                    this._subscribers = {};
+                    this._sensorsByUnit = {};
+                    this._units = [];
+                });
+
                 _wsClient.onMetadata((metadata : Msg2Socket.MetadataUpdate) : void => this._updateMetadata(metadata));
                 _wsClient.onUpdate((data : Msg2Socket.UpdateData) : void => this._updateValues(data));
-
-                this._hasInitialMetadata = false;
 
                 this._wsClient.requestMetadata();
 
                 $interval(() => this._pollHistoryData(), 1 * 60 * 1000);
+                $interval(() => this._renewRealtimeRequests(), 30 * 1000);
             });
         }
 
@@ -593,31 +605,33 @@ module UpdateDispatcher  {
             // Gather start, end and sensors for each resolution
             Common.forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
                 for(var resolution in map) {
-                    for(var {start: start, end: end, slidingWindow: slidingWindow} of map[resolution]) {
+                    if(resolution !== 'raw') {
 
-                        if(slidingWindow) {
-                            start = now - start;
-                            end = now - end;
+                        for(var {start: start, end: end, slidingWindow: slidingWindow} of map[resolution]) {
+                            if(slidingWindow) {
+                                start = now - start;
+                                end = now - end;
+                            }
+
+                            if(requests[resolution] === undefined) {
+                                requests[resolution] = {
+                                    start: start,
+                                    end: end,
+                                    sensors: {}
+                                };
+                            }
+
+                            //Adjust start and end of interval
+                            requests[resolution].start = Math.min(start, requests[resolution].start);
+                            requests[resolution].end = Math.max(end, requests[resolution].end);
+
+
+                            if(requests[resolution].sensors[deviceID] === undefined) {
+                                requests[resolution].sensors[deviceID] = new Set<string>();
+                            }
+
+                            requests[resolution].sensors[deviceID].add(sensorID);
                         }
-
-                        if(requests[resolution] === undefined) {
-                            requests[resolution] = {
-                                start: start,
-                                end: end,
-                                sensors: {}
-                            };
-                        }
-
-                        //Adjust start and end of interval
-                        requests[resolution].start = Math.min(start, requests[resolution].start);
-                        requests[resolution].end = Math.max(end, requests[resolution].end);
-
-
-                        if(requests[resolution].sensors[deviceID] === undefined) {
-                            requests[resolution].sensors[deviceID] = new Set<string>();
-                        }
-
-                        requests[resolution].sensors[deviceID].add(sensorID);
                     }
                 }
             });
@@ -634,6 +648,30 @@ module UpdateDispatcher  {
 
                 this._wsClient.requestValues(start, end, resolution, sensorList);
             }
+        }
+
+        private _renewRealtimeRequests() {
+            var request : Msg2Socket.RequestRealtimeUpdateArgs = {};
+
+            Common.forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
+                if(request[deviceID] === undefined) {
+                    request[deviceID] = {};
+                }
+                for(var resolution in map) {
+                    if(request[deviceID][resolution] === undefined) {
+                        request[deviceID][resolution] = [];
+                    }
+                    for(var {start: start, end: end, slidingWindow: slidingWindow} of map[resolution]) {
+                        if(end === 0 && slidingWindow) {
+                            if(request[deviceID][resolution].indexOf(sensorID) === -1) {
+                                request[deviceID][resolution].push(sensorID);
+                            }
+                        }
+                    }
+                }
+            });
+
+            this._wsClient.requestRealtimeUpdates(request);
         }
 
         /**

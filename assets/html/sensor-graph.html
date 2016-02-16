@@ -5,6 +5,17 @@
 	<div class="modal-body">
 		<form class="form-horizontal">
 			<div class="form-group">
+				<label for="mode" class="col-sm-3 control-label">Mode</label>
+				<div class="col-sm-9">
+					<div class="btn-group" id="mode">
+						<label class="btn btn-primary" ng-model="config.mode" uib-btn-radio="'interval'">Interval</label>
+						<label class="btn btn-primary" ng-model="config.mode" uib-btn-radio="'slidingWindow'">Sliding Window</label>
+						<label class="btn btn-primary" ng-model="config.mode" uib-btn-radio="'realtime'">Realtime</label>
+					</div>
+				</div>
+			</div>
+
+			<div class="form-group">
 				<label for="unit" class="col-sm-3 control-label">Unit</label>
 				<div class="col-sm-9">
 					<select id="unit" class="form-control" ng-options="sensorUnit as sensorUnit for sensorUnit in units" ng-model="config.unit"></select>
@@ -14,7 +25,7 @@
 			<div class="form-group">
 				<label for="resolution" class="col-sm-3 control-label">Resolution</label>
 				<div class="col-sm-9">
-					<select id="resoltion" class="form-control"  ng-options="res as res for res in resolutions" ng-model="config.resolution"></select>
+					<select id="resoltion" class="form-control"  ng-options="res as res for res in resolutions[config.mode]" ng-model="config.resolution"></select>
 				</div>
 			</div>
 
@@ -28,47 +39,17 @@
 				</div>
 			</div>
 
-			<div class="form-group">
-				<label for="mode" class="col-sm-3 control-label">Resolution</label>
-				<div class="col-sm-9">
-					<div class="btn-group" id="mode">
-						<label class="btn btn-primary" ng-model="config.mode" uib-btn-radio="'interval'">Interval</label>
-						<label class="btn btn-primary" ng-model="config.mode" uib-btn-radio="'slidingWindow'">Sliding Window</label>
-						<label class="btn btn-primary" ng-model="config.mode" uib-btn-radio="'realtime'">Realtime</label>
-					</div>
-				</div>
-			</div>
-
-			<!-- config.mode === 'interval' -->
-			<div class="form-group" ng-show="false">
+			<div class="form-group" ng-show="config.mode === 'interval'">
 				<label for="intervalStart" class="col-sm-3 control-label">Interval start</label>
 				<div class="col-sm-9">
-					<p class="input-group">
-						<input class="form-control"
-							id="intervalStart"
-							type="date"
-							uib-datepicker-popup
-							is-open="intervalStartPickerOpen"
-							min-mode="pickerModes[config.resolution]"
-							datepicker-mode="pickerModes[config.resolution]"
-							ng-model="config.intervalStart"/>
-						<span class="input-group-btn">
-                			<button type="button" class="btn btn-default" ng-click="intervalStartPickerOpen = true"><i class="glyphicon glyphicon-calendar"></i></button>
-        				</span>
-					</p>
+					<div date-time-picker="" ng-model="config.intervalStart"></div>
 				</div>
 			</div>
 
-			<!-- config.mode === 'interval' -->
-			<div class="form-group" ng-show="false">
+			<div class="form-group" ng-show="config.mode === 'interval'">
 				<label for="intervalEnd" class="col-sm-3 control-label">Interval end</label>
 				<div class="col-sm-9">
-					<p class="input-group">
-						<input class="form-control" id="intervalEnd" type="date" uib-datepicker-popup is-open="intervalEndPickerOpen" datepicker-mode="pickerModes[config.resolution]"  ng-model="config.intervalEnd"/>
-						<span class="input-group-btn">
-							<button type="button" class="btn btn-default" ng-click="intervalEndPickerOpen = true"><i class="glyphicon glyphicon-calendar"></i></button>
-						</span>
-					</p>
+					<div date-time-picker="" ng-model="config.intervalEnd"></div>
 				</div>
 			</div>
 

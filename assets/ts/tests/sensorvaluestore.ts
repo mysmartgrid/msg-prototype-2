@@ -33,26 +33,24 @@ QUnit.test("Add sensor", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 	assert.ok(!store.hasSensor("ADevice", "ASensor"), "Store should not know device and sensor by now");
 
-	store.addSensor("ADevice", "ASensor", "ADummySensor");
+	store.addSensor("ADevice", "ASensor");
 	assert.ok(store.hasSensor("ADevice", "ASensor"), "Store should know device and sensor by now");
 
 	var data = store.getData();
-	var labels = store.getLabels();
 	assert.ok(data.length === 1, "There should be one timeseries");
 	assert.ok(data[0].line !== undefined, "The series should have a line property");
 	assert.ok(data[0].line.color !== undefined, "The series should have a line.color property");
 	assert.ok(data[0].data !== undefined, "The series should have a data array");
 	assert.ok(data[0].data.length === 0, "The data array should be empty");
-	assert.ok(store.getLabels()["ADevice"]["ASensor"] === "ADummySensor", "The sensor should have a label");
 })
 
 
 QUnit.test("Duplicate sensor", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
-	store.addSensor("ADevice", "ASensor", "ADummySensor");
+	store.addSensor("ADevice", "ASensor");
 
 	assert.throws(() : void => {
-			store.addSensor("ADevice", "ASensor", "ADummySensor");
+			store.addSensor("ADevice", "ASensor");
 		},
 		errorCompare("Sensor has been added already"),
 		"Adding a sensor twice should raise an error");
@@ -62,9 +60,9 @@ QUnit.test("Duplicate sensor", function(assert : QUnitAssert) : void {
 QUnit.test("Remove sensor", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
-	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
-	store.addSensor("ADevice", "ASensor2", "ADummySensor2");
-	store.addSensor("ADevice", "ASensor3", "ADummySensor3");
+	store.addSensor("ADevice", "ASensor1");
+	store.addSensor("ADevice", "ASensor2");
+	store.addSensor("ADevice", "ASensor3");
 
 	store.removeSensor("ADevice", "ASensor2");
 
@@ -73,15 +71,6 @@ QUnit.test("Remove sensor", function(assert : QUnitAssert) : void {
 	var data = store.getData();
 	assert.ok(data.length === 2, "There should still be 2 timeseries left.");
 
-	var expectedLabels = {
-		"ADevice": {
-			"ASensor1": "ADummySensor1",
-			"ASensor3": "ADummySensor3",
-		}
-	}
-
-	var labels = store.getLabels();
-	assert.deepEqual(labels, expectedLabels, "There should be two lables left");
 });
 
 
@@ -93,22 +82,6 @@ QUnit.test("Remove nonexistent sensor", function(assert : QUnitAssert) : void {
 		},
 		errorCompare("No such sensor"),
 		"Removing a sensor that does not exist should raise an error");
-});
-
-QUnit.test("Change a sensor label", function(assert : QUnitAssert) : void {
-	var store = new Store.SensorValueStore();
-	store.addSensor("ADevice", "ASensor", "ADummySensor");
-
-	store.setLabel("ADevice", "ASensor", "AnOtherDummySensor");
-
-	var expectedLabels = {
-		"ADevice": {
-			"ASensor": "AnOtherDummySensor",
-		}
-	};
-
-	var labels = store.getLabels();
-	assert.deepEqual(labels, expectedLabels, "Label should be changed");
 });
 
 
@@ -125,7 +98,7 @@ QUnit.test("Clamp empty store", function(assert : QUnitAssert) : void {
 QUnit.test("Add single value", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
-	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+	store.addSensor("ADevice", "ASensor1");
 
 	var timestamp = Common.now();
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
@@ -139,7 +112,7 @@ QUnit.test("Add single value", function(assert : QUnitAssert) : void {
 QUnit.test("Add two values with different timestamps", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
-	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+	store.addSensor("ADevice", "ASensor1");
 
 	var timestamp = Common.now();
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
@@ -153,7 +126,7 @@ QUnit.test("Add two values with different timestamps", function(assert : QUnitAs
 QUnit.test("Add values with same imestamps", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
-	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+	store.addSensor("ADevice", "ASensor1");
 
 	var timestamp = Common.now();
 
@@ -184,7 +157,7 @@ QUnit.test("Add values with same imestamps", function(assert : QUnitAssert) : vo
 QUnit.test("Clamp data - slinding window", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
-	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+	store.addSensor("ADevice", "ASensor1");
 
 	var timestamp = Common.now();
 	var oldTimestamp = timestamp - 6 * 60 * 1000;
@@ -207,7 +180,7 @@ QUnit.test("Clamp data - slinding window", function(assert : QUnitAssert) : void
 QUnit.test("Clamp data - fixed interval", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
-	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+	store.addSensor("ADevice", "ASensor1");
 
 	store.setStart(630 * 1000);
 	store.setEnd(840 * 1000);
@@ -234,7 +207,7 @@ QUnit.test("Clamp data - fixed interval", function(assert : QUnitAssert) : void 
 QUnit.test("Test timeout past", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
-	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+	store.addSensor("ADevice", "ASensor1");
 
 	var timestamp = Common.now();
 	var oldTimestamp = timestamp - 3 * 60 * 1000;
@@ -259,7 +232,7 @@ QUnit.test("Test timeout past", function(assert : QUnitAssert) : void {
 QUnit.test("Test timeout future", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
-	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+	store.addSensor("ADevice", "ASensor1");
 
 	var timestamp = Common.now();
 	var oldTimestamp = timestamp - 3 * 60 * 1000;
@@ -288,7 +261,7 @@ QUnit.test("Remove past timeout, reinsert in future", function(assert : QUnitAss
 
 	store.setTimeout(Timeout);
 
-	store.addSensor("ADevice", "ASensor1", "ADummySensor1");
+	store.addSensor("ADevice", "ASensor1");
 
 
 	var lastTimestamp = Common.now();

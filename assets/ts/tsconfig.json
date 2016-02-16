@@ -1,9 +1,10 @@
 {
     "compilerOptions": {
-      "out": "../js/app.js",
-      "target": "es5",
-       "sourceMap": true,
-       "sourceRoot": "/ts/"
+        "out": "../js/app.js",
+        "target": "es5",
+        "sourceMap": true,
+        "sourceRoot": "/ts/",
+        "removeComments": true
     },
     "files": [
       "app.ts",
@@ -14,6 +15,7 @@
       "common.ts",
       "utils.ts",
       "ui-elements/numberspinner.ts",
-      "ui-elements/timerangespinner.ts"
+      "ui-elements/timerangespinner.ts",
+      "ui-elements/datetimepicker.ts"
     ]
 }
