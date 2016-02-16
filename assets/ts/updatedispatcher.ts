@@ -65,6 +65,7 @@ module UpdateDispatcher  {
     }
 
     //IDEA: Rename to Subscription
+    //IDEA: Implement as class (for isRealtime() and others)
     // Setting for a subscription
     interface SubscriberSettings {
         // True if start and end denote timestamps relative to the current timestamp
@@ -216,6 +217,7 @@ module UpdateDispatcher  {
                 this._wsClient.requestMetadata();
 
                 $interval(() => this._pollHistoryData(), 1 * 60 * 1000);
+                $interval(() => this._renewRealtimeRequests(), 30 * 1000);
             });
         }
 
@@ -646,6 +648,30 @@ module UpdateDispatcher  {
 
                 this._wsClient.requestValues(start, end, resolution, sensorList);
             }
+        }
+
+        private _renewRealtimeRequests() {
+            var request : Msg2Socket.RequestRealtimeUpdateArgs = {};
+
+            Common.forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
+                if(request[deviceID] === undefined) {
+                    request[deviceID] = {};
+                }
+                for(var resolution in map) {
+                    if(request[deviceID][resolution] === undefined) {
+                        request[deviceID][resolution] = [];
+                    }
+                    for(var {start: start, end: end, slidingWindow: slidingWindow} of map[resolution]) {
+                        if(end === 0 && slidingWindow) {
+                            if(request[deviceID][resolution].indexOf(sensorID) === -1) {
+                                request[deviceID][resolution].push(sensorID);
+                            }
+                        }
+                    }
+                }
+            });
+
+            this._wsClient.requestRealtimeUpdates(request);
         }
 
         /**

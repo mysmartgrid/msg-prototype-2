@@ -1,8 +1,4 @@
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
+/// <reference path="angular.d.ts" />
 "use strict";
 var Msg2Socket;
 (function (Msg2Socket) {
@@ -25,8 +21,8 @@ var Msg2Socket;
             configurable: true
         });
         Socket.prototype._callHandlers = function (handlers, param) {
-            for (var _i = 0, handlers_1 = handlers; _i < handlers_1.length; _i++) {
-                var handler = handlers_1[_i];
+            for (var _i = 0; _i < handlers.length; _i++) {
+                var handler = handlers[_i];
                 if (this.$rootScope.$$phase === "apply" || this.$rootScope.$$phase === "$digest") {
                     handler(param);
                 }
@@ -87,7 +83,6 @@ var Msg2Socket;
         };
         Socket.prototype.connect = function (url) {
             var _this = this;
-            this._url = url;
             this._socket = new WebSocket(url, [ApiVersion]);
             this._socket.onerror = this._emitError.bind(this);
             this._socket.onclose = this._emitClose.bind(this);
@@ -146,10 +141,15 @@ var Msg2Socket;
         };
         ;
         return Socket;
-    }());
+    })();
     Msg2Socket.Socket = Socket;
     ;
 })(Msg2Socket || (Msg2Socket = {}));
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
 var Utils;
 (function (Utils) {
     var ExtArray = (function (_super) {
@@ -175,7 +175,7 @@ var Utils;
             }
         };
         return ExtArray;
-    }(Array));
+    })(Array);
     Utils.ExtArray = ExtArray;
     function deepCopyJSON(src) {
         var dst = {};
@@ -226,6 +226,9 @@ var Common;
     }
     Common.now = now;
 })(Common || (Common = {}));
+/// <reference path="utils.ts"/>
+/// <reference path="common.ts"/>
+/// <reference path="msg2socket.ts" />
 var ExtArray = Utils.ExtArray;
 var UpdateDispatcher;
 (function (UpdateDispatcher_1) {
@@ -268,6 +271,7 @@ var UpdateDispatcher;
                 _wsClient.onUpdate(function (data) { return _this._updateValues(data); });
                 _this._wsClient.requestMetadata();
                 $interval(function () { return _this._pollHistoryData(); }, 1 * 60 * 1000);
+                $interval(function () { return _this._renewRealtimeRequests(); }, 30 * 1000);
             });
         }
         Object.defineProperty(UpdateDispatcher.prototype, "devices", {
@@ -537,6 +541,28 @@ var UpdateDispatcher;
                 this._wsClient.requestValues(start, end, resolution, sensorList);
             }
         };
+        UpdateDispatcher.prototype._renewRealtimeRequests = function () {
+            var request = {};
+            Common.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
+                if (request[deviceID] === undefined) {
+                    request[deviceID] = {};
+                }
+                for (var resolution in map) {
+                    if (request[deviceID][resolution] === undefined) {
+                        request[deviceID][resolution] = [];
+                    }
+                    for (var _i = 0, _a = map[resolution]; _i < _a.length; _i++) {
+                        var _b = _a[_i], start = _b.start, end = _b.end, slidingWindow = _b.slidingWindow;
+                        if (end === 0 && slidingWindow) {
+                            if (request[deviceID][resolution].indexOf(sensorID) === -1) {
+                                request[deviceID][resolution].push(sensorID);
+                            }
+                        }
+                    }
+                }
+            });
+            this._wsClient.requestRealtimeUpdates(request);
+        };
         UpdateDispatcher.prototype._updateValues = function (data) {
             var resolution = data.resolution, values = data.values;
             for (var deviceID in values) {
@@ -568,7 +594,7 @@ var UpdateDispatcher;
             }
         };
         return UpdateDispatcher;
-    }());
+    })();
     UpdateDispatcher_1.UpdateDispatcher = UpdateDispatcher;
     var DummySubscriber = (function () {
         function DummySubscriber() {
@@ -590,9 +616,12 @@ var UpdateDispatcher;
             console.log("Remove sensor " + deviceID + ":" + sensorID);
         };
         return DummySubscriber;
-    }());
+    })();
     UpdateDispatcher_1.DummySubscriber = DummySubscriber;
 })(UpdateDispatcher || (UpdateDispatcher = {}));
+/// <reference path="es6-shim.d.ts" />
+/// <reference path="common.ts"/>
+/// <reference path="msg2socket.ts" />
 "use strict";
 var Store;
 (function (Store) {
@@ -732,9 +761,10 @@ var Store;
             return colors;
         };
         return SensorValueStore;
-    }());
+    })();
     Store.SensorValueStore = SensorValueStore;
 })(Store || (Store = {}));
+/// <reference path="../angular.d.ts" />
 var Directives;
 (function (Directives) {
     var UserInterface;
@@ -798,7 +828,7 @@ var Directives;
                 input.bind("mouse wheel", function (event) { return _this._onMouseWheel(event); });
             };
             return NumberSpinnerController;
-        }());
+        })();
         UserInterface.NumberSpinnerController = NumberSpinnerController;
         function NumberSpinnerFactory() {
             return function () { return new NumberSpinnerDirective(); };
@@ -823,9 +853,11 @@ var Directives;
                 };
             }
             return NumberSpinnerDirective;
-        }());
+        })();
     })(UserInterface = Directives.UserInterface || (Directives.UserInterface = {}));
 })(Directives || (Directives = {}));
+/// <reference path="../angular.d.ts" />
+/// <reference path="../common.ts"/>
 var Directives;
 (function (Directives) {
     var UserInterface;
@@ -872,8 +904,8 @@ var Directives;
                 var editDone = TimeUnits.every(function (unit) { return (_this.$scope.time[unit] !== null && _this.$scope.time[unit] !== undefined); });
                 if (editDone) {
                     var milliseconds = 0;
-                    for (var _i = 0, TimeUnits_1 = TimeUnits; _i < TimeUnits_1.length; _i++) {
-                        var unit = TimeUnits_1[_i];
+                    for (var _i = 0; _i < TimeUnits.length; _i++) {
+                        var unit = TimeUnits[_i];
                         milliseconds += this.$scope.time[unit] * UnitsToMillisecs[unit];
                     }
                     if (this.$scope.min !== undefined) {
@@ -891,8 +923,8 @@ var Directives;
             };
             TimeRangeSpinnerController.prototype._setFromMilliseconds = function (milliseconds) {
                 var remainder = milliseconds;
-                for (var _i = 0, TimeUnits_2 = TimeUnits; _i < TimeUnits_2.length; _i++) {
-                    var unit = TimeUnits_2[_i];
+                for (var _i = 0; _i < TimeUnits.length; _i++) {
+                    var unit = TimeUnits[_i];
                     this.$scope.time[unit] = Math.floor(remainder / UnitsToMillisecs[unit]);
                     remainder = remainder % UnitsToMillisecs[unit];
                 }
@@ -921,7 +953,7 @@ var Directives;
                 });
             };
             return TimeRangeSpinnerController;
-        }());
+        })();
         UserInterface.TimeRangeSpinnerController = TimeRangeSpinnerController;
         function TimeRangeSpinnerFactory() {
             return function () { return new TimeRangeSpinnerDirective(); };
@@ -943,9 +975,11 @@ var Directives;
                 };
             }
             return TimeRangeSpinnerDirective;
-        }());
+        })();
     })(UserInterface = Directives.UserInterface || (Directives.UserInterface = {}));
 })(Directives || (Directives = {}));
+/// <reference path="../angular.d.ts" />
+/// <reference path="../common.ts" />
 var Directives;
 (function (Directives) {
     var UserInterface;
@@ -984,7 +1018,7 @@ var Directives;
                 }
             };
             return DateTimePickerController;
-        }());
+        })();
         UserInterface.DateTimePickerController = DateTimePickerController;
         function DateTimePickerFactory() {
             return function () { return new DateTimePickerDirective(); };
@@ -1005,9 +1039,14 @@ var Directives;
                 };
             }
             return DateTimePickerDirective;
-        }());
+        })();
     })(UserInterface = Directives.UserInterface || (Directives.UserInterface = {}));
 })(Directives || (Directives = {}));
+/// <reference path="angular.d.ts" />
+/// <reference path="angular-ui-bootstrap.d.ts" />
+/// <reference path="common.ts"/>
+/// <reference path="msg2socket.ts" />
+/// <reference path="sensorvaluestore.ts" />
 "use strict";
 var Directives;
 (function (Directives) {
@@ -1057,7 +1096,7 @@ var Directives;
             };
         }
         return SensorGraphSettingsController;
-    }());
+    })();
     var SensorGraphController = (function () {
         function SensorGraphController($scope, $interval, $timeout, $uibModal, _dispatcher) {
             var _this = this;
@@ -1161,13 +1200,13 @@ var Directives;
                 config.intervalEnd === this._config.intervalEnd) {
                 var addedSensors = Utils.difference(config.sensors, this._config.sensors, sensorEqual);
                 var removedSensors = Utils.difference(this._config.sensors, config.sensors, sensorEqual);
-                for (var _i = 0, addedSensors_1 = addedSensors; _i < addedSensors_1.length; _i++) {
-                    var _a = addedSensors_1[_i], deviceID = _a.deviceID, sensorID = _a.sensorID;
+                for (var _i = 0; _i < addedSensors.length; _i++) {
+                    var _a = addedSensors[_i], deviceID = _a.deviceID, sensorID = _a.sensorID;
                     this._subscribeSensor(config, deviceID, sensorID);
                     this._store.addSensor(deviceID, sensorID);
                 }
-                for (var _b = 0, removedSensors_1 = removedSensors; _b < removedSensors_1.length; _b++) {
-                    var _c = removedSensors_1[_b], deviceID = _c.deviceID, sensorID = _c.sensorID;
+                for (var _b = 0; _b < removedSensors.length; _b++) {
+                    var _c = removedSensors[_b], deviceID = _c.deviceID, sensorID = _c.sensorID;
                     this._unsubscribeSensor(this._config, deviceID, sensorID);
                     this._store.removeSensor(deviceID, sensorID);
                 }
@@ -1244,7 +1283,7 @@ var Directives;
             this._timeout = this.$timeout(function () { return _this._redrawGraph(); }, delay);
         };
         return SensorGraphController;
-    }());
+    })();
     Directives.SensorGraphController = SensorGraphController;
     var SensorGraphDirective = (function () {
         function SensorGraphDirective() {
@@ -1258,12 +1297,22 @@ var Directives;
             };
         }
         return SensorGraphDirective;
-    }());
+    })();
     function SensorGraphFactory() {
         return function () { return new SensorGraphDirective(); };
     }
     Directives.SensorGraphFactory = SensorGraphFactory;
 })(Directives || (Directives = {}));
+/// <reference path="jquery.d.ts" />
+/// <reference path="angular.d.ts" />
+/// <reference path="bootstrap.d.ts" />
+/// <reference path="msg2socket.ts" />
+/// <reference path="updatedispatcher.ts"/>
+/// <reference path="sensorvaluestore.ts" />
+/// <reference path="ui-elements/numberspinner.ts"/>
+/// <reference path="ui-elements/timerangespinner.ts"/>
+/// <reference path="ui-elements/datetimepicker.ts"/>
+/// <reference path="sensorgraph.ts"/>
 "use strict";
 angular.module("msgp", ['ui.bootstrap'])
     .config(function ($interpolateProvider) {
