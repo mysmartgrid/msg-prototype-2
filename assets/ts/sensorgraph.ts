@@ -302,7 +302,7 @@ module Directives {
 				}
 			}
 
-			this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 120);
+			this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 60);
 
 			this._config = config;
 			this.$scope.sensorColors = this._store.getColors();
@@ -320,7 +320,9 @@ module Directives {
 				xaxis: {
 					mode: 'time',
 					timeMode : 'local',
-					title: 'Time'
+					title: 'Time',
+					noTicks: 15,
+					minorTickFreq: 1
 				},
 				HtmlText: false,
 				preventDefault : false,

@@ -598,6 +598,7 @@ module UpdateDispatcher  {
          * The _updateValues method takes care of dropping unecessary values and dispatching the rest to the subscribers.
          */
         private _pollHistoryData() : void {
+    
             var requests : {[resolution : string] : {start :number, end: number, sensors: {[deviceID : string] : Set<string>}}};
             requests = {};
             var now = Common.now();
