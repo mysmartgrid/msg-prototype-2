@@ -505,46 +505,39 @@ var UpdateDispatcher;
                 }
             }
         };
-        UpdateDispatcher.prototype._emitDeviceMetadataUpdate = function (deviceID) {
+        UpdateDispatcher.prototype._notifySubscribers = function (notify, deviceID, sensorID) {
             var notified = new Set();
-            for (var sensorID in this._subscribers[deviceID]) {
-                for (var resolution in this._subscribers[deviceID][sensorID]) {
-                    for (var _i = 0, _a = this._subscribers[deviceID][sensorID][resolution]; _i < _a.length; _i++) {
-                        var subscription = _a[_i];
+            var subscriptionsByResolutions = [];
+            if (sensorID === undefined) {
+                for (var _sensorID in this._subscribers[deviceID]) {
+                    subscriptionsByResolutions.push(this._subscribers[deviceID][_sensorID]);
+                }
+            }
+            else {
+                subscriptionsByResolutions.push(this._subscribers[deviceID][sensorID]);
+            }
+            for (var _i = 0; _i < subscriptionsByResolutions.length; _i++) {
+                var subscriptionByResolution = subscriptionsByResolutions[_i];
+                for (var resolution in subscriptionByResolution) {
+                    for (var _a = 0, _b = subscriptionByResolution[resolution]; _a < _b.length; _a++) {
+                        var subscription = _b[_a];
                         var subscriber = subscription.getSubscriber();
                     }
                     if (!notified.has(subscriber)) {
-                        subscriber.updateDeviceMetadata(deviceID);
+                        notify(subscriber);
                         notified.add(subscriber);
                     }
                 }
             }
         };
+        UpdateDispatcher.prototype._emitDeviceMetadataUpdate = function (deviceID) {
+            this._notifySubscribers(function (subscriber) { return subscriber.updateDeviceMetadata(deviceID); }, deviceID);
+        };
         UpdateDispatcher.prototype._emitSensorMetadataUpdate = function (deviceID, sensorID) {
-            var notified = new Set();
-            for (var resolution in this._subscribers[deviceID][sensorID]) {
-                for (var _i = 0, _a = this._subscribers[deviceID][sensorID][resolution]; _i < _a.length; _i++) {
-                    var subscription = _a[_i];
-                    var subscriber = subscription.getSubscriber();
-                }
-                if (!notified.has(subscriber)) {
-                    subscriber.updateSensorMetadata(deviceID, sensorID);
-                    notified.add(subscriber);
-                }
-            }
+            this._notifySubscribers(function (subscriber) { return subscriber.updateSensorMetadata(deviceID, sensorID); }, deviceID, sensorID);
         };
         UpdateDispatcher.prototype._emitRemoveSensor = function (deviceID, sensorID) {
-            var notified = new Set();
-            for (var resolution in this._subscribers[deviceID][sensorID]) {
-                for (var _i = 0, _a = this._subscribers[deviceID][sensorID][resolution]; _i < _a.length; _i++) {
-                    var subscription = _a[_i];
-                    var subscriber = subscription.getSubscriber();
-                }
-                if (!notified.has(subscriber)) {
-                    subscriber.removeSensor(deviceID, sensorID);
-                    notified.add(subscriber);
-                }
-            }
+            this._notifySubscribers(function (subscriber) { return subscriber.removeSensor(deviceID, sensorID); }, deviceID, sensorID);
         };
         UpdateDispatcher.prototype._pollHistoryData = function () {
             var requests;

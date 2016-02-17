@@ -342,23 +342,7 @@ module UpdateDispatcher  {
 
 
         /**
-         * Internal handler for all types of subscrition.
-         * There a three valid combinations of paramaters for this method.
-         * Fixed Interval:
-         *  slidingWindow: false,
-         *  start: timestamp start,
-         *  end: timestamp end
-         *
-         * Sliding window:
-         *  slidingWindow: true,
-         *  start: how many milliseconds back the window should start
-         *  end: how many milliseconds back the window should end
-         *
-         * Sliding window for realtime updates:
-         *  slidingWindow: true,
-         *  start: how many milliseconds back the window should start
-         *  end: 0 (window always end at the current timestamp)
-         *
+         * Common handler for all subscriptions
          */
         private _subscribeSensor(deviceID : string,
                                 sensorID : string,
@@ -532,57 +516,55 @@ module UpdateDispatcher  {
             }
         }
 
-        /**
-         * Notify all subscribers to all sensors in all resolutions for this device of the update.
-         * A set is used to ensure each subscriber is notified exactly once.
-         */
-        private _emitDeviceMetadataUpdate(deviceID : string) : void {
-            // Notify every subscriber to the devices sensors once
+        private _notifySubscribers(notify : (subscriber : Subscriber) => void, deviceID : string, sensorID? : string) : void {
+            // Notify every subscriber once once
             var notified = new Set<Subscriber>();
-            for(var sensorID in this._subscribers[deviceID]) {
-                for(var resolution in this._subscribers[deviceID][sensorID]) {
-                    for(var subscription of this._subscribers[deviceID][sensorID][resolution])
+            var subscriptionsByResolutions = [];
+
+            if(sensorID === undefined) {
+                for(var _sensorID in this._subscribers[deviceID]) {
+                    subscriptionsByResolutions.push(this._subscribers[deviceID][_sensorID])
+                }
+            }
+            else {
+                subscriptionsByResolutions.push(this._subscribers[deviceID][sensorID])
+            }
+
+            for(var subscriptionByResolution of subscriptionsByResolutions) {
+                for(var resolution in subscriptionByResolution) {
+                    for(var subscription of subscriptionByResolution[resolution])
                         var subscriber = subscription.getSubscriber();
                         if(!notified.has(subscriber)) {
-                            subscriber.updateDeviceMetadata(deviceID);
+                            notify(subscriber);
                             notified.add(subscriber);
                         }
                 }
             }
         }
 
+
+        /**
+         * Notify all subscribers to all sensors in all resolutions for this device of the update.
+         */
+        private _emitDeviceMetadataUpdate(deviceID : string) : void {
+            this._notifySubscribers((subscriber) => subscriber.updateDeviceMetadata(deviceID), deviceID);
+        }
+
+
         /**
          * Notify all subscribers to a sensors in all resolutions of the update.
          * A set is used to ensure each subscriber is notified exactly once.
          */
         private _emitSensorMetadataUpdate(deviceID : string, sensorID : string) : void {
-            // Notify every subscriber to the sensor once
-            var notified = new Set<Subscriber>();
-            for(var resolution in this._subscribers[deviceID][sensorID]) {
-                for(var subscription of this._subscribers[deviceID][sensorID][resolution])
-                    var subscriber = subscription.getSubscriber();
-                    if(!notified.has(subscriber)) {
-                        subscriber.updateSensorMetadata(deviceID, sensorID);
-                        notified.add(subscriber);
-                    }
-            }
+            this._notifySubscribers((subscriber) => subscriber.updateSensorMetadata(deviceID, sensorID), deviceID, sensorID);
         }
+
 
         /**
          * Notify all subscribers to a sensors in all resolutions.
-         * A set is used to ensure each subscriber is notified exactly once.
          */
         private _emitRemoveSensor(deviceID : string, sensorID : string) : void {
-            // Notify every subscriber to the sensor once
-            var notified = new Set<Subscriber>();
-            for(var resolution in this._subscribers[deviceID][sensorID]) {
-                for(var subscription of this._subscribers[deviceID][sensorID][resolution])
-                    var subscriber = subscription.getSubscriber();
-                    if(!notified.has(subscriber)) {
-                        subscriber.removeSensor(deviceID, sensorID);
-                        notified.add(subscriber);
-                    }
-            }
+            this._notifySubscribers((subscriber) => subscriber.removeSensor(deviceID, sensorID), deviceID, sensorID);
         }
 
         /**
