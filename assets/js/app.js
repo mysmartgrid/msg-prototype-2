@@ -233,6 +233,87 @@ var ExtArray = Utils.ExtArray;
 var UpdateDispatcher;
 (function (UpdateDispatcher_1) {
     ;
+    var SubscriptionMode;
+    (function (SubscriptionMode) {
+        SubscriptionMode[SubscriptionMode["Realtime"] = 0] = "Realtime";
+        SubscriptionMode[SubscriptionMode["SlidingWindow"] = 1] = "SlidingWindow";
+        SubscriptionMode[SubscriptionMode["Interval"] = 2] = "Interval";
+    })(SubscriptionMode || (SubscriptionMode = {}));
+    var Subscription = (function () {
+        function Subscription(_subscriber) {
+            this._subscriber = _subscriber;
+        }
+        Subscription.prototype.inTimeRange = function (timestamp, now) {
+            return this.getStart(now) <= timestamp && this.getEnd(now) >= timestamp;
+        };
+        Subscription.prototype.getSubscriber = function () {
+            return this._subscriber;
+        };
+        ;
+        return Subscription;
+    })();
+    var IntervalSubscription = (function (_super) {
+        __extends(IntervalSubscription, _super);
+        function IntervalSubscription(_start, _end, subscriber) {
+            _super.call(this, subscriber);
+            this._start = _start;
+            this._end = _end;
+            if (_start > _end) {
+                throw new Error("Start should be less than end for IntervalSubscription");
+            }
+        }
+        IntervalSubscription.prototype.getMode = function () {
+            return SubscriptionMode.Interval;
+        };
+        IntervalSubscription.prototype.getStart = function (now) {
+            return this._start;
+        };
+        IntervalSubscription.prototype.getEnd = function (now) {
+            return this._end;
+        };
+        return IntervalSubscription;
+    })(Subscription);
+    var SlidingWindowSubscription = (function (_super) {
+        __extends(SlidingWindowSubscription, _super);
+        function SlidingWindowSubscription(_start, _end, subscriber) {
+            _super.call(this, subscriber);
+            this._start = _start;
+            this._end = _end;
+            if (_end > _start) {
+                throw new Error("Start should be bigger than end for SlidingWindowSubscription");
+            }
+        }
+        SlidingWindowSubscription.prototype.getMode = function () {
+            return SubscriptionMode.SlidingWindow;
+        };
+        SlidingWindowSubscription.prototype.getStart = function (now) {
+            return now - this._start;
+        };
+        SlidingWindowSubscription.prototype.getEnd = function (now) {
+            return now - this._end;
+        };
+        return SlidingWindowSubscription;
+    })(Subscription);
+    var RealtimeSubscription = (function (_super) {
+        __extends(RealtimeSubscription, _super);
+        function RealtimeSubscription(_start, subscriber) {
+            _super.call(this, subscriber);
+            this._start = _start;
+            if (_start <= 0) {
+                throw new Error("Start should greater than zero for RealtimeSubscription");
+            }
+        }
+        RealtimeSubscription.prototype.getMode = function () {
+            return SubscriptionMode.Realtime;
+        };
+        RealtimeSubscription.prototype.getStart = function (now) {
+            return now - this._start;
+        };
+        RealtimeSubscription.prototype.getEnd = function (now) {
+            return now;
+        };
+        return RealtimeSubscription;
+    })(Subscription);
     UpdateDispatcher_1.SupportedResolutions = new Set(["raw", "second", "minute", "hour", "day", "week", "month", "year"]);
     UpdateDispatcher_1.ResoltuionToMillisecs = {
         raw: 1000,
@@ -296,17 +377,24 @@ var UpdateDispatcher;
             configurable: true
         });
         UpdateDispatcher.prototype.subscribeInterval = function (deviceID, sensorID, resolution, start, end, subscriber) {
-            this._subscribeSensor(deviceID, sensorID, resolution, false, start, end, subscriber);
+            var subscripton = new IntervalSubscription(start, end, subscriber);
+            this._subscribeSensor(deviceID, sensorID, resolution, subscripton);
         };
         UpdateDispatcher.prototype.subscribeSlidingWindow = function (deviceID, sensorID, resolution, start, end, subscriber) {
-            this._subscribeSensor(deviceID, sensorID, resolution, true, start, end, subscriber);
+            var subscripton = new SlidingWindowSubscription(start, end, subscriber);
+            this._subscribeSensor(deviceID, sensorID, resolution, subscripton);
         };
         ;
         UpdateDispatcher.prototype.subscribeRealtimeSlidingWindow = function (deviceID, sensorID, resolution, start, subscriber) {
-            this._subscribeSensor(deviceID, sensorID, resolution, true, start, 0, subscriber);
+            var subscripton = new RealtimeSubscription(start, subscriber);
+            this._subscribeSensor(deviceID, sensorID, resolution, subscripton);
+            var request = {};
+            request[deviceID] = {};
+            request[deviceID][resolution] = [sensorID];
+            this._wsClient.requestRealtimeUpdates(request);
         };
         ;
-        UpdateDispatcher.prototype._subscribeSensor = function (deviceID, sensorID, resolution, slidingWindow, start, end, subscriber) {
+        UpdateDispatcher.prototype._subscribeSensor = function (deviceID, sensorID, resolution, subscription) {
             if (this._devices[deviceID] === undefined) {
                 throw new Error("Unknown device");
             }
@@ -316,33 +404,14 @@ var UpdateDispatcher;
             if (!UpdateDispatcher_1.SupportedResolutions.has(resolution)) {
                 throw new Error("Unsupported resolution");
             }
-            if (slidingWindow && start < end) {
-                throw new Error("Start should be bigger then end for sliding window mode");
-            }
-            else if (!slidingWindow && start > end) {
-                throw new Error("End should be bigger then star for interval mode");
-            }
             if (this._subscribers[deviceID][sensorID][resolution] === undefined) {
                 this._subscribers[deviceID][sensorID][resolution] = new ExtArray();
             }
-            this._subscribers[deviceID][sensorID][resolution].push({ slidingWindow: slidingWindow,
-                start: start,
-                end: end,
-                subscriber: subscriber });
-            if (slidingWindow && end === 0) {
-                var request = {};
-                request[deviceID] = {};
-                request[deviceID][resolution] = [sensorID];
-                this._wsClient.requestRealtimeUpdates(request);
-            }
+            this._subscribers[deviceID][sensorID][resolution].push(subscription);
             var now = Common.now();
-            if (slidingWindow) {
-                start = now - start;
-                end = now - end;
-            }
             var sensorsList = {};
             sensorsList[deviceID] = [sensorID];
-            this._wsClient.requestValues(start, end, resolution, sensorsList);
+            this._wsClient.requestValues(subscription.getStart(now), subscription.getEnd(now), resolution, sensorsList);
         };
         UpdateDispatcher.prototype.unsubscribeAll = function (subscriber) {
             var _this = this;
@@ -353,20 +422,6 @@ var UpdateDispatcher;
             });
         };
         UpdateDispatcher.prototype.unsubscribeSensor = function (deviceID, sensorID, resolution, subscriber) {
-            this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber);
-        };
-        UpdateDispatcher.prototype.unsubscribeInterval = function (deviceID, sensorID, resolution, start, end, subscriber) {
-            this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber, false, start, end);
-        };
-        UpdateDispatcher.prototype.unsubscribeSlidingWindow = function (deviceID, sensorID, resolution, start, end, subscriber) {
-            this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber, true, start, end);
-        };
-        ;
-        UpdateDispatcher.prototype.unsubscribeRealtimeSlidingWindow = function (deviceID, sensorID, resolution, start, subscriber) {
-            this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber, true, start, 0);
-        };
-        ;
-        UpdateDispatcher.prototype._unsubscribeSensor = function (deviceID, sensorID, resolution, subscriber, slidingWindow, start, end) {
             if (this._devices[deviceID] === undefined) {
                 throw new Error("Unknown device");
             }
@@ -376,20 +431,7 @@ var UpdateDispatcher;
             if (this._subscribers[deviceID][sensorID][resolution] === undefined) {
                 throw new Error("No subscribers for this resolution");
             }
-            if (start === undefined && end === undefined && slidingWindow === undefined) {
-                this._subscribers[deviceID][sensorID][resolution].removeWhere(function (settings) { return settings.subscriber == subscriber; });
-            }
-            else if (start !== undefined && end !== undefined && slidingWindow !== undefined) {
-                this._subscribers[deviceID][sensorID][resolution].removeWhere(function (settings) {
-                    return settings.subscriber === subscriber &&
-                        settings.slidingWindow === slidingWindow &&
-                        settings.start === start &&
-                        settings.end === end;
-                });
-            }
-            else {
-                throw new Error("Either start or end missing");
-            }
+            this._subscribers[deviceID][sensorID][resolution].removeWhere(function (subscripton) { return subscripton.getSubscriber() === subscriber; });
         };
         UpdateDispatcher.prototype.onInitialMetadata = function (callback) {
             if (!this._hasInitialMetadata) {
@@ -468,11 +510,12 @@ var UpdateDispatcher;
             for (var sensorID in this._subscribers[deviceID]) {
                 for (var resolution in this._subscribers[deviceID][sensorID]) {
                     for (var _i = 0, _a = this._subscribers[deviceID][sensorID][resolution]; _i < _a.length; _i++) {
-                        var subscriber = _a[_i].subscriber;
-                        if (!notified.has(subscriber)) {
-                            subscriber.updateDeviceMetadata(deviceID);
-                            notified.add(subscriber);
-                        }
+                        var subscription = _a[_i];
+                        var subscriber = subscription.getSubscriber();
+                    }
+                    if (!notified.has(subscriber)) {
+                        subscriber.updateDeviceMetadata(deviceID);
+                        notified.add(subscriber);
                     }
                 }
             }
@@ -481,11 +524,12 @@ var UpdateDispatcher;
             var notified = new Set();
             for (var resolution in this._subscribers[deviceID][sensorID]) {
                 for (var _i = 0, _a = this._subscribers[deviceID][sensorID][resolution]; _i < _a.length; _i++) {
-                    var subscriber = _a[_i].subscriber;
-                    if (!notified.has(subscriber)) {
-                        subscriber.updateSensorMetadata(deviceID, sensorID);
-                        notified.add(subscriber);
-                    }
+                    var subscription = _a[_i];
+                    var subscriber = subscription.getSubscriber();
+                }
+                if (!notified.has(subscriber)) {
+                    subscriber.updateSensorMetadata(deviceID, sensorID);
+                    notified.add(subscriber);
                 }
             }
         };
@@ -493,11 +537,12 @@ var UpdateDispatcher;
             var notified = new Set();
             for (var resolution in this._subscribers[deviceID][sensorID]) {
                 for (var _i = 0, _a = this._subscribers[deviceID][sensorID][resolution]; _i < _a.length; _i++) {
-                    var subscriber = _a[_i].subscriber;
-                    if (!notified.has(subscriber)) {
-                        subscriber.removeSensor(deviceID, sensorID);
-                        notified.add(subscriber);
-                    }
+                    var subscription = _a[_i];
+                    var subscriber = subscription.getSubscriber();
+                }
+                if (!notified.has(subscriber)) {
+                    subscriber.removeSensor(deviceID, sensorID);
+                    notified.add(subscriber);
                 }
             }
         };
@@ -509,11 +554,9 @@ var UpdateDispatcher;
                 for (var resolution in map) {
                     if (resolution !== 'raw') {
                         for (var _i = 0, _a = map[resolution]; _i < _a.length; _i++) {
-                            var _b = _a[_i], start = _b.start, end = _b.end, slidingWindow = _b.slidingWindow;
-                            if (slidingWindow) {
-                                start = now - start;
-                                end = now - end;
-                            }
+                            var subscripton = _a[_i];
+                            var start = subscripton.getStart(now);
+                            var end = subscripton.getEnd(now);
                             if (requests[resolution] === undefined) {
                                 requests[resolution] = {
                                     start: start,
@@ -543,6 +586,7 @@ var UpdateDispatcher;
         };
         UpdateDispatcher.prototype._renewRealtimeRequests = function () {
             var request = {};
+            var hasRealtimeSubscriptions = false;
             Common.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
                 if (request[deviceID] === undefined) {
                     request[deviceID] = {};
@@ -552,8 +596,9 @@ var UpdateDispatcher;
                         request[deviceID][resolution] = [];
                     }
                     for (var _i = 0, _a = map[resolution]; _i < _a.length; _i++) {
-                        var _b = _a[_i], start = _b.start, end = _b.end, slidingWindow = _b.slidingWindow;
-                        if (end === 0 && slidingWindow) {
+                        var subscripton = _a[_i];
+                        if (subscripton.getMode() == SubscriptionMode.Realtime) {
+                            hasRealtimeSubscriptions = true;
                             if (request[deviceID][resolution].indexOf(sensorID) === -1) {
                                 request[deviceID][resolution].push(sensorID);
                             }
@@ -561,7 +606,9 @@ var UpdateDispatcher;
                     }
                 }
             });
-            this._wsClient.requestRealtimeUpdates(request);
+            if (hasRealtimeSubscriptions) {
+                this._wsClient.requestRealtimeUpdates(request);
+            }
         };
         UpdateDispatcher.prototype._updateValues = function (data) {
             var resolution = data.resolution, values = data.values;
@@ -581,12 +628,9 @@ var UpdateDispatcher;
                 && this._subscribers[deviceID][sensorID] !== undefined
                 && this._subscribers[deviceID][sensorID][resolution] !== undefined) {
                 for (var _i = 0, _a = this._subscribers[deviceID][sensorID][resolution]; _i < _a.length; _i++) {
-                    var _b = _a[_i], start = _b.start, end = _b.end, slidingWindow = _b.slidingWindow, subscriber = _b.subscriber;
-                    if (slidingWindow) {
-                        start = now - start;
-                        end = now - end;
-                    }
-                    if (start <= timestamp && end >= timestamp && !notified.has(subscriber)) {
+                    var subscripton = _a[_i];
+                    var subscriber = subscripton.getSubscriber();
+                    if (subscripton.inTimeRange(timestamp, now) && !notified.has(subscriber)) {
                         subscriber.updateValue(deviceID, sensorID, resolution, timestamp, value);
                         notified.add(subscriber);
                     }
@@ -1175,20 +1219,6 @@ var Directives;
                 throw new Error("Unknown mode:" + config.mode);
             }
         };
-        SensorGraphController.prototype._unsubscribeSensor = function (config, deviceID, sensorID) {
-            if (config.mode === 'realtime') {
-                this._dispatcher.unsubscribeRealtimeSlidingWindow(deviceID, sensorID, config.resolution, config.windowStart, this);
-            }
-            else if (config.mode === 'slidingWindow') {
-                this._dispatcher.unsubscribeSlidingWindow(deviceID, sensorID, config.resolution, config.windowStart, config.windowEnd, this);
-            }
-            else if (config.mode === 'interval') {
-                this._dispatcher.unsubscribeInterval(deviceID, sensorID, config.resolution, config.intervalStart, config.intervalEnd, this);
-            }
-            else {
-                throw new Error("Unknown mode:" + config.mode);
-            }
-        };
         SensorGraphController.prototype._applyConfig = function (config) {
             if (this._config !== undefined &&
                 config.mode === this._config.mode &&
@@ -1207,7 +1237,7 @@ var Directives;
                 }
                 for (var _b = 0; _b < removedSensors.length; _b++) {
                     var _c = removedSensors[_b], deviceID = _c.deviceID, sensorID = _c.sensorID;
-                    this._unsubscribeSensor(this._config, deviceID, sensorID);
+                    this._dispatcher.unsubscribeSensor(deviceID, sensorID, config.resolution, this);
                     this._store.removeSensor(deviceID, sensorID);
                 }
             }

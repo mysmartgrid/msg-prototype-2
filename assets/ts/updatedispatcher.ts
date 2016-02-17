@@ -12,22 +12,22 @@ module UpdateDispatcher  {
     }
 
     // Device metadata (currently just a name)
-    export interface DeviceMetadata {
+    interface DeviceMetadata {
         name : string;
     }
 
     // Device metadata extende with a sensor list
-    export interface DeviceMetadataWithSensors extends DeviceMetadata {
+    interface DeviceMetadataWithSensors extends DeviceMetadata {
         sensors : SensorMap;
     }
 
     // Map: SensorIDs to sensor metadata
-    export interface SensorMap {
+    interface SensorMap {
         [sensorID : string] : SensorMetadata;
     }
 
     // Type alias, so we can change the type without refactoring
-    export interface SensorMetadata extends Msg2Socket.SensorMetadata {};
+    interface SensorMetadata extends Msg2Socket.SensorMetadata {};
 
 
     export interface SensorSpecifier {
@@ -38,7 +38,6 @@ module UpdateDispatcher  {
     export interface UnitSensorMap {
         [unit : string] : SensorSpecifier[];
     }
-
 
     // Interface for subscribers
     export interface Subscriber {
@@ -64,34 +63,100 @@ module UpdateDispatcher  {
         removeSensor(deviceID : string, sensorID : string) : void;
     }
 
-    //IDEA: Rename to Subscription
-    //IDEA: Implement as class (for isRealtime() and others)
+
+    enum SubscriptionMode {
+        Realtime,
+        SlidingWindow,
+        Interval
+    }
+
     // Setting for a subscription
-    interface SubscriberSettings {
-        // True if start and end denote timestamps relative to the current timestamp
-        slidingWindow : boolean;
+    abstract class Subscription {
 
-        /**
-         * Either the start timestamp of the subscription interval,
-         * or how many milliseconds into the past the sliding window starts
-         */
-        start : number;
+        public abstract getMode() : SubscriptionMode;
+        public abstract getStart(now : number) : number;
+        public abstract getEnd(now : number) : number;
 
-        /**
-         * Either the end timestamp of the subscription interval,
-         * or how many milliseconds into the past the sliding window ends.
-         * If this attribute is 0 and slidingWindow is set all updates with a timestamp newer then
-         * start milliseconds in the past will be forwarded to the subscriber.
-         */
-        end : number;
+        public inTimeRange(timestamp : number, now : number) : boolean {
+            return this.getStart(now) <= timestamp && this.getEnd(now) >= timestamp;
+        }
 
-        // The subscriber object
-        subscriber : Subscriber;
+        public getSubscriber() : Subscriber {
+            return this._subscriber;
+        }
+
+        constructor(private _subscriber) {};
+    }
+
+    class IntervalSubscription  extends Subscription {
+        public getMode() : SubscriptionMode {
+            return SubscriptionMode.Interval;
+        }
+
+        public getStart(now : number) : number {
+            return this._start;
+        }
+
+        public getEnd(now : number) : number {
+            return this._end;
+        }
+
+        constructor(private _start, private _end, subscriber : Subscriber) {
+            super(subscriber);
+
+            if(_start > _end) {
+                throw new Error("Start should be less than end for IntervalSubscription");
+            }
+        }
+    }
+
+    class SlidingWindowSubscription  extends Subscription {
+        public getMode() : SubscriptionMode {
+            return SubscriptionMode.SlidingWindow;
+        }
+
+        public getStart(now : number) : number {
+            return now - this._start;
+        }
+
+        public getEnd(now : number) : number {
+            return now - this._end;
+        }
+
+        constructor(private _start, private _end, subscriber : Subscriber) {
+            super(subscriber);
+
+            if(_end > _start) {
+                throw new Error("Start should be bigger than end for SlidingWindowSubscription");
+            }
+        }
+    }
+
+    class RealtimeSubscription  extends Subscription {
+        public getMode() : SubscriptionMode {
+            return SubscriptionMode.Realtime;
+        }
+
+        public getStart(now : number) : number {
+            return now - this._start;
+        }
+
+        public getEnd(now : number) : number {
+            return now;
+        }
+
+        constructor(private _start, subscriber : Subscriber) {
+            super(subscriber);
+
+            if(_start <= 0) {
+                throw new Error("Start should greater than zero for RealtimeSubscription");
+            }
+        }
     }
 
     // Map: time resolution to Array of subscribers
     interface ResolutionSubscriberMap {
-        [resolution : string] : ExtArray<SubscriberSettings>;
+        [resolution : string] : ExtArray<Subscription>;
     }
 
     // Set of all supported time resolutions for faster sanity checks
@@ -122,7 +187,7 @@ module UpdateDispatcher  {
      * Device metadata can be accessed using devices[deviceID].
      * Sensor metadata is stored in devices[deviceID].sensors[SensorID].
      *
-     * Secondly it allows subscribtions to metadata changes and value updates.
+     * Secondly it allows subscriptions to metadata changes and value updates.
      * There are three types subscription a fixed interval in the past,
      * a sliding window between two points relative to the current timestamp,
      * and a sliding window from a point in the past to the current timestamp,
@@ -177,7 +242,7 @@ module UpdateDispatcher  {
 
         /**
          * Map for managing subscriptions
-         * Structure [deviceID][sensorId][resolution] -> SubscriberSettings[]
+         * Structure [deviceID][sensorId][resolution] -> Subscription[]
          */
         private _subscribers : Common.DeviceSensorMap<ResolutionSubscriberMap>;
 
@@ -232,7 +297,9 @@ module UpdateDispatcher  {
                                 start : number,
                                 end : number,
                                 subscriber: Subscriber) {
-            this._subscribeSensor(deviceID, sensorID, resolution, false, start, end, subscriber);
+
+            var subscripton = new IntervalSubscription(start, end, subscriber);
+            this._subscribeSensor(deviceID, sensorID, resolution, subscripton);
         }
 
 
@@ -246,7 +313,9 @@ module UpdateDispatcher  {
                                 start : number,
                                 end : number,
                                 subscriber: Subscriber) {
-            this._subscribeSensor(deviceID, sensorID, resolution, true, start, end, subscriber);
+
+            var subscripton = new SlidingWindowSubscription(start, end, subscriber);
+            this._subscribeSensor(deviceID, sensorID, resolution, subscripton);
         };
 
 
@@ -260,7 +329,15 @@ module UpdateDispatcher  {
                                 resolution : string,
                                 start : number,
                                 subscriber: Subscriber) {
-            this._subscribeSensor(deviceID, sensorID, resolution, true, start, 0, subscriber);
+
+            var subscripton = new RealtimeSubscription(start, subscriber);
+            this._subscribeSensor(deviceID, sensorID, resolution, subscripton);
+
+
+            var request : Msg2Socket.RequestRealtimeUpdateArgs = {};
+            request[deviceID] = {};
+            request[deviceID][resolution] = [sensorID];
+            this._wsClient.requestRealtimeUpdates(request);
         };
 
 
@@ -286,10 +363,7 @@ module UpdateDispatcher  {
         private _subscribeSensor(deviceID : string,
                                 sensorID : string,
                                 resolution : string,
-                                slidingWindow : boolean,
-                                start : number,
-                                end : number,
-                                subscriber: Subscriber) : void{
+                                subscription : Subscription) : void{
 
             if(this._devices[deviceID] === undefined) {
                 throw new Error("Unknown device");
@@ -303,42 +377,22 @@ module UpdateDispatcher  {
                 throw new Error("Unsupported resolution");
             }
 
-            if(slidingWindow && start < end) {
-                throw new Error("Start should be bigger then end for sliding window mode");
-            }
-            else if(!slidingWindow && start > end) {
-                throw new Error("End should be bigger then star for interval mode");
-            }
-
             if(this._subscribers[deviceID][sensorID][resolution] === undefined) {
-                this._subscribers[deviceID][sensorID][resolution] = new ExtArray<SubscriberSettings>();
+                this._subscribers[deviceID][sensorID][resolution] = new ExtArray<Subscription>();
             }
 
-            this._subscribers[deviceID][sensorID][resolution].push({slidingWindow : slidingWindow,
-                                                                    start: start,
-                                                                    end: end,
-                                                                    subscriber: subscriber});
-
-            if(slidingWindow && end === 0) {
-                var request : Msg2Socket.RequestRealtimeUpdateArgs = {};
-                request[deviceID] = {};
-                request[deviceID][resolution] = [sensorID];
-                this._wsClient.requestRealtimeUpdates(request);
-            }
+            this._subscribers[deviceID][sensorID][resolution].push(subscription);
 
             // Request history
             var now = Common.now();
-            if(slidingWindow) {
-                start = now - start;
-                end = now - end;
-            }
 
             var sensorsList : Msg2Socket.DeviceSensorList = {};
             sensorsList[deviceID] = [sensorID];
-            this._wsClient.requestValues(start, end, resolution, sensorsList);
+            this._wsClient.requestValues(subscription.getStart(now), subscription.getEnd(now), resolution, sensorsList);
         }
 
-        // Shorthand to remove all subscribtions for a given subscriber
+
+        // Shorthand to remove all subscriptions for a given subscriber
         public unsubscribeAll(subscriber: Subscriber) {
             Common.forEachSensor(this._subscribers, (deviceID, sensorID, sensor) : void => {
                 for(var resolution in sensor) {
@@ -347,64 +401,13 @@ module UpdateDispatcher  {
             });
         }
 
-        // Shorthand to remove all subscribtions to sensor and resoltion for a specific subscriber
+        /**
+         * Removes a subscription given by resolution and sensor for a specific subscriber.
+         */
         public unsubscribeSensor(deviceID : string,
                                     sensorID : string,
                                     resolution : string,
                                     subscriber: Subscriber) : void {
-            this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber);
-        }
-
-        /**
-         * Unsubscribe for value updates with in a fixed interval from start to end.
-         * Start and end are millisecond timestamps.
-         */
-        public unsubscribeInterval(deviceID : string,
-                                sensorID : string,
-                                resolution : string,
-                                start : number,
-                                end : number,
-                                subscriber: Subscriber) {
-            this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber, false, start, end);
-        }
-
-        /**
-         * Unsubscribe for value updates with in a slinding window from current_timestamp - start to current_timestamp  - end.
-         * Start and end are in milliseconds.
-         */
-        public unsubscribeSlidingWindow(deviceID : string,
-                                sensorID : string,
-                                resolution : string,
-                                start : number,
-                                end : number,
-                                subscriber: Subscriber) {
-            this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber, true, start, end);
-        };
-
-        /**
-         * Unsubscribe for value updates with in a slinding window from current_timestamp - start to current_timestamp.
-         * Start and end are in milliseconds.
-         */
-        public unsubscribeRealtimeSlidingWindow(deviceID : string,
-                                sensorID : string,
-                                resolution : string,
-                                start : number,
-                                subscriber: Subscriber) {
-            this._unsubscribeSensor(deviceID, sensorID, resolution, subscriber, true, start, 0);
-        };
-
-        /**
-         * Internal method to remove a subscribtion given by start, end, slidingWindow,
-         * resolution and sensor for a specific subscriber.
-         * If start, end and slidingWindow are missing all subscribtions for the sensor and resolution.
-         */
-        private _unsubscribeSensor(deviceID : string,
-                                    sensorID : string,
-                                    resolution : string,
-                                    subscriber: Subscriber,
-                                    slidingWindow?: boolean,
-                                    start? : number,
-                                    end? : number) : void {
             if(this._devices[deviceID] === undefined) {
                 throw new Error("Unknown device");
             }
@@ -417,19 +420,7 @@ module UpdateDispatcher  {
                 throw new Error("No subscribers for this resolution");
             }
 
-            if(start === undefined && end === undefined && slidingWindow === undefined) {
-                this._subscribers[deviceID][sensorID][resolution].removeWhere((settings) => settings.subscriber == subscriber);
-            }
-            else if(start !== undefined && end !== undefined && slidingWindow !== undefined) {
-                this._subscribers[deviceID][sensorID][resolution].removeWhere((settings) =>
-                                                                                settings.subscriber === subscriber &&
-                                                                                settings.slidingWindow === slidingWindow &&
-                                                                                settings.start === start &&
-                                                                                settings.end === end);
-            }
-            else {
-                throw new Error("Either start or end missing");
-            }
+            this._subscribers[deviceID][sensorID][resolution].removeWhere((subscripton) => subscripton.getSubscriber() === subscriber);
         }
 
         /**
@@ -550,7 +541,8 @@ module UpdateDispatcher  {
             var notified = new Set<Subscriber>();
             for(var sensorID in this._subscribers[deviceID]) {
                 for(var resolution in this._subscribers[deviceID][sensorID]) {
-                    for(var {subscriber: subscriber} of this._subscribers[deviceID][sensorID][resolution])
+                    for(var subscription of this._subscribers[deviceID][sensorID][resolution])
+                        var subscriber = subscription.getSubscriber();
                         if(!notified.has(subscriber)) {
                             subscriber.updateDeviceMetadata(deviceID);
                             notified.add(subscriber);
@@ -567,7 +559,8 @@ module UpdateDispatcher  {
             // Notify every subscriber to the sensor once
             var notified = new Set<Subscriber>();
             for(var resolution in this._subscribers[deviceID][sensorID]) {
-                for(var {subscriber: subscriber} of this._subscribers[deviceID][sensorID][resolution])
+                for(var subscription of this._subscribers[deviceID][sensorID][resolution])
+                    var subscriber = subscription.getSubscriber();
                     if(!notified.has(subscriber)) {
                         subscriber.updateSensorMetadata(deviceID, sensorID);
                         notified.add(subscriber);
@@ -583,7 +576,8 @@ module UpdateDispatcher  {
             // Notify every subscriber to the sensor once
             var notified = new Set<Subscriber>();
             for(var resolution in this._subscribers[deviceID][sensorID]) {
-                for(var {subscriber: subscriber} of this._subscribers[deviceID][sensorID][resolution])
+                for(var subscription of this._subscribers[deviceID][sensorID][resolution])
+                    var subscriber = subscription.getSubscriber();
                     if(!notified.has(subscriber)) {
                         subscriber.removeSensor(deviceID, sensorID);
                         notified.add(subscriber);
@@ -598,7 +592,7 @@ module UpdateDispatcher  {
          * The _updateValues method takes care of dropping unecessary values and dispatching the rest to the subscribers.
          */
         private _pollHistoryData() : void {
-    
+
             var requests : {[resolution : string] : {start :number, end: number, sensors: {[deviceID : string] : Set<string>}}};
             requests = {};
             var now = Common.now();
@@ -608,11 +602,10 @@ module UpdateDispatcher  {
                 for(var resolution in map) {
                     if(resolution !== 'raw') {
 
-                        for(var {start: start, end: end, slidingWindow: slidingWindow} of map[resolution]) {
-                            if(slidingWindow) {
-                                start = now - start;
-                                end = now - end;
-                            }
+                        for(var subscripton of map[resolution]) {
+
+                            var start = subscripton.getStart(now);
+                            var end = subscripton.getEnd(now);
 
                             if(requests[resolution] === undefined) {
                                 requests[resolution] = {
@@ -653,6 +646,7 @@ module UpdateDispatcher  {
 
         private _renewRealtimeRequests() {
             var request : Msg2Socket.RequestRealtimeUpdateArgs = {};
+            var hasRealtimeSubscriptions = false;
 
             Common.forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
                 if(request[deviceID] === undefined) {
@@ -662,8 +656,9 @@ module UpdateDispatcher  {
                     if(request[deviceID][resolution] === undefined) {
                         request[deviceID][resolution] = [];
                     }
-                    for(var {start: start, end: end, slidingWindow: slidingWindow} of map[resolution]) {
-                        if(end === 0 && slidingWindow) {
+                    for(var subscripton of map[resolution]) {
+                        if(subscripton.getMode() == SubscriptionMode.Realtime) {
+                            hasRealtimeSubscriptions = true;
                             if(request[deviceID][resolution].indexOf(sensorID) === -1) {
                                 request[deviceID][resolution].push(sensorID);
                             }
@@ -672,7 +667,9 @@ module UpdateDispatcher  {
                 }
             });
 
-            this._wsClient.requestRealtimeUpdates(request);
+            if(hasRealtimeSubscriptions) {
+                this._wsClient.requestRealtimeUpdates(request);
+            }
         }
 
         /**
@@ -703,14 +700,10 @@ module UpdateDispatcher  {
             if(this._subscribers[deviceID] !== undefined
                 && this._subscribers[deviceID][sensorID] !== undefined
                 && this._subscribers[deviceID][sensorID][resolution] !== undefined) {
-                for(var {start: start, end: end, slidingWindow: slidingWindow, subscriber: subscriber} of this._subscribers[deviceID][sensorID][resolution]) {
+                for(var subscripton of this._subscribers[deviceID][sensorID][resolution]) {
+                    var subscriber = subscripton.getSubscriber();
 
-                    if(slidingWindow) {
-                        start = now - start;
-                        end = now - end;
-                    }
-
-                    if(start <= timestamp && end >= timestamp && !notified.has(subscriber)) {
+                    if(subscripton.inTimeRange(timestamp, now) && !notified.has(subscriber)) {
                         subscriber.updateValue(deviceID, sensorID, resolution, timestamp, value);
                         notified.add(subscriber);
                     }

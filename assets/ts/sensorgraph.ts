@@ -218,35 +218,6 @@ module Directives {
 			}
 		}
 
-		private _unsubscribeSensor(config : SensorGraphConfig, deviceID: string, sensorID : string) {
-			if(config.mode === 'realtime') {
-				this._dispatcher.unsubscribeRealtimeSlidingWindow(deviceID,
-																sensorID,
-																config.resolution,
-																config.windowStart,
-																this);
-			}
-			else if(config.mode === 'slidingWindow'){
-				this._dispatcher.unsubscribeSlidingWindow(deviceID,
-															sensorID,
-															config.resolution,
-															config.windowStart,
-															config.windowEnd,
-															this);
-			}
-			else if(config.mode === 'interval') {
-				this._dispatcher.unsubscribeInterval(deviceID,
-													sensorID,
-													config.resolution,
-													config.intervalStart,
-													config.intervalEnd,
-													this);
-			}
-			else {
-				throw new Error("Unknown mode:" + config.mode);
-			}
-		}
-
 
 		private _applyConfig(config : SensorGraphConfig) {
 
@@ -270,7 +241,7 @@ module Directives {
 				}
 
 				for(var {deviceID: deviceID, sensorID: sensorID} of removedSensors) {
-					this._unsubscribeSensor(this._config, deviceID, sensorID);
+					this._dispatcher.unsubscribeSensor(deviceID, sensorID, config.resolution, this);
 					this._store.removeSensor(deviceID, sensorID);
 				}
 
