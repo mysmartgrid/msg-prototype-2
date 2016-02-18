@@ -153,7 +153,7 @@ func (api *WsDevApi) Run() error {
 }
 
 func (api *WsDevApi) RequestRealtimeUpdates(req msg2api.DeviceCmdRequestRealtimeUpdatesArgs) {
-	if time.Now().Sub(api.lastRealtimeUpdateRequest) >= 25*time.Second {
+	if time.Now().Sub(api.lastRealtimeUpdateRequest) >= 25*time.Second && len(req) > 0 {
 		api.server.RequestRealtimeUpdates(req)
 		api.lastRealtimeUpdateRequest = time.Now()
 	}
@@ -275,7 +275,10 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 				if err != nil {
 					return &msg2api.Error{Code: "could not add readings"}
 				}
-				api.ctx.Hub.Publish(api.User, measurementWithMetadata{device.Id(), s.Id(), value.Time, value.Value, "raw"})
+
+				if time.Now().Sub(api.lastRealtimeUpdateRequest) < 40*time.Second {
+					api.ctx.Hub.Publish(api.User, measurementWithMetadata{device.Id(), s.Id(), value.Time, value.Value, "raw"})
+				}
 			}
 		}
 
