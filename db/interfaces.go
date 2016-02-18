@@ -98,3 +98,5 @@ type Value struct {
 	Time  time.Time
 	Value float64
 }
+
+type ValueByTime []Value
