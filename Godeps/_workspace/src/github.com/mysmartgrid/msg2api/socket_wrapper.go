@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const pingTimeout = 60 * time.Second
+const pingTimeout = 5 * time.Minute
 
 var badFrameType = errors.New("bad frame type")
 

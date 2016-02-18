@@ -20,10 +20,6 @@ type Db interface {
 	View(func(Tx) error) error
 
 	AddReading(sensor Sensor, time time.Time, value float64) error
-	SetRealtimeHandler(handler func(values map[string]map[string]map[string]map[string][]Value))
-	RequestRealtimeUpdates(user, device, resolution string, sensors []string) error
-
-	Run()
 
 	RunBenchmark(usrCount, devCnt, snsCnt int, duration time.Duration)
 }

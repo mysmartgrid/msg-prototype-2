@@ -206,7 +206,7 @@ func init() {
 		log.Fatal("error opening device db: ", err)
 	}
 
-	apiCtx = *msgp.NewWsApiContext(db, h)
+	apiCtx = msgp.WsApiContext{Db: db, Hub: h}
 }
 
 func getSession(w http.ResponseWriter, r *http.Request) *sessions.Session {

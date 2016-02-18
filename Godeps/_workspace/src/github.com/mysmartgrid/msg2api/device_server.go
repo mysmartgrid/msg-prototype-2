@@ -12,12 +12,23 @@ import (
 	"time"
 )
 
+// DeviceServer contains the websocket connection to the device and
+// stores handler functions to handle device messages.
 type DeviceServer struct {
 	*apiBase
 
-	Update         func(values map[string][]Measurement) *Error
-	AddSensor      func(name, unit string, port int32) *Error
-	RemoveSensor   func(name string) *Error
+	// Update handles new measurement values coming from the device.
+	// 'values' maps a sensor ID to a measurement.
+	Update func(values map[string][]Measurement) *Error
+
+	// AddSensor is called when the device wants to register a new sensor.
+	// This should only be called once for each sensor and then be stored in the backend.
+	AddSensor func(name, unit string, port int32) *Error
+
+	// RemoveSensor is called when the device wants to deregister a sensor.
+	RemoveSensor func(name string) *Error
+
+	// UpdateMetadata handles metadata updates for sensors and the device itslef.
 	UpdateMetadata func(metadata *DeviceMetadata) *Error
 }
 
@@ -53,6 +64,8 @@ func (d *DeviceServer) authenticate(key []byte) error {
 	return d.socket.Write("proceed")
 }
 
+// Run tries to authenticate the DeviceServer to the Device over the websocket and
+// starts listening for commands from the Device on success.
 func (d *DeviceServer) Run(key []byte) error {
 	var err error
 
@@ -95,6 +108,7 @@ fail:
 	return err
 }
 
+// RequestRealtimeUpdates forwards a request for realtime updates on the given sensor IDs to the device.
 func (d *DeviceServer) RequestRealtimeUpdates(sensors []string) {
 	d.socket.WriteJSON(MessageOut{Command: "requestRealtimeUpdates", Args: sensors})
 }
@@ -156,6 +170,7 @@ func (d *DeviceServer) doUpdateMetadata(msg *MessageIn) *Error {
 	return d.UpdateMetadata(&md)
 }
 
+// NewDeviceServer returns a new DeviceServer running on a websocket on the given http connection.
 func NewDeviceServer(w http.ResponseWriter, r *http.Request) (*DeviceServer, error) {
 	base, err := initApiBaseFromHttp(w, r, []string{deviceApiProtocolV1})
 	if err != nil {

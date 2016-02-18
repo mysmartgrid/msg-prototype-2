@@ -7,14 +7,24 @@ import (
 	"time"
 )
 
+// UserServer contains the websocket connection to the User and
+// stores handler functions to handler user requests.
 type UserServer struct {
 	*apiBase
 
-	GetMetadata            func() error
-	GetValues              func(since, until time.Time, resolution string, sensors map[string][]string) error
-	RequestRealtimeUpdates func(sensors map[string]map[string][]string) error
+	// GetMetadata handles a request for all availiable metadata for the user.
+	GetMetadata func() error
+
+	// GetValues handles a request for measurements of a give resolution in a given timespan for a given set of sensors.
+	// 'sensors' contains a mapping from device IDs to an array of sensor IDs.
+	GetValues func(since, until time.Time, resolution string, sensors map[string][]string) error
+
+	// RequestRealtimeUpdates handles a request for realtime update on a given set of sensors.
+	// 'sensors' contains a mapping from device IDs to a resolution to an array of sensor IDs.
+	RequestRealtimeUpdates func(sensors map[string][]string) error
 }
 
+// Run listens for incoming commands on the websocket and handles them.
 func (u *UserServer) Run() error {
 	for {
 		var msg MessageIn
@@ -46,12 +56,16 @@ func (u *UserServer) Run() error {
 	}
 }
 
+// SendUpdate sends a set of measuremnts to the users.
 func (u *UserServer) SendUpdate(values UserEventUpdateArgs) error {
-	return u.socket.WriteJSON(MessageOut{Command: "update", Args: values})
+	now := time.Now().UnixNano() / 1e6
+	return u.socket.WriteJSON(MessageOut{Command: "update", Now: &now, Args: values})
 }
 
+// SendMetadata sends a set of metadata descriptions to the user.
 func (u *UserServer) SendMetadata(data UserEventMetadataArgs) error {
-	return u.socket.WriteJSON(MessageOut{Command: "metadata", Args: data})
+	now := time.Now().UnixNano() / 1e6
+	return u.socket.WriteJSON(MessageOut{Command: "metadata", Now: &now, Args: data})
 }
 
 func (u *UserServer) doGetMetadata(cmd *MessageIn) *Error {
@@ -111,6 +125,7 @@ func (u *UserServer) doRequestRealtimeUpdates(cmd *MessageIn) *Error {
 	return nil
 }
 
+// NewUserServer returns a new UserServer running on a websocket on the given http connection.
 func NewUserServer(w http.ResponseWriter, r *http.Request) (*UserServer, error) {
 	base, err := initApiBaseFromHttp(w, r, []string{userApiProtocolV3})
 	if err != nil {

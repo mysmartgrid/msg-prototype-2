@@ -42,25 +42,6 @@ type WsApiContext struct {
 	devMtx  sync.RWMutex
 }
 
-func NewWsApiContext(d db.Db, hub *hub.Hub) *WsApiContext {
-	d.SetRealtimeHandler(func(values map[string]map[string]map[string]map[string][]db.Value) {
-		for user, devs := range values {
-			for dev, reses := range devs {
-				for res, sensors := range reses {
-					for sensor, vals := range sensors {
-						for _, val := range vals {
-							hub.Publish(user, measurementWithMetadata{dev, sensor, val.Time, val.Value, res})
-						}
-					}
-				}
-			}
-		}
-	})
-	d.Run()
-
-	return &WsApiContext{Db: d, Hub: hub}
-}
-
 func (ctx *WsApiContext) RegisterDevice(dev *WsDevApi) (error, *WsDevApi) {
 	ctx.devMtx.Lock()
 	defer ctx.devMtx.Unlock()
@@ -153,7 +134,7 @@ func (api *WsDevApi) Run() error {
 }
 
 func (api *WsDevApi) RequestRealtimeUpdates(req msg2api.DeviceCmdRequestRealtimeUpdatesArgs) {
-	if time.Now().Sub(api.lastRealtimeUpdateRequest) >= 25*time.Second {
+	if time.Now().Sub(api.lastRealtimeUpdateRequest) >= 25*time.Second && len(req) > 0 {
 		api.server.RequestRealtimeUpdates(req)
 		api.lastRealtimeUpdateRequest = time.Now()
 	}
@@ -275,7 +256,10 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 				if err != nil {
 					return &msg2api.Error{Code: "could not add readings"}
 				}
-				api.ctx.Hub.Publish(api.User, measurementWithMetadata{device.Id(), s.Id(), value.Time, value.Value, "raw"})
+
+				if time.Now().Sub(api.lastRealtimeUpdateRequest) < 40*time.Second {
+					api.ctx.Hub.Publish(api.User, measurementWithMetadata{device.Id(), s.Id(), value.Time, value.Value, "raw"})
+				}
 			}
 		}
 
@@ -519,21 +503,12 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, sen
 	})
 }
 
-func (api *WsUserApi) doRequestRealtimeUpdates(sensors map[string]map[string][]string) error {
-	for dev, resolutions := range sensors {
-		var err error
-		for resolution, sensors := range resolutions {
-			if resolution == "raw" {
-				err = api.Ctx.WithDevice(dev, func(dev *WsDevApi) error {
-					dev.RequestRealtimeUpdates(sensors)
-					return nil
-				})
-			} else if resolution == "second" {
-				err = noRealtime
-			} else {
-				err = api.Ctx.Db.RequestRealtimeUpdates(api.User, dev, resolution, sensors)
-			}
-		}
+func (api *WsUserApi) doRequestRealtimeUpdates(sensors map[string][]string) error {
+	for dev, sensors := range sensors {
+		err := api.Ctx.WithDevice(dev, func(dev *WsDevApi) error {
+			dev.RequestRealtimeUpdates(sensors)
+			return nil
+		})
 		if err != nil && err != deviceNotRegistered {
 			return err
 		}
