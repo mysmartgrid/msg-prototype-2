@@ -5,11 +5,13 @@ import (
 	"time"
 )
 
+// Measurement contains value and timestamp to one sensor measurement.
 type Measurement struct {
 	Time  time.Time
 	Value float64
 }
 
+// UnmarshalJSON extracts a json encoded measurement into the Measurement struct.
 func (p *Measurement) UnmarshalJSON(data []byte) error {
 	var arr [2]float64
 
@@ -23,6 +25,7 @@ func (p *Measurement) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes the Measurement struct to json.
 func (p *Measurement) MarshalJSON() ([]byte, error) {
 	return json.Marshal([2]float64{float64(jsTime(p.Time)), p.Value})
 }

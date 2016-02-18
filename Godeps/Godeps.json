@@ -5,51 +5,52 @@
 		".",
 		"./cmd/msgpd",
 		"./cmd/msgpdevd",
-		"./cmd/msgpc"
+		"./cmd/msgpc",
+		"./cmd/msgdbd"
 	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/BurntSushi/toml",
-			"Comment": "v0.1.0-21-g056c9bc",
-			"Rev": "056c9bc7be7190eaa7715723883caffa5f8fa3e4"
+			"Comment": "v0.1.0-23-g5c4df71",
+			"Rev": "5c4df71dfe9ac89ef6287afc05e4c1b16ae65a1e"
 		},
 		{
 			"ImportPath": "github.com/boltdb/bolt",
-			"Comment": "v1.0-98-gafceb31",
-			"Rev": "afceb316b96ea97cbac6d23afbdf69543d80748a"
+			"Comment": "v1.1.0-40-g34a0fa5",
+			"Rev": "34a0fa5307f7562980fb8e7ff4723f7987edf49b"
 		},
 		{
 			"ImportPath": "github.com/goburrow/modbus",
-			"Rev": "8b151e5eecacb1e3b87935d96bd33dd14b17175e"
+			"Rev": "2abd4f3eb317bb103b1943a9edc24fc39c69a9a0"
 		},
 		{
 			"ImportPath": "github.com/goburrow/serial",
-			"Rev": "bf1bf09b87e3ec7436f34f09ae59ce10537366ac"
+			"Rev": "709ae907b909ef40d069bb36d5f46c83f3fac5bd"
 		},
 		{
 			"ImportPath": "github.com/gorilla/context",
-			"Rev": "215affda49addc4c8ef7e2534915df2c8c35c6cd"
+			"Rev": "1c83b3eabd45b6d76072b66b746c20815fb2872d"
 		},
 		{
 			"ImportPath": "github.com/gorilla/mux",
-			"Rev": "47e8f450ef38c857cdd922ec08862ca9d65a1c6d"
+			"Rev": "26a6070f849969ba72b72256e9f14cf519751690"
 		},
 		{
 			"ImportPath": "github.com/gorilla/securecookie",
-			"Rev": "8e98dd730fc43f1383f19615db6f2e702c9738e8"
+			"Rev": "e95799a481bbcc3d01c2ad5178524cb8bec9f370"
 		},
 		{
 			"ImportPath": "github.com/gorilla/sessions",
-			"Rev": "f61c3ec2cf65d69e7efedfd4d060fe128882c951"
+			"Rev": "99b16d2edd22458c541b3640ce83689b08a05c20"
 		},
 		{
 			"ImportPath": "github.com/gorilla/websocket",
-			"Rev": "a3ec486e6a7a41858210b0fc5d7b5df593b3c4a3"
+			"Rev": "3986be78bf859e01f01af631ad76da5b269d270c"
 		},
 		{
 			"ImportPath": "github.com/lib/pq",
-			"Comment": "go1.0-cutoff-56-gdc50b6a",
-			"Rev": "dc50b6ad2d3ee836442cf3389009c7cd1e64bb43"
+			"Comment": "go1.0-cutoff-63-g11fc39a",
+			"Rev": "11fc39a580a008f1f39bb3d11d984fb34ed778d9"
 		},
 		{
 			"ImportPath": "github.com/mattn/go-runewidth",
@@ -62,11 +63,11 @@
 		},
 		{
 			"ImportPath": "github.com/mysmartgrid/msg2api",
-			"Rev": "387ff453a8b1b4a596f7418b5e853c45c3273825"
+			"Rev": "089f6f15b2083bcbda768eab8d89c4574bf34c2a"
 		},
 		{
 			"ImportPath": "github.com/olekukonko/tablewriter",
-			"Rev": "333c0610de3426f738e7ec63801cfd1883b0aeb4"
+			"Rev": "48dc4474bcf3e0134e9a64222207b1e020f171e9"
 		},
 		{
 			"ImportPath": "github.com/zfjagann/golang-ring",
@@ -74,11 +75,11 @@
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/bcrypt",
-			"Rev": "4d48e5fa3d62b5e6e71260571bf76c767198ca02"
+			"Rev": "552e9d568fde9701ea1944fb01c8aadaceaa7353"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/blowfish",
-			"Rev": "4d48e5fa3d62b5e6e71260571bf76c767198ca02"
+			"Rev": "552e9d568fde9701ea1944fb01c8aadaceaa7353"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
