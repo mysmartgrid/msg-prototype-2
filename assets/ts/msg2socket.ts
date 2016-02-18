@@ -2,7 +2,7 @@
 "use strict";
 
 module Msg2Socket {
-	const ApiVersion : string = "v3.user.msg";
+	const ApiVersion : string = "v5.user.msg";
 
 	/*
 	 * Handlers
@@ -76,7 +76,7 @@ module Msg2Socket {
 	}
 
 	export interface RequestRealtimeUpdateArgs {
-		[deviceID : string] : {[resolution: string] : string[]};
+		[deviceID : string] : string[];
 	}
 
 	export interface DeviceSensorList {

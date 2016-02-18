@@ -25,7 +25,7 @@
 			<div class="form-group">
 				<label for="resolution" class="col-sm-3 control-label">Resolution</label>
 				<div class="col-sm-9">
-					<select id="resoltion" class="form-control"  ng-options="res as res for res in resolutions[config.mode]" ng-model="config.resolution"></select>
+					<select ng-disabled="config.mode === 'realtime'" id="resoltion" class="form-control"  ng-options="res as res for res in resolutions[config.mode]" ng-model="config.resolution"></select>
 				</div>
 			</div>
 

@@ -2,7 +2,7 @@
 "use strict";
 var Msg2Socket;
 (function (Msg2Socket) {
-    var ApiVersion = "v3.user.msg";
+    var ApiVersion = "v5.user.msg";
     var Socket = (function () {
         function Socket($rootScope) {
             this.$rootScope = $rootScope;
@@ -325,6 +325,7 @@ var UpdateDispatcher;
         month: 31 * 24 * 60 * 60 * 1000,
         year: 365 * 24 * 60 * 60 * 1000
     };
+    var RealtimeResoulution = 'raw';
     UpdateDispatcher_1.UpdateDispatcherFactory = ["WSUserClient", "$interval",
         function (wsClient, $interval) {
             return new UpdateDispatcher(wsClient, $interval);
@@ -385,12 +386,11 @@ var UpdateDispatcher;
             this._subscribeSensor(deviceID, sensorID, resolution, subscripton);
         };
         ;
-        UpdateDispatcher.prototype.subscribeRealtimeSlidingWindow = function (deviceID, sensorID, resolution, start, subscriber) {
+        UpdateDispatcher.prototype.subscribeRealtimeSlidingWindow = function (deviceID, sensorID, start, subscriber) {
             var subscripton = new RealtimeSubscription(start, subscriber);
-            this._subscribeSensor(deviceID, sensorID, resolution, subscripton);
+            this._subscribeSensor(deviceID, sensorID, RealtimeResoulution, subscripton);
             var request = {};
-            request[deviceID] = {};
-            request[deviceID][resolution] = [sensorID];
+            request[deviceID] = [sensorID];
             this._wsClient.requestRealtimeUpdates(request);
         };
         ;
@@ -545,7 +545,7 @@ var UpdateDispatcher;
             var now = Common.now();
             Common.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
                 for (var resolution in map) {
-                    if (resolution !== 'raw') {
+                    if (resolution !== RealtimeResoulution) {
                         for (var _i = 0, _a = map[resolution]; _i < _a.length; _i++) {
                             var subscripton = _a[_i];
                             var start = subscripton.getStart(now);
@@ -581,19 +581,16 @@ var UpdateDispatcher;
             var request = {};
             var hasRealtimeSubscriptions = false;
             Common.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
-                if (request[deviceID] === undefined) {
-                    request[deviceID] = {};
-                }
-                for (var resolution in map) {
-                    if (request[deviceID][resolution] === undefined) {
-                        request[deviceID][resolution] = [];
+                if (map[RealtimeResoulution] !== undefined) {
+                    if (request[deviceID] === undefined) {
+                        request[deviceID] = [];
                     }
-                    for (var _i = 0, _a = map[resolution]; _i < _a.length; _i++) {
+                    for (var _i = 0, _a = map[RealtimeResoulution]; _i < _a.length; _i++) {
                         var subscripton = _a[_i];
                         if (subscripton.getMode() == SubscriptionMode.Realtime) {
                             hasRealtimeSubscriptions = true;
-                            if (request[deviceID][resolution].indexOf(sensorID) === -1) {
-                                request[deviceID][resolution].push(sensorID);
+                            if (request[deviceID].indexOf(sensorID) === -1) {
+                                request[deviceID].push(sensorID);
                             }
                         }
                     }
@@ -1103,13 +1100,16 @@ var Directives;
             $scope.devices = _dispatcher.devices;
             var supportedResolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
             $scope.resolutions = {};
-            $scope.resolutions['realtime'] = supportedResolutions.filter(function (res) { return res !== 'second'; });
+            $scope.resolutions['realtime'] = ['raw'];
             $scope.resolutions['slidingWindow'] = supportedResolutions.filter(function (res) { return res !== 'raw'; });
             $scope.resolutions['interval'] = supportedResolutions.filter(function (res) { return res !== 'raw'; });
             $scope.$watch("config.mode", function () {
                 var mode = $scope.config.mode;
                 if ($scope.resolutions[mode].indexOf($scope.config.resolution) === -1) {
                     $scope.config.resolution = $scope.resolutions[mode][0];
+                }
+                if (mode === 'realtime') {
+                    $scope.config.resolution = 'raw';
                 }
             });
             $scope.units = _dispatcher.units;
@@ -1200,7 +1200,7 @@ var Directives;
         };
         SensorGraphController.prototype._subscribeSensor = function (config, deviceID, sensorID) {
             if (config.mode === 'realtime') {
-                this._dispatcher.subscribeRealtimeSlidingWindow(deviceID, sensorID, config.resolution, config.windowStart, this);
+                this._dispatcher.subscribeRealtimeSlidingWindow(deviceID, sensorID, config.windowStart, this);
             }
             else if (config.mode === 'slidingWindow') {
                 this._dispatcher.subscribeSlidingWindow(deviceID, sensorID, config.resolution, config.windowStart, config.windowEnd, this);

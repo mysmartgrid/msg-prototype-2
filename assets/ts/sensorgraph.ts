@@ -64,7 +64,7 @@ module Directives {
 
 			var supportedResolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
 			$scope.resolutions = {};
-			$scope.resolutions['realtime'] = supportedResolutions.filter((res) => res !== 'second');
+			$scope.resolutions['realtime'] = ['raw'];
 			$scope.resolutions['slidingWindow'] = supportedResolutions.filter((res) => res !== 'raw');
 			$scope.resolutions['interval'] = supportedResolutions.filter((res) => res !== 'raw');
 
@@ -73,6 +73,10 @@ module Directives {
 				var mode = $scope.config.mode;
 				if($scope.resolutions[mode].indexOf($scope.config.resolution) === -1) {
 					$scope.config.resolution = $scope.resolutions[mode][0];
+				}
+
+				if(mode === 'realtime') {
+					$scope.config.resolution = 'raw';
 				}
 			});
 
@@ -193,7 +197,6 @@ module Directives {
 			if(config.mode === 'realtime') {
 				this._dispatcher.subscribeRealtimeSlidingWindow(deviceID,
 																sensorID,
-																config.resolution,
 																config.windowStart,
 																this);
 			}

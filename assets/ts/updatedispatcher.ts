@@ -173,6 +173,8 @@ module UpdateDispatcher  {
         year: 365 * 24 * 60 * 60 * 1000
     };
 
+    const RealtimeResoulution = 'raw';
+
     // Angular factory function with injected dependencies
     export const UpdateDispatcherFactory = ["WSUserClient", "$interval",
                                             (wsClient : Msg2Socket.Socket, $interval : ng.IIntervalService) =>
@@ -326,17 +328,15 @@ module UpdateDispatcher  {
          */
         public subscribeRealtimeSlidingWindow(deviceID : string,
                                 sensorID : string,
-                                resolution : string,
                                 start : number,
                                 subscriber: Subscriber) {
 
             var subscripton = new RealtimeSubscription(start, subscriber);
-            this._subscribeSensor(deviceID, sensorID, resolution, subscripton);
+            this._subscribeSensor(deviceID, sensorID, RealtimeResoulution, subscripton);
 
 
             var request : Msg2Socket.RequestRealtimeUpdateArgs = {};
-            request[deviceID] = {};
-            request[deviceID][resolution] = [sensorID];
+            request[deviceID] = [sensorID];
             this._wsClient.requestRealtimeUpdates(request);
         };
 
@@ -582,7 +582,7 @@ module UpdateDispatcher  {
             // Gather start, end and sensors for each resolution
             Common.forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
                 for(var resolution in map) {
-                    if(resolution !== 'raw') {
+                    if(resolution !== RealtimeResoulution) {
 
                         for(var subscripton of map[resolution]) {
 
@@ -631,18 +631,15 @@ module UpdateDispatcher  {
             var hasRealtimeSubscriptions = false;
 
             Common.forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
-                if(request[deviceID] === undefined) {
-                    request[deviceID] = {};
-                }
-                for(var resolution in map) {
-                    if(request[deviceID][resolution] === undefined) {
-                        request[deviceID][resolution] = [];
+                if(map[RealtimeResoulution] !== undefined) {
+                    if(request[deviceID] === undefined) {
+                        request[deviceID] = [];
                     }
-                    for(var subscripton of map[resolution]) {
+                    for(var subscripton of map[RealtimeResoulution]) {
                         if(subscripton.getMode() == SubscriptionMode.Realtime) {
                             hasRealtimeSubscriptions = true;
-                            if(request[deviceID][resolution].indexOf(sensorID) === -1) {
-                                request[deviceID][resolution].push(sensorID);
+                            if(request[deviceID].indexOf(sensorID) === -1) {
+                                request[deviceID].push(sensorID);
                             }
                         }
                     }
