@@ -18,9 +18,12 @@ func (b unknownCommand) Error() string {
 	return "received unknown command " + b.cmd
 }
 
+// DeviceClient contains the websocket connection to the DeviceServer and
+// stores handler functions to handle server messages.
 type DeviceClient struct {
 	*apiBase
 
+	// RequestRealtimeUpdates handles requests for realtime updates for the given array of sensor IDs.
 	RequestRealtimeUpdates func(sensors []string)
 }
 
@@ -71,6 +74,7 @@ func (c *DeviceClient) executeCommand(cmd *MessageOut) error {
 	}
 }
 
+// RunOnce waits for one command from the server, handles it and then returns.
 func (c *DeviceClient) RunOnce() error {
 	_, err := c.waitForServer()
 	if err != nil {
@@ -79,10 +83,13 @@ func (c *DeviceClient) RunOnce() error {
 	return nil
 }
 
+// Close closes the websocket connection to the DeviceServer
 func (c *DeviceClient) Close() {
 	c.socket.Close(websocket.CloseGoingAway, "")
 }
 
+// AddSensor registers a new sensor at the server.
+// This only has to be doen once for every sensor and is then stored.
 func (c *DeviceClient) AddSensor(name, unit string, port int32) error {
 	cmd := MessageOut{
 		Command: "addSensor",
@@ -96,6 +103,8 @@ func (c *DeviceClient) AddSensor(name, unit string, port int32) error {
 	return c.executeCommand(&cmd)
 }
 
+// Update sends a set of measurements to the server.
+// 'values' maps sensor IDs to measurements.
 func (c *DeviceClient) Update(values map[string][]Measurement) error {
 	cmd := MessageOut{
 		Command: "update",
@@ -105,6 +114,7 @@ func (c *DeviceClient) Update(values map[string][]Measurement) error {
 	return c.executeCommand(&cmd)
 }
 
+// Rename sends a metadata update containing the device name to the server.
 func (c *DeviceClient) Rename(name string) error {
 	cmd := MessageOut{
 		Command: "updateMetadata",
@@ -117,6 +127,7 @@ func (c *DeviceClient) Rename(name string) error {
 	return c.executeCommand(&cmd)
 }
 
+// UpdateSensor sends a metadata update for the given sensor ID to the server.
 func (c *DeviceClient) UpdateSensor(id string, md SensorMetadata) error {
 	cmd := MessageOut{
 		Command: "updateMetadata",
@@ -130,10 +141,11 @@ func (c *DeviceClient) UpdateSensor(id string, md SensorMetadata) error {
 	return c.executeCommand(&cmd)
 }
 
+// RemoveSensor deregisters the sensor ID on the server.
 func (c *DeviceClient) RemoveSensor(id string) error {
 	cmd := MessageOut{
 		Command: "removeSensor",
-		Args:    DeviceCmdRemoveSensorArgs{
+		Args: DeviceCmdRemoveSensorArgs{
 			Name: id,
 		},
 	}
@@ -170,6 +182,8 @@ func (c *DeviceClient) authenticate(key []byte) error {
 	return nil
 }
 
+// NewDeviceClient opens a new websocket connection on the given url, tries an authentication
+// with the given key and returns a new DeviceClient on success.
 func NewDeviceClient(url string, key []byte, tlsConfig *tls.Config) (*DeviceClient, error) {
 	dialer := websocket.Dialer{
 		TLSClientConfig: tlsConfig,

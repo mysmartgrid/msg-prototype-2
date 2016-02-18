@@ -1,4 +1,4 @@
-// +build !windows,!plan9
+// +build !windows,!plan9,!solaris
 
 package bolt
 
@@ -58,9 +58,14 @@ func mmap(db *DB, sz int) error {
 	}
 
 	// Map the data file to memory.
-	b, err := syscall.Mmap(int(db.file.Fd()), 0, sz, syscall.PROT_READ, syscall.MAP_SHARED)
+	b, err := syscall.Mmap(int(db.file.Fd()), 0, sz, syscall.PROT_READ, syscall.MAP_SHARED|db.MmapFlags)
 	if err != nil {
 		return err
+	}
+
+	// Advise the kernel that the mmap is accessed randomly.
+	if err := madvise(b, syscall.MADV_RANDOM); err != nil {
+		return fmt.Errorf("madvise: %s", err)
 	}
 
 	// Save the original byte slice and convert to a byte array pointer.
@@ -83,4 +88,13 @@ func munmap(db *DB) error {
 	db.data = nil
 	db.datasz = 0
 	return err
+}
+
+// NOTE: This function is copied from stdlib because it is not available on darwin.
+func madvise(b []byte, advice int) (err error) {
+	_, _, e1 := syscall.Syscall(syscall.SYS_MADVISE, uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)), uintptr(advice))
+	if e1 != 0 {
+		err = e1
+	}
+	return
 }
