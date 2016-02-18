@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 )
 
@@ -43,6 +44,18 @@ type bufferValue struct {
 type realtimeEntry struct {
 	sensor                  Sensor
 	lastRequest, lastUpdate time.Time
+}
+
+func (v ValueByTime) Len() int {
+	return len(v)
+}
+
+func (v ValueByTime) Swap(i, j int) {
+	v[i], v[j] = v[j], v[i]
+}
+
+func (v ValueByTime) Less(i, j int) bool {
+	return v[i].Time.Before(v[j].Time)
 }
 
 func (db *db) flushBuffer() {
@@ -250,9 +263,10 @@ func (db *db) doRealtimeUpdates() {
 		for sensorid, entry := range sensorids {
 			devvalues, err := db.sqldb.loadValues(entry.lastUpdate, time.Now(), resolution, []uint64{sensorid})
 			values := devvalues[sensorid]
+			sort.Sort(ValueByTime(values))
 			if err == nil {
-				entry.lastUpdate = time.Now()
 				if len(values) > 0 {
+					entry.lastUpdate = values[len(values)-1].Time.Add(time.Millisecond * 1)
 					user := entry.sensor.Device().User().Id()
 					device := entry.sensor.Device().Id()
 					if _, ok := result[user]; !ok {
