@@ -30,7 +30,7 @@ module UpdateDispatcher  {
     interface SensorMetadata extends Msg2Socket.SensorMetadata {};
 
 
-    export interface SensorSpecifier {
+    interface SensorSpecifier {
         sensorID : string;
         deviceID : string;
     }
