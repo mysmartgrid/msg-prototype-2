@@ -1,10 +1,8 @@
 {
     "compilerOptions": {
-        "outDir": "../js/",
+        "outDir": "../js_modules/",
         "target": "es5",
-        "module": "amd",
-        "sourceMap": true,
-        "sourceRoot": "/ts/",
+        "module": "commonjs",
         "removeComments": true
     },
     "filesGlob": [
@@ -18,7 +16,6 @@
         "definitions/bootstrap.d.ts",
         "definitions/es6-shim.d.ts",
         "definitions/jquery.d.ts",
-        "definitions/require.d.ts",
         "directives/sensorgraph.ts",
         "directives/ui-elements/datetimepicker.ts",
         "directives/ui-elements/numberspinner.ts",
@@ -27,8 +24,7 @@
         "lib/msg2socket.ts",
         "lib/sensorvaluestore.ts",
         "lib/updatedispatcher.ts",
-        "lib/utils.ts",
-        "main.ts"
+        "lib/utils.ts"
     ],
     "atom": {
         "rewriteTsconfig": true

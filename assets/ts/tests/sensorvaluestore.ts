@@ -1,10 +1,5 @@
-/// <reference path="qunit/qunit.d.ts" />
-
-/// <reference path="../sensorvaluestore.ts"/>
-/// <reference path="../msg2socket.ts"/>
-/// <reference path="../common.ts"/>
-
-"use strict";
+import * as Store from '../lib/sensorvaluestore';
+import * as Common from '../lib/common';
 
 function errorCompare(msg : string) : (error : Error) => boolean {
 	return function(error : Error) : boolean {

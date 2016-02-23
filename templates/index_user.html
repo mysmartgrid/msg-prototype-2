@@ -2,7 +2,7 @@
 {{template "head" "home:logged-in"}}
 
 
-<div class="container-fluid">
+<div class="container-fluid" ng-app="msgp">
 	<div class="row">
 		<div class="col-md-12">
 		<div data-ng-controller="GraphPage">
@@ -22,26 +22,8 @@
 		</div>
 	</div>
 </div>
-<script>
-require.config({
-	baseUrl: '/js',
-	paths: {
-		'angular': 'angular-1.3.14',
-		'bootstrap': 'bootstrap.min',
-		'ui-bootstrap': 'ui-bootstrap-tpls-0.14.3.min'
-	},
-	shim: {
-		'angular': {
-			exports: 'angular',
-		},
-		'ui-bootstrap': ['bootstrap', 'angular'],
-	}
-});
-require(['angular', 'bootstrap', 'ui-bootstrap', 'app'], function (angular, jquery) {
+<script type="text/javascript">
 	angular.module("msgp").value("wsurl", {{.Ws}});
-	angular.bootstrap(document, ['msgp']);
-});
-
 </script>
 {{template "tail"}}
 {{end}}

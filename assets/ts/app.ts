@@ -6,9 +6,7 @@ import TimeRangeSpinnerFactory from './directives/ui-elements/timerangespinner';
 import DateTimePickerFactory from './directives/ui-elements/datetimepicker';
 import SensorGraphFactory from './directives/sensorgraph';
 
-import angular = require('angular');
 
-console.log('app');
 
 angular.module("msgp", ['ui.bootstrap'])
 .config(function($interpolateProvider) {
