@@ -1,7 +1,7 @@
-build-all: .build/msgpc .build/msgpd .build/msgpdevd
+build-all: .build/msgpc .build/msgpd .build/msgpdevd .build/msgdbd
 
 godep-all:
-	godep save . ./cmd/msgpd ./cmd/msgpdevd ./cmd/msgpc
+	godep save . ./cmd/msgpd ./cmd/msgpdevd ./cmd/msgpc ./cmd/msgdbd
 
 gofmt-all:
 	find . -iname '*.go' -and -not -ipath './Godeps/*' |\
@@ -18,3 +18,6 @@ gofmt-all:
 
 .build/msgpdevd:
 	godep go build ./cmd/msgpdevd
+
+.build/msgdbd:
+	godep go build ./cmd/msgdbd

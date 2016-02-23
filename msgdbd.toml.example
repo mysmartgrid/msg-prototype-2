@@ -1,0 +1,10 @@
+# All durations are minutes
+aggregationinterval = 1
+cleanupinterval = 0
+
+[postgres]
+user     = "msgdb"
+password = "msgdb"
+database = "msgdb"
+address  = "localhost"
+port     = "5432"
