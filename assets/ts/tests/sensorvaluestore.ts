@@ -1,5 +1,5 @@
 import * as Store from '../lib/sensorvaluestore';
-import * as Common from '../lib/common';
+import * as Utils from '../lib/utils';
 
 function errorCompare(msg : string) : (error : Error) => boolean {
 	return function(error : Error) : boolean {
@@ -95,7 +95,7 @@ QUnit.test("Add single value", function(assert : QUnitAssert) : void {
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
 
 	var data = store.getData();
@@ -109,7 +109,7 @@ QUnit.test("Add two values with different timestamps", function(assert : QUnitAs
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
 	store.addValue("ADevice", "ASensor1", timestamp - 1000, 84);
 
@@ -123,7 +123,7 @@ QUnit.test("Add values with same imestamps", function(assert : QUnitAssert) : vo
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 
 	store.addValue("ADevice", "ASensor1", timestamp - 3000, 23);
 	store.addValue("ADevice", "ASensor1", timestamp - 1000, 666);
@@ -154,7 +154,7 @@ QUnit.test("Clamp data - slinding window", function(assert : QUnitAssert) : void
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 	var oldTimestamp = timestamp - 6 * 60 * 1000;
 	store.addValue("ADevice", "ASensor1", oldTimestamp , 23);
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
@@ -204,7 +204,7 @@ QUnit.test("Test timeout past", function(assert : QUnitAssert) : void {
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 	var oldTimestamp = timestamp - 3 * 60 * 1000;
 	var middleTimestamp = timestamp - 1 * 60 * 1000;
 	store.addValue("ADevice", "ASensor1", oldTimestamp , 23);
@@ -229,7 +229,7 @@ QUnit.test("Test timeout future", function(assert : QUnitAssert) : void {
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 	var oldTimestamp = timestamp - 3 * 60 * 1000;
 	var middleTimestamp = timestamp - 1 * 60 * 1000;
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
@@ -259,8 +259,8 @@ QUnit.test("Remove past timeout, reinsert in future", function(assert : QUnitAss
 	store.addSensor("ADevice", "ASensor1");
 
 
-	var lastTimestamp = Common.now();
-	var firstTimestamp = Common.now() - 60 * 1000;
+	var lastTimestamp = Utils.now();
+	var firstTimestamp = Utils.now() - 60 * 1000;
 	var middleTimestamp = firstTimestamp + 9 * 1000;
 
 	store.addValue("ADevice", "ASensor1", lastTimestamp, 0);

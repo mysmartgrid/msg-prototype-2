@@ -8,7 +8,7 @@
         "**/*.ts",
         "../definitions/es6-shim.d.ts",
         "../lib/sensorvaluestore.ts",
-        "../lib/common.ts"
+        "../lib/utils.ts"
     ],
     "atom": {
         "rewriteTsconfig": true
@@ -18,6 +18,6 @@
         "sensorvaluestore.ts",
         "../definitions/es6-shim.d.ts",
         "../lib/sensorvaluestore.ts",
-        "../lib/common.ts"
+        "../lib/utils.ts"
     ]
 }

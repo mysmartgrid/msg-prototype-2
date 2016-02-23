@@ -21,6 +21,23 @@ export class ExtArray<U> extends Array<U> {
     }
 }
 
+export function updateProperties<U>(target : U, source: U) : boolean {
+    var wasUpdated = false;
+    for(var prop in target) {
+        if(target[prop] !== source[prop]) {
+            target[prop] = source[prop];
+            wasUpdated = true;
+        }
+    }
+
+    return wasUpdated;
+}
+
+export function now() : number {
+    return (new Date()).getTime();
+}
+
+
 export function deepCopyJSON<T>(src : T) : T {
     var dst : any = {};
 

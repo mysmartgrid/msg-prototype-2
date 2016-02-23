@@ -1,3 +1,5 @@
+import {DeviceSensorMap, DeviceMap, SensorMap, SensorMetadata} from './common';
+
 const ApiVersion : string = "v5.user.msg";
 
 /*
@@ -19,7 +21,6 @@ export interface ErrorHandler {
 	(e : Event) : void;
 }
 
-
 export interface UpdateHandler {
 	(update : UpdateData) : void;
 }
@@ -30,35 +31,17 @@ export interface UpdateHandler {
 
 export interface UpdateData {
 	resolution: string;
-	values: {[deviceID : string] : {[sensorID : string] : [number, number][]}};
+	values: DeviceSensorMap<[number, number][]>;
 }
 
 export interface MetadataUpdate {
-	devices : DeviceMetadataMap;
+	devices : DeviceMap<DeviceMetadataUpdate>;
 }
 
-export interface DeviceMetadataMap {
-	[deviceID : string] : DeviceMetadata;
-}
-
-export interface DeviceMetadata {
+export interface DeviceMetadataUpdate {
 	name : string;
-	sensors : SensorMetadataMap;
-	deletedSensors : DeletedSensorsMap;
-}
-
-export interface DeletedSensorsMap {
-	[sensorID : string] : string;
-}
-
-export interface SensorMetadataMap {
-	[sensorID : string] : SensorMetadata;
-}
-
-export interface SensorMetadata {
-	name : string;
-	unit : string;
-	port : number;
+	sensors : SensorMap<SensorMetadata>;
+	deletedSensors : SensorMap<string>;
 }
 
 export interface MetadataHandler {
@@ -77,7 +60,6 @@ export interface RequestRealtimeUpdateArgs {
 export interface DeviceSensorList {
 	[deviceID : string] : string[]
 }
-
 
 export interface GetValuesArgs {
 	since : number;

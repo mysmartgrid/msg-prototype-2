@@ -172,12 +172,9 @@ angular.module("msgp", ['ui.bootstrap'])
 
 },{"./directives/sensorgraph":2,"./directives/ui-elements/datetimepicker":3,"./directives/ui-elements/numberspinner":4,"./directives/ui-elements/timerangespinner":5,"./lib/msg2socket":7,"./lib/updatedispatcher":9}],2:[function(require,module,exports){
 var Utils = require('../lib/utils');
-var Common = require('../lib/common');
 var UpdateDispatcher = require('../lib/updatedispatcher');
 var Store = require('../lib/sensorvaluestore');
-function sensorEqual(a, b) {
-    return a.deviceID === b.deviceID && a.sensorID === b.sensorID;
-}
+var common_1 = require('../lib/common');
 var SensorGraphSettingsFactory = ["$scope", "$uibModalInstance", "UpdateDispatcher", "config",
     function ($scope, $uibModalInstance, dispatcher, config) {
         return new SensorGraphSettingsController($scope, $uibModalInstance, dispatcher, config);
@@ -282,8 +279,8 @@ var SensorGraphController = (function () {
             resolution: UpdateDispatcher.SupportedResolutions.values().next().value,
             sensors: [],
             mode: 'realtime',
-            intervalStart: Common.now() - 24 * 60 * 1000,
-            intervalEnd: Common.now(),
+            intervalStart: Utils.now() - 24 * 60 * 1000,
+            intervalEnd: Utils.now(),
             windowStart: 5 * 60 * 1000,
             windowEnd: 0
         });
@@ -311,8 +308,8 @@ var SensorGraphController = (function () {
             config.windowEnd === this._config.windowEnd &&
             config.intervalStart === this._config.intervalStart &&
             config.intervalEnd === this._config.intervalEnd) {
-            var addedSensors = Utils.difference(config.sensors, this._config.sensors, sensorEqual);
-            var removedSensors = Utils.difference(this._config.sensors, config.sensors, sensorEqual);
+            var addedSensors = Utils.difference(config.sensors, this._config.sensors, common_1.sensorEqual);
+            var removedSensors = Utils.difference(this._config.sensors, config.sensors, common_1.sensorEqual);
             for (var _i = 0; _i < addedSensors.length; _i++) {
                 var _a = addedSensors[_i], deviceID = _a.deviceID, sensorID = _a.sensorID;
                 this._subscribeSensor(config, deviceID, sensorID);
@@ -357,7 +354,7 @@ var SensorGraphController = (function () {
     SensorGraphController.prototype._redrawGraph = function () {
         var _this = this;
         this.$timeout.cancel(this._timeout);
-        var time = Common.now();
+        var time = Utils.now();
         var graphOptions = {
             xaxis: {
                 mode: 'time',
@@ -681,6 +678,8 @@ var TimeRangeSpinnerDirective = (function () {
 })();
 
 },{}],6:[function(require,module,exports){
+;
+;
 function forEachSensor(map, f) {
     for (var deviceId in map) {
         for (var sensorId in map[deviceId]) {
@@ -689,21 +688,10 @@ function forEachSensor(map, f) {
     }
 }
 exports.forEachSensor = forEachSensor;
-function updateProperties(target, source) {
-    var wasUpdated = false;
-    for (var prop in target) {
-        if (target[prop] !== source[prop]) {
-            target[prop] = source[prop];
-            wasUpdated = true;
-        }
-    }
-    return wasUpdated;
+function sensorEqual(a, b) {
+    return a.deviceID === b.deviceID && a.sensorID === b.sensorID;
 }
-exports.updateProperties = updateProperties;
-function now() {
-    return (new Date()).getTime();
-}
-exports.now = now;
+exports.sensorEqual = sensorEqual;
 
 },{}],7:[function(require,module,exports){
 var ApiVersion = "v5.user.msg";
@@ -850,7 +838,7 @@ exports.Socket = Socket;
 ;
 
 },{}],8:[function(require,module,exports){
-var Common = require('./common');
+var Utils = require('./utils');
 var ColorScheme = ['#00A8F0', '#C0D800', '#CB4B4B', '#4DA74D', '#9440ED'];
 var SensorValueStore = (function () {
     function SensorValueStore() {
@@ -890,8 +878,8 @@ var SensorValueStore = (function () {
         var oldest = this._start;
         var newest = this._end;
         if (this._slidingWindow) {
-            oldest = Common.now() - this._start;
-            newest = Common.now() - this._end;
+            oldest = Utils.now() - this._start;
+            newest = Utils.now() - this._end;
         }
         this._series.forEach(function (series) {
             series.data = series.data.filter(function (point) {
@@ -990,16 +978,14 @@ var SensorValueStore = (function () {
 })();
 exports.SensorValueStore = SensorValueStore;
 
-},{"./common":6}],9:[function(require,module,exports){
+},{"./utils":10}],9:[function(require,module,exports){
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     function __() { this.constructor = d; }
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
-var Common = require('./common');
-var utils_1 = require('../lib/utils');
-console.log('Dispatcher');
-;
+var Utils = require('./utils');
+var common_1 = require('./common');
 var SubscriptionMode;
 (function (SubscriptionMode) {
     SubscriptionMode[SubscriptionMode["Realtime"] = 0] = "Realtime";
@@ -1172,17 +1158,17 @@ var UpdateDispatcher = (function () {
             throw new Error("Unsupported resolution");
         }
         if (this._subscribers[deviceID][sensorID][resolution] === undefined) {
-            this._subscribers[deviceID][sensorID][resolution] = new utils_1.ExtArray();
+            this._subscribers[deviceID][sensorID][resolution] = new Utils.ExtArray();
         }
         this._subscribers[deviceID][sensorID][resolution].push(subscription);
-        var now = Common.now();
+        var now = Utils.now();
         var sensorsList = {};
         sensorsList[deviceID] = [sensorID];
         this._wsClient.requestValues(subscription.getStart(now), subscription.getEnd(now), resolution, sensorsList);
     };
     UpdateDispatcher.prototype.unsubscribeAll = function (subscriber) {
         var _this = this;
-        Common.forEachSensor(this._subscribers, function (deviceID, sensorID, sensor) {
+        common_1.forEachSensor(this._subscribers, function (deviceID, sensorID, sensor) {
             for (var resolution in sensor) {
                 _this.unsubscribeSensor(deviceID, sensorID, resolution, subscriber);
             }
@@ -1236,7 +1222,7 @@ var UpdateDispatcher = (function () {
                         port: null,
                     };
                 }
-                var wasUpdated = Common.updateProperties(this._devices[deviceID].sensors[sensorID], metadata.devices[deviceID].sensors[sensorID]);
+                var wasUpdated = Utils.updateProperties(this._devices[deviceID].sensors[sensorID], metadata.devices[deviceID].sensors[sensorID]);
                 if (wasUpdated) {
                     this._emitSensorMetadataUpdate(deviceID, sensorID);
                 }
@@ -1309,8 +1295,8 @@ var UpdateDispatcher = (function () {
     UpdateDispatcher.prototype._pollHistoryData = function () {
         var requests;
         requests = {};
-        var now = Common.now();
-        Common.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
+        var now = Utils.now();
+        common_1.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
             for (var resolution in map) {
                 if (resolution !== RealtimeResoulution) {
                     for (var _i = 0, _a = map[resolution]; _i < _a.length; _i++) {
@@ -1347,7 +1333,7 @@ var UpdateDispatcher = (function () {
     UpdateDispatcher.prototype._renewRealtimeRequests = function () {
         var request = {};
         var hasRealtimeSubscriptions = false;
-        Common.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
+        common_1.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
             if (map[RealtimeResoulution] !== undefined) {
                 if (request[deviceID] === undefined) {
                     request[deviceID] = [];
@@ -1379,7 +1365,7 @@ var UpdateDispatcher = (function () {
         }
     };
     UpdateDispatcher.prototype._emitValueUpdate = function (deviceID, sensorID, resolution, timestamp, value) {
-        var now = Common.now();
+        var now = Utils.now();
         var notified = new Set();
         if (this._subscribers[deviceID] !== undefined
             && this._subscribers[deviceID][sensorID] !== undefined
@@ -1420,7 +1406,7 @@ var DummySubscriber = (function () {
 })();
 exports.DummySubscriber = DummySubscriber;
 
-},{"../lib/utils":10,"./common":6}],10:[function(require,module,exports){
+},{"./common":6,"./utils":10}],10:[function(require,module,exports){
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     function __() { this.constructor = d; }
@@ -1451,6 +1437,21 @@ var ExtArray = (function (_super) {
     return ExtArray;
 })(Array);
 exports.ExtArray = ExtArray;
+function updateProperties(target, source) {
+    var wasUpdated = false;
+    for (var prop in target) {
+        if (target[prop] !== source[prop]) {
+            target[prop] = source[prop];
+            wasUpdated = true;
+        }
+    }
+    return wasUpdated;
+}
+exports.updateProperties = updateProperties;
+function now() {
+    return (new Date()).getTime();
+}
+exports.now = now;
 function deepCopyJSON(src) {
     var dst = {};
     if (Array.isArray(src)) {

@@ -1,41 +1,10 @@
 import * as Msg2Socket from './msg2socket';
-import * as Common from './common';
-import {ExtArray} from '../lib/utils';
+import * as Utils from './utils';
 
-console.log('Dispatcher');
+import {DeviceSensorMap, DeviceMap, SensorMap, DeviceMetadata,
+    DeviceWithSensors, SensorMetadata, MetadataTree,
+    SensorSpecifier, SensorUnitMap, forEachSensor} from './common';
 
-// Map: DeviceIDs to Sensorslist and device metadata
-export interface DeviceMap {
-    [deviceID : string] : DeviceMetadataWithSensors;
-}
-
-// Device metadata (currently just a name)
-interface DeviceMetadata {
-    name : string;
-}
-
-// Device metadata extende with a sensor list
-interface DeviceMetadataWithSensors extends DeviceMetadata {
-    sensors : SensorMap;
-}
-
-// Map: SensorIDs to sensor metadata
-interface SensorMap {
-    [sensorID : string] : SensorMetadata;
-}
-
-// Type alias, so we can change the type without refactoring
-interface SensorMetadata extends Msg2Socket.SensorMetadata {};
-
-
-interface SensorSpecifier {
-    sensorID : string;
-    deviceID : string;
-}
-
-export interface UnitSensorMap {
-    [unit : string] : SensorSpecifier[];
-}
 
 // Interface for subscribers
 export interface Subscriber {
@@ -154,7 +123,7 @@ class RealtimeSubscription  extends Subscription {
 
 // Map: time resolution to Array of subscribers
 interface ResolutionSubscriberMap {
-    [resolution : string] : ExtArray<Subscription>;
+    [resolution : string] : Utils.ExtArray<Subscription>;
 }
 
 // Set of all supported time resolutions for faster sanity checks
@@ -217,16 +186,16 @@ export class UpdateDispatcher {
     private _InitialCallbacks : (() => void)[];
 
     // Tree-Structure for storing device and sensor metadata
-    private _devices : DeviceMap;
+    private _devices : MetadataTree;
 
     // Device/Sensor Tuples sorted by Units
-    private _sensorsByUnit : UnitSensorMap;
+    private _sensorsByUnit : SensorUnitMap;
 
     // List of all avaiable units
     private _units : string[];
 
     // Accesor to prevent write access to the devices property
-    public get devices() : DeviceMap {
+    public get devices() : MetadataTree {
         return this._devices;
     }
 
@@ -236,7 +205,7 @@ export class UpdateDispatcher {
     }
 
     // Accesor for _sensorsByUnit
-    public get sensorsByUnit() : UnitSensorMap {
+    public get sensorsByUnit() : SensorUnitMap {
         return this._sensorsByUnit;
     }
 
@@ -244,7 +213,7 @@ export class UpdateDispatcher {
      * Map for managing subscriptions
      * Structure [deviceID][sensorId][resolution] -> Subscription[]
      */
-    private _subscribers : Common.DeviceSensorMap<ResolutionSubscriberMap>;
+    private _subscribers : DeviceSensorMap<ResolutionSubscriberMap>;
 
     /**
      * Construtor for UpdateDispatcher
@@ -360,13 +329,13 @@ export class UpdateDispatcher {
         }
 
         if(this._subscribers[deviceID][sensorID][resolution] === undefined) {
-            this._subscribers[deviceID][sensorID][resolution] = new ExtArray<Subscription>();
+            this._subscribers[deviceID][sensorID][resolution] = new Utils.ExtArray<Subscription>();
         }
 
         this._subscribers[deviceID][sensorID][resolution].push(subscription);
 
         // Request history
-        var now = Common.now();
+        var now = Utils.now();
 
         var sensorsList : Msg2Socket.DeviceSensorList = {};
         sensorsList[deviceID] = [sensorID];
@@ -376,7 +345,7 @@ export class UpdateDispatcher {
 
     // Shorthand to remove all subscriptions for a given subscriber
     public unsubscribeAll(subscriber: Subscriber) {
-        Common.forEachSensor(this._subscribers, (deviceID, sensorID, sensor) : void => {
+        forEachSensor(this._subscribers, (deviceID, sensorID, sensor) : void => {
             for(var resolution in sensor) {
                 this.unsubscribeSensor(deviceID, sensorID, resolution, subscriber);
             }
@@ -466,7 +435,7 @@ export class UpdateDispatcher {
                 }
 
                 // Update metatdata and inform subscribers
-                var wasUpdated = Common.updateProperties(this._devices[deviceID].sensors[sensorID],
+                var wasUpdated = Utils.updateProperties(this._devices[deviceID].sensors[sensorID],
                                                             metadata.devices[deviceID].sensors[sensorID]);
                 if(wasUpdated) {
                     this._emitSensorMetadataUpdate(deviceID, sensorID);
@@ -575,10 +544,10 @@ export class UpdateDispatcher {
 
         var requests : {[resolution : string] : {start :number, end: number, sensors: {[deviceID : string] : Set<string>}}};
         requests = {};
-        var now = Common.now();
+        var now = Utils.now();
 
         // Gather start, end and sensors for each resolution
-        Common.forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
+        forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
             for(var resolution in map) {
                 if(resolution !== RealtimeResoulution) {
 
@@ -628,7 +597,7 @@ export class UpdateDispatcher {
         var request : Msg2Socket.RequestRealtimeUpdateArgs = {};
         var hasRealtimeSubscriptions = false;
 
-        Common.forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
+        forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
             if(map[RealtimeResoulution] !== undefined) {
                 if(request[deviceID] === undefined) {
                     request[deviceID] = [];
@@ -670,7 +639,7 @@ export class UpdateDispatcher {
      * Also maintains a set of already notified subscribers to avoid notifying a subscriber twices in case of overlapping subscriptons.
      */
     private _emitValueUpdate(deviceID : string, sensorID : string, resolution : string, timestamp : number, value : number) : void {
-        var now = Common.now();
+        var now = Utils.now();
         var notified = new Set<Subscriber>();
 
         // Make sure we have subscribsers for this sensor

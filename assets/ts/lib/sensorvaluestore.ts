@@ -1,4 +1,5 @@
 import * as Common from './common';
+import * as Utils from './utils';
 
 export interface TimeSeries {
 	line? : { color : string },
@@ -68,8 +69,8 @@ export class SensorValueStore {
 		var newest = this._end;
 
 		if(this._slidingWindow) {
-			oldest = Common.now() - this._start;
-			newest = Common.now() - this._end;
+			oldest = Utils.now() - this._start;
+			newest = Utils.now() - this._end;
 		}
 
 		this._series.forEach((series : TimeSeries) : void => {

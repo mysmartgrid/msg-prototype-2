@@ -1,29 +1,16 @@
 import * as Utils from '../lib/utils';
-import * as Common from '../lib/common';
 import * as UpdateDispatcher from '../lib/updatedispatcher';
 import * as Store from '../lib/sensorvaluestore';
 
+import {SensorSpecifier, MetadataTree, SensorUnitMap, sensorEqual} from '../lib/common';
+
 declare var Flotr : any;
-
-
-export interface Sensor {
-	deviceID : string;
-	sensorID : string;
-}
-
-function sensorEqual(a : Sensor, b : Sensor) : boolean {
-	return a.deviceID === b.deviceID && a.sensorID === b.sensorID;
-}
-
-interface SensorUnitMap {
-	[unit : string] : Sensor[];
-}
 
 
 interface SensorGraphConfig {
 	unit : string,
 	resolution : string;
-	sensors : Sensor[];
+	sensors : SensorSpecifier[];
 	mode : string,
 	intervalStart : number;
 	intervalEnd : number;
@@ -32,13 +19,12 @@ interface SensorGraphConfig {
 }
 
 
-
 interface SensorGraphSettingsScope extends SensorGraphScope {
 	pickerModes : {[resoltuion : string] : string};
 	resolutions : {[mode : string] :string[]};
 	units : string[];
 	config : SensorGraphConfig;
-	sensorsByUnit : UpdateDispatcher.UnitSensorMap;
+	sensorsByUnit : SensorUnitMap;
 	ok : () => void;
 	cancel : () => void;
 }
@@ -107,9 +93,9 @@ class SensorGraphSettingsController {
 interface SensorGraphScope  extends ng.IScope {
 	openSettings : () => void;
 
-	sensors : Sensor[];
+	sensors : SensorSpecifier[];
 	sensorColors : {[device : string] : {[sensor : string] : string}};
-	devices : UpdateDispatcher.DeviceMap;
+	devices : MetadataTree;
 }
 
 export class SensorGraphController implements UpdateDispatcher.Subscriber{
@@ -182,8 +168,8 @@ export class SensorGraphController implements UpdateDispatcher.Subscriber{
 			resolution : UpdateDispatcher.SupportedResolutions.values().next().value,
 			sensors : [],
 			mode: 'realtime',
-			intervalStart : Common.now() - 24 * 60 * 1000,
-			intervalEnd : Common.now(),
+			intervalStart : Utils.now() - 24 * 60 * 1000,
+			intervalEnd : Utils.now(),
 			windowStart : 5 * 60 * 1000,
 			windowEnd : 0
 		});
@@ -284,7 +270,7 @@ export class SensorGraphController implements UpdateDispatcher.Subscriber{
 	private _redrawGraph() {
 		this.$timeout.cancel(this._timeout);
 
-		var time = Common.now();
+		var time = Utils.now();
 
 		var graphOptions : any = {
 			xaxis: {
