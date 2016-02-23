@@ -1,22 +1,32 @@
 {
     "compilerOptions": {
-        "outFile": "../js/app.js",
+        "outDir": "../js_modules/",
         "target": "es5",
-        "sourceMap": true,
-        "sourceRoot": "/ts/",
+        "module": "commonjs",
         "removeComments": true
     },
+    "filesGlob": [
+        "**/*.ts",
+        "!tests/**"
+    ],
     "files": [
-      "app.ts",
-      "sensorgraph.ts",
-      "msg2socket.ts",
-      "sensorvaluestore.ts",
-      "updatedispatcher.ts",
-      "common.ts",
-      "utils.ts",
-      "ui-elements/numberspinner.ts",
-      "ui-elements/timerangespinner.ts",
-      "ui-elements/datetimepicker.ts"
-  ],
-  "buildOnSave" : true
+        "app.ts",
+        "definitions/angular-ui-bootstrap.d.ts",
+        "definitions/angular.d.ts",
+        "definitions/bootstrap.d.ts",
+        "definitions/es6-shim.d.ts",
+        "definitions/jquery.d.ts",
+        "directives/sensorgraph.ts",
+        "directives/ui-elements/datetimepicker.ts",
+        "directives/ui-elements/numberspinner.ts",
+        "directives/ui-elements/timerangespinner.ts",
+        "lib/common.ts",
+        "lib/msg2socket.ts",
+        "lib/sensorvaluestore.ts",
+        "lib/updatedispatcher.ts",
+        "lib/utils.ts"
+    ],
+    "atom": {
+        "rewriteTsconfig": true
+    }
 }
