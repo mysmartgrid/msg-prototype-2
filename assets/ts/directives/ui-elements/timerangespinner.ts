@@ -39,8 +39,6 @@ class TimeRangeSpinnerController {
             $scope.$watch("ngModel", () : void => this._setFromMilliseconds($scope.ngModel));
         }
 
-        console.log($scope);
-
         $scope.change = () : void => this._change();
         $scope.increment = (unit) : void => this._increment(unit);
         $scope.decrement = (unit) : void => this._decrement(unit);

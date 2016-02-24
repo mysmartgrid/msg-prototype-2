@@ -413,10 +413,7 @@ export class UpdateDispatcher {
             if(deviceName !== undefined && this._devices[deviceID].name !== deviceName) {
                 this._devices[deviceID].name = deviceName;
                 this._emitDeviceMetadataUpdate(deviceID);
-                console.log("Nameupdate: " + deviceName);
             }
-
-
 
             // Add or update sensors
             for(var sensorID in metadata.devices[deviceID].sensors) {

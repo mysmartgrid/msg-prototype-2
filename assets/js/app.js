@@ -1,4 +1,5 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+"use strict";
 var Msg2Socket = require('./lib/msg2socket');
 var UpdateDispatcher = require('./lib/updatedispatcher');
 var numberspinner_1 = require('./directives/ui-elements/numberspinner');
@@ -171,6 +172,7 @@ angular.module("msgp", ['ui.bootstrap'])
     }]);
 
 },{"./directives/sensorgraph":2,"./directives/ui-elements/datetimepicker":3,"./directives/ui-elements/numberspinner":4,"./directives/ui-elements/timerangespinner":5,"./lib/msg2socket":7,"./lib/updatedispatcher":9}],2:[function(require,module,exports){
+"use strict";
 var Utils = require('../lib/utils');
 var UpdateDispatcher = require('../lib/updatedispatcher');
 var Store = require('../lib/sensorvaluestore');
@@ -220,7 +222,7 @@ var SensorGraphSettingsController = (function () {
         };
     }
     return SensorGraphSettingsController;
-})();
+}());
 var SensorGraphController = (function () {
     function SensorGraphController($scope, $interval, $timeout, $uibModal, _dispatcher) {
         var _this = this;
@@ -310,13 +312,13 @@ var SensorGraphController = (function () {
             config.intervalEnd === this._config.intervalEnd) {
             var addedSensors = Utils.difference(config.sensors, this._config.sensors, common_1.sensorEqual);
             var removedSensors = Utils.difference(this._config.sensors, config.sensors, common_1.sensorEqual);
-            for (var _i = 0; _i < addedSensors.length; _i++) {
-                var _a = addedSensors[_i], deviceID = _a.deviceID, sensorID = _a.sensorID;
+            for (var _i = 0, addedSensors_1 = addedSensors; _i < addedSensors_1.length; _i++) {
+                var _a = addedSensors_1[_i], deviceID = _a.deviceID, sensorID = _a.sensorID;
                 this._subscribeSensor(config, deviceID, sensorID);
                 this._store.addSensor(deviceID, sensorID);
             }
-            for (var _b = 0; _b < removedSensors.length; _b++) {
-                var _c = removedSensors[_b], deviceID = _c.deviceID, sensorID = _c.sensorID;
+            for (var _b = 0, removedSensors_1 = removedSensors; _b < removedSensors_1.length; _b++) {
+                var _c = removedSensors_1[_b], deviceID = _c.deviceID, sensorID = _c.sensorID;
                 this._dispatcher.unsubscribeSensor(deviceID, sensorID, config.resolution, this);
                 this._store.removeSensor(deviceID, sensorID);
             }
@@ -395,7 +397,7 @@ var SensorGraphController = (function () {
         this._timeout = this.$timeout(function () { return _this._redrawGraph(); }, delay);
     };
     return SensorGraphController;
-})();
+}());
 exports.SensorGraphController = SensorGraphController;
 var SensorGraphDirective = (function () {
     function SensorGraphDirective() {
@@ -409,7 +411,7 @@ var SensorGraphDirective = (function () {
         };
     }
     return SensorGraphDirective;
-})();
+}());
 function SensorGraphFactory() {
     return function () { return new SensorGraphDirective(); };
 }
@@ -417,6 +419,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = SensorGraphFactory;
 
 },{"../lib/common":6,"../lib/sensorvaluestore":8,"../lib/updatedispatcher":9,"../lib/utils":10}],3:[function(require,module,exports){
+"use strict";
 var DateTimePickerController = (function () {
     function DateTimePickerController($scope) {
         var _this = this;
@@ -451,7 +454,7 @@ var DateTimePickerController = (function () {
         }
     };
     return DateTimePickerController;
-})();
+}());
 function DateTimePickerFactory() {
     return function () { return new DateTimePickerDirective(); };
 }
@@ -472,9 +475,10 @@ var DateTimePickerDirective = (function () {
         };
     }
     return DateTimePickerDirective;
-})();
+}());
 
 },{}],4:[function(require,module,exports){
+"use strict";
 var NumberSpinnerController = (function () {
     function NumberSpinnerController($scope) {
         var _this = this;
@@ -534,7 +538,7 @@ var NumberSpinnerController = (function () {
         input.bind("mouse wheel", function (event) { return _this._onMouseWheel(event); });
     };
     return NumberSpinnerController;
-})();
+}());
 function NumberSpinnerFactory() {
     return function () { return new NumberSpinnerDirective(); };
 }
@@ -559,9 +563,10 @@ var NumberSpinnerDirective = (function () {
         };
     }
     return NumberSpinnerDirective;
-})();
+}());
 
 },{}],5:[function(require,module,exports){
+"use strict";
 var TimeUnits = ["years", "days", "hours", "minutes"];
 var UnitsToMillisecs = {
     "years": 365 * 24 * 60 * 60 * 1000,
@@ -582,7 +587,6 @@ var TimeRangeSpinnerController = (function () {
         if ($scope.ngModel !== undefined) {
             $scope.$watch("ngModel", function () { return _this._setFromMilliseconds($scope.ngModel); });
         }
-        console.log($scope);
         $scope.change = function () { return _this._change(); };
         $scope.increment = function (unit) { return _this._increment(unit); };
         $scope.decrement = function (unit) { return _this._decrement(unit); };
@@ -604,8 +608,8 @@ var TimeRangeSpinnerController = (function () {
         var editDone = TimeUnits.every(function (unit) { return (_this.$scope.time[unit] !== null && _this.$scope.time[unit] !== undefined); });
         if (editDone) {
             var milliseconds = 0;
-            for (var _i = 0; _i < TimeUnits.length; _i++) {
-                var unit = TimeUnits[_i];
+            for (var _i = 0, TimeUnits_1 = TimeUnits; _i < TimeUnits_1.length; _i++) {
+                var unit = TimeUnits_1[_i];
                 milliseconds += this.$scope.time[unit] * UnitsToMillisecs[unit];
             }
             if (this.$scope.min !== undefined) {
@@ -623,8 +627,8 @@ var TimeRangeSpinnerController = (function () {
     };
     TimeRangeSpinnerController.prototype._setFromMilliseconds = function (milliseconds) {
         var remainder = milliseconds;
-        for (var _i = 0; _i < TimeUnits.length; _i++) {
-            var unit = TimeUnits[_i];
+        for (var _i = 0, TimeUnits_2 = TimeUnits; _i < TimeUnits_2.length; _i++) {
+            var unit = TimeUnits_2[_i];
             this.$scope.time[unit] = Math.floor(remainder / UnitsToMillisecs[unit]);
             remainder = remainder % UnitsToMillisecs[unit];
         }
@@ -653,7 +657,7 @@ var TimeRangeSpinnerController = (function () {
         });
     };
     return TimeRangeSpinnerController;
-})();
+}());
 function TimeRangeSpinnerFactory() {
     return function () { return new TimeRangeSpinnerDirective(); };
 }
@@ -675,9 +679,10 @@ var TimeRangeSpinnerDirective = (function () {
         };
     }
     return TimeRangeSpinnerDirective;
-})();
+}());
 
 },{}],6:[function(require,module,exports){
+"use strict";
 ;
 ;
 function forEachSensor(map, f) {
@@ -694,6 +699,7 @@ function sensorEqual(a, b) {
 exports.sensorEqual = sensorEqual;
 
 },{}],7:[function(require,module,exports){
+"use strict";
 var ApiVersion = "v5.user.msg";
 var Socket = (function () {
     function Socket($rootScope) {
@@ -713,8 +719,8 @@ var Socket = (function () {
         configurable: true
     });
     Socket.prototype._callHandlers = function (handlers, param) {
-        for (var _i = 0; _i < handlers.length; _i++) {
-            var handler = handlers[_i];
+        for (var _i = 0, handlers_1 = handlers; _i < handlers_1.length; _i++) {
+            var handler = handlers_1[_i];
             if (this.$rootScope.$$phase === "apply" || this.$rootScope.$$phase === "$digest") {
                 handler(param);
             }
@@ -833,11 +839,12 @@ var Socket = (function () {
     };
     ;
     return Socket;
-})();
+}());
 exports.Socket = Socket;
 ;
 
 },{}],8:[function(require,module,exports){
+"use strict";
 var Utils = require('./utils');
 var ColorScheme = ['#00A8F0', '#C0D800', '#CB4B4B', '#4DA74D', '#9440ED'];
 var SensorValueStore = (function () {
@@ -975,10 +982,11 @@ var SensorValueStore = (function () {
         return colors;
     };
     return SensorValueStore;
-})();
+}());
 exports.SensorValueStore = SensorValueStore;
 
 },{"./utils":10}],9:[function(require,module,exports){
+"use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     function __() { this.constructor = d; }
@@ -1004,7 +1012,7 @@ var Subscription = (function () {
     };
     ;
     return Subscription;
-})();
+}());
 var IntervalSubscription = (function (_super) {
     __extends(IntervalSubscription, _super);
     function IntervalSubscription(_start, _end, subscriber) {
@@ -1025,7 +1033,7 @@ var IntervalSubscription = (function (_super) {
         return this._end;
     };
     return IntervalSubscription;
-})(Subscription);
+}(Subscription));
 var SlidingWindowSubscription = (function (_super) {
     __extends(SlidingWindowSubscription, _super);
     function SlidingWindowSubscription(_start, _end, subscriber) {
@@ -1046,7 +1054,7 @@ var SlidingWindowSubscription = (function (_super) {
         return now - this._end;
     };
     return SlidingWindowSubscription;
-})(Subscription);
+}(Subscription));
 var RealtimeSubscription = (function (_super) {
     __extends(RealtimeSubscription, _super);
     function RealtimeSubscription(_start, subscriber) {
@@ -1066,7 +1074,7 @@ var RealtimeSubscription = (function (_super) {
         return now;
     };
     return RealtimeSubscription;
-})(Subscription);
+}(Subscription));
 exports.SupportedResolutions = new Set(["raw", "second", "minute", "hour", "day", "week", "month", "year"]);
 exports.ResoltuionToMillisecs = {
     raw: 1000,
@@ -1209,7 +1217,6 @@ var UpdateDispatcher = (function () {
             if (deviceName !== undefined && this._devices[deviceID].name !== deviceName) {
                 this._devices[deviceID].name = deviceName;
                 this._emitDeviceMetadataUpdate(deviceID);
-                console.log("Nameupdate: " + deviceName);
             }
             for (var sensorID in metadata.devices[deviceID].sensors) {
                 if (this._subscribers[deviceID][sensorID] === undefined) {
@@ -1269,8 +1276,8 @@ var UpdateDispatcher = (function () {
         else {
             subscriptionsByResolutions.push(this._subscribers[deviceID][sensorID]);
         }
-        for (var _i = 0; _i < subscriptionsByResolutions.length; _i++) {
-            var subscriptionByResolution = subscriptionsByResolutions[_i];
+        for (var _i = 0, subscriptionsByResolutions_1 = subscriptionsByResolutions; _i < subscriptionsByResolutions_1.length; _i++) {
+            var subscriptionByResolution = subscriptionsByResolutions_1[_i];
             for (var resolution in subscriptionByResolution) {
                 for (var _a = 0, _b = subscriptionByResolution[resolution]; _a < _b.length; _a++) {
                     var subscription = _b[_a];
@@ -1381,7 +1388,7 @@ var UpdateDispatcher = (function () {
         }
     };
     return UpdateDispatcher;
-})();
+}());
 exports.UpdateDispatcher = UpdateDispatcher;
 var DummySubscriber = (function () {
     function DummySubscriber() {
@@ -1403,10 +1410,11 @@ var DummySubscriber = (function () {
         console.log("Remove sensor " + deviceID + ":" + sensorID);
     };
     return DummySubscriber;
-})();
+}());
 exports.DummySubscriber = DummySubscriber;
 
 },{"./common":6,"./utils":10}],10:[function(require,module,exports){
+"use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     function __() { this.constructor = d; }
@@ -1435,7 +1443,7 @@ var ExtArray = (function (_super) {
         }
     };
     return ExtArray;
-})(Array);
+}(Array));
 exports.ExtArray = ExtArray;
 function updateProperties(target, source) {
     var wasUpdated = false;

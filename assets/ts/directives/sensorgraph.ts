@@ -2,7 +2,7 @@ import * as Utils from '../lib/utils';
 import * as UpdateDispatcher from '../lib/updatedispatcher';
 import * as Store from '../lib/sensorvaluestore';
 
-import {SensorSpecifier, MetadataTree, SensorUnitMap, sensorEqual} from '../lib/common';
+import {SensorSpecifier, MetadataTree, SensorUnitMap, DeviceSensorMap, sensorEqual} from '../lib/common';
 
 declare var Flotr : any;
 
@@ -94,7 +94,7 @@ interface SensorGraphScope  extends ng.IScope {
 	openSettings : () => void;
 
 	sensors : SensorSpecifier[];
-	sensorColors : {[device : string] : {[sensor : string] : string}};
+	sensorColors : DeviceSensorMap<string>;
 	devices : MetadataTree;
 }
 
