@@ -199,16 +199,6 @@ var SensorGraphSettingsController = (function () {
         $scope.units = _dispatcher.units;
         $scope.sensorsByUnit = _dispatcher.sensorsByUnit;
         $scope.config = config;
-        $scope.pickerModes = {
-            raw: 'day',
-            second: 'day',
-            minute: 'day',
-            hour: 'day',
-            day: 'day',
-            week: 'day',
-            month: 'month',
-            year: 'year'
-        };
         $scope.ok = function () {
             $uibModalInstance.close($scope.config);
         };
@@ -426,6 +416,23 @@ var DateTimePickerController = (function () {
                 }
             });
         }
+        var pickerModes = {
+            'raw': 'day',
+            'second': 'day',
+            'minute': 'day',
+            'hour': 'day',
+            'day': 'day',
+            'week': 'day',
+            'month': 'month',
+            'year': 'year'
+        };
+        $scope.pickerOptions = {};
+        $scope.disableTimepicker = false;
+        $scope.$watch('resolution', function () {
+            $scope.pickerOptions['datepickerMode'] = pickerModes[$scope.resolution];
+            $scope.pickerOptions['minMode'] = pickerModes[$scope.resolution];
+            $scope.disableTimepicker = !($scope.resolution == 'raw' || $scope.resolution == "second" || $scope.resolution == "hour");
+        });
         $scope.change = function () { return _this._change(); };
     }
     DateTimePickerController.prototype._millisecsToDate = function (millisecs) {
@@ -462,6 +469,7 @@ var DateTimePickerDirective = (function () {
         this.scope = {
             ngModel: '=?',
             ngChange: '&',
+            resolution: '=',
             min: '=?',
             max: '=?'
         };
@@ -682,7 +690,6 @@ var utils_1 = require('./utils');
 ;
 ;
 exports.SupportedResolutions = new utils_1.ExtArray("raw", "second", "minute", "hour", "day", "week", "month", "year");
-console.log(exports.SupportedResolutions);
 exports.ResolutionsPerMode = {
     "interval": exports.SupportedResolutions,
     "slidingWindow": exports.SupportedResolutions.filter(function (res) { return res !== "raw"; }),

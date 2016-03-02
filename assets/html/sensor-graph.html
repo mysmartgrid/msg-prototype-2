@@ -42,14 +42,14 @@
 			<div class="form-group" ng-show="config.mode === 'interval'">
 				<label for="intervalStart" class="col-sm-3 control-label">Interval start</label>
 				<div class="col-sm-9">
-					<div date-time-picker="" ng-model="config.intervalStart"></div>
+					<div date-time-picker="" resolution="config.resolution" ng-model="config.intervalStart"></div>
 				</div>
 			</div>
 
 			<div class="form-group" ng-show="config.mode === 'interval'">
 				<label for="intervalEnd" class="col-sm-3 control-label">Interval end</label>
 				<div class="col-sm-9">
-					<div date-time-picker="" ng-model="config.intervalEnd"></div>
+					<div date-time-picker="" resolution="config.resolution" ng-model="config.intervalEnd"></div>
 				</div>
 			</div>
 

@@ -9,6 +9,27 @@ class DateTimePickerController {
             });
         }
 
+        var pickerModes = {
+            'raw' : 'day',
+            'second' : 'day',
+            'minute' : 'day',
+            'hour' : 'day',
+            'day' : 'day',
+            'week' : 'day',
+            'month' : 'month',
+            'year' : 'year'
+        }
+
+        $scope.pickerOptions = {};
+        $scope.disableTimepicker = false;
+
+        $scope.$watch('resolution', () : void => {
+            $scope.pickerOptions['datepickerMode'] = pickerModes[$scope.resolution];
+            $scope.pickerOptions['minMode'] = pickerModes[$scope.resolution];
+            $scope.disableTimepicker = !($scope.resolution == 'raw' || $scope.resolution == "second" || $scope.resolution == "hour");
+        });
+
+
         $scope.change = () : void => this._change();
     }
 
@@ -51,6 +72,7 @@ class DateTimePickerDirective implements ng.IDirective {
     public scope = {
         ngModel: '=?',
         ngChange: '&',
+        resolution: '=',
         min: '=?',
         max: '=?'
     }

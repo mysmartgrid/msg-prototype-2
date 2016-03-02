@@ -65,18 +65,6 @@ class SensorGraphSettingsController {
 
 		$scope.config = config;
 
-		$scope.pickerModes = {
-			raw : 'day',
-			second : 'day',
-			minute : 'day',
-			hour : 'day',
-			day : 'day',
-			week : 'day',
-			month : 'month',
-			year : 'year'
-		}
-
-
 		$scope.ok = () : void => {
 			$uibModalInstance.close($scope.config);
 		};
