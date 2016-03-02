@@ -2,7 +2,8 @@ import * as Utils from '../lib/utils';
 import * as UpdateDispatcher from '../lib/updatedispatcher';
 import * as Store from '../lib/sensorvaluestore';
 
-import {SensorSpecifier, MetadataTree, SensorUnitMap, DeviceSensorMap, sensorEqual} from '../lib/common';
+import {SensorSpecifier, MetadataTree, SensorUnitMap, DeviceSensorMap,
+		sensorEqual, SupportedResolutions, ResoltuionToMillisecs, ResolutionsPerMode} from '../lib/common';
 
 declare var Flotr : any;
 
@@ -21,7 +22,7 @@ interface SensorGraphConfig {
 
 interface SensorGraphSettingsScope extends SensorGraphScope {
 	pickerModes : {[resoltuion : string] : string};
-	resolutions : {[mode : string] :string[]};
+	resolutions : {[mode : string] : Array<string>};
 	units : string[];
 	config : SensorGraphConfig;
 	sensorsByUnit : SensorUnitMap;
@@ -44,11 +45,8 @@ class SensorGraphSettingsController {
 
 		$scope.devices = _dispatcher.devices;
 
-		var supportedResolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
-		$scope.resolutions = {};
-		$scope.resolutions['realtime'] = ['raw'];
-		$scope.resolutions['slidingWindow'] = supportedResolutions.filter((res) => res !== 'raw');
-		$scope.resolutions['interval'] = supportedResolutions.filter((res) => res !== 'raw');
+
+		$scope.resolutions = ResolutionsPerMode;
 
 
 		$scope.$watch("config.mode", () : void => {
@@ -165,7 +163,7 @@ export class SensorGraphController implements UpdateDispatcher.Subscriber{
 	private _setDefaultConfig() {
 		this._applyConfig({
 			unit : this._dispatcher.units[0],
-			resolution : UpdateDispatcher.SupportedResolutions.values().next().value,
+			resolution : SupportedResolutions[0],
 			sensors : [],
 			mode: 'realtime',
 			intervalStart : Utils.now() - 24 * 60 * 1000,
@@ -258,7 +256,7 @@ export class SensorGraphController implements UpdateDispatcher.Subscriber{
 			}
 		}
 
-		this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 60);
+		this._store.setTimeout(ResoltuionToMillisecs[config.resolution] * 60);
 
 		this._config = config;
 		this.$scope.sensorColors = this._store.getColors();

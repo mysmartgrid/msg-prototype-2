@@ -174,7 +174,6 @@ angular.module("msgp", ['ui.bootstrap'])
 },{"./directives/sensorgraph":2,"./directives/ui-elements/datetimepicker":3,"./directives/ui-elements/numberspinner":4,"./directives/ui-elements/timerangespinner":5,"./lib/msg2socket":7,"./lib/updatedispatcher":9}],2:[function(require,module,exports){
 "use strict";
 var Utils = require('../lib/utils');
-var UpdateDispatcher = require('../lib/updatedispatcher');
 var Store = require('../lib/sensorvaluestore');
 var common_1 = require('../lib/common');
 var SensorGraphSettingsFactory = ["$scope", "$uibModalInstance", "UpdateDispatcher", "config",
@@ -187,11 +186,7 @@ var SensorGraphSettingsController = (function () {
         this.$uibModalInstance = $uibModalInstance;
         this._dispatcher = _dispatcher;
         $scope.devices = _dispatcher.devices;
-        var supportedResolutions = Array.from(UpdateDispatcher.SupportedResolutions.values());
-        $scope.resolutions = {};
-        $scope.resolutions['realtime'] = ['raw'];
-        $scope.resolutions['slidingWindow'] = supportedResolutions.filter(function (res) { return res !== 'raw'; });
-        $scope.resolutions['interval'] = supportedResolutions.filter(function (res) { return res !== 'raw'; });
+        $scope.resolutions = common_1.ResolutionsPerMode;
         $scope.$watch("config.mode", function () {
             var mode = $scope.config.mode;
             if ($scope.resolutions[mode].indexOf($scope.config.resolution) === -1) {
@@ -278,7 +273,7 @@ var SensorGraphController = (function () {
     SensorGraphController.prototype._setDefaultConfig = function () {
         this._applyConfig({
             unit: this._dispatcher.units[0],
-            resolution: UpdateDispatcher.SupportedResolutions.values().next().value,
+            resolution: common_1.SupportedResolutions[0],
             sensors: [],
             mode: 'realtime',
             intervalStart: Utils.now() - 24 * 60 * 1000,
@@ -347,7 +342,7 @@ var SensorGraphController = (function () {
                 this._store.addSensor(deviceID, sensorID);
             }
         }
-        this._store.setTimeout(UpdateDispatcher.ResoltuionToMillisecs[config.resolution] * 60);
+        this._store.setTimeout(common_1.ResoltuionToMillisecs[config.resolution] * 60);
         this._config = config;
         this.$scope.sensorColors = this._store.getColors();
         this.$scope.sensors = config.sensors;
@@ -418,7 +413,7 @@ function SensorGraphFactory() {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = SensorGraphFactory;
 
-},{"../lib/common":6,"../lib/sensorvaluestore":8,"../lib/updatedispatcher":9,"../lib/utils":10}],3:[function(require,module,exports){
+},{"../lib/common":6,"../lib/sensorvaluestore":8,"../lib/utils":10}],3:[function(require,module,exports){
 "use strict";
 var DateTimePickerController = (function () {
     function DateTimePickerController($scope) {
@@ -683,7 +678,27 @@ var TimeRangeSpinnerDirective = (function () {
 
 },{}],6:[function(require,module,exports){
 "use strict";
+var utils_1 = require('./utils');
 ;
+;
+exports.SupportedResolutions = new utils_1.ExtArray("raw", "second", "minute", "hour", "day", "week", "month", "year");
+console.log(exports.SupportedResolutions);
+exports.ResolutionsPerMode = {
+    "interval": exports.SupportedResolutions,
+    "slidingWindow": exports.SupportedResolutions.filter(function (res) { return res !== "raw"; }),
+    "realtime": ["raw"]
+};
+(function (ResoltuionToMillisecs) {
+    ResoltuionToMillisecs[ResoltuionToMillisecs["raw"] = 1000] = "raw";
+    ResoltuionToMillisecs[ResoltuionToMillisecs["second"] = 1000] = "second";
+    ResoltuionToMillisecs[ResoltuionToMillisecs["minute"] = 60000] = "minute";
+    ResoltuionToMillisecs[ResoltuionToMillisecs["hour"] = 3600000] = "hour";
+    ResoltuionToMillisecs[ResoltuionToMillisecs["day"] = 86400000] = "day";
+    ResoltuionToMillisecs[ResoltuionToMillisecs["week"] = 604800000] = "week";
+    ResoltuionToMillisecs[ResoltuionToMillisecs["month"] = 2678400000] = "month";
+    ResoltuionToMillisecs[ResoltuionToMillisecs["year"] = 31536000000] = "year";
+})(exports.ResoltuionToMillisecs || (exports.ResoltuionToMillisecs = {}));
+var ResoltuionToMillisecs = exports.ResoltuionToMillisecs;
 ;
 function forEachSensor(map, f) {
     for (var deviceId in map) {
@@ -698,7 +713,7 @@ function sensorEqual(a, b) {
 }
 exports.sensorEqual = sensorEqual;
 
-},{}],7:[function(require,module,exports){
+},{"./utils":10}],7:[function(require,module,exports){
 "use strict";
 var ApiVersion = "v5.user.msg";
 var Socket = (function () {
@@ -1075,17 +1090,6 @@ var RealtimeSubscription = (function (_super) {
     };
     return RealtimeSubscription;
 }(Subscription));
-exports.SupportedResolutions = new Set(["raw", "second", "minute", "hour", "day", "week", "month", "year"]);
-exports.ResoltuionToMillisecs = {
-    raw: 1000,
-    second: 1000,
-    minute: 60 * 1000,
-    hour: 60 * 60 * 1000,
-    day: 24 * 60 * 60 * 1000,
-    week: 7 * 24 * 60 * 60 * 1000,
-    month: 31 * 24 * 60 * 60 * 1000,
-    year: 365 * 24 * 60 * 60 * 1000
-};
 var RealtimeResoulution = 'raw';
 exports.UpdateDispatcherFactory = ["WSUserClient", "$interval",
     function (wsClient, $interval) {
@@ -1162,8 +1166,8 @@ var UpdateDispatcher = (function () {
         if (this._devices[deviceID] === undefined) {
             throw new Error("Unknown device");
         }
-        if (!exports.SupportedResolutions.has(resolution)) {
-            throw new Error("Unsupported resolution");
+        if (!common_1.SupportedResolutions.contains(resolution)) {
+            throw new Error("Unsupported resolution: " + resolution);
         }
         if (this._subscribers[deviceID][sensorID][resolution] === undefined) {
             this._subscribers[deviceID][sensorID][resolution] = new Utils.ExtArray();
@@ -1423,7 +1427,15 @@ var __extends = (this && this.__extends) || function (d, b) {
 var ExtArray = (function (_super) {
     __extends(ExtArray, _super);
     function ExtArray() {
-        _super.apply(this, arguments);
+        var args = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+            args[_i - 0] = arguments[_i];
+        }
+        _super.apply(this, args);
+        for (var _a = 0, args_1 = args; _a < args_1.length; _a++) {
+            var arg = args_1[_a];
+            this.push(arg);
+        }
     }
     ExtArray.prototype.contains = function (element) {
         var i = this.indexOf(element);

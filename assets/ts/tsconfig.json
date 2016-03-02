@@ -9,6 +9,9 @@
         "**/*.ts",
         "!tests/**"
     ],
+    "scripts": {
+        "postbuild": "bash postbuild"
+    },
     "files": [
         "app.ts",
         "definitions/angular-ui-bootstrap.d.ts",

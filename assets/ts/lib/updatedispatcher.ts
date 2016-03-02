@@ -3,7 +3,7 @@ import * as Utils from './utils';
 
 import {DeviceSensorMap, DeviceMap, SensorMap, DeviceMetadata,
     DeviceWithSensors, SensorMetadata, MetadataTree,
-    SensorSpecifier, SensorUnitMap, forEachSensor} from './common';
+    SensorSpecifier, SensorUnitMap, forEachSensor, SupportedResolutions} from './common';
 
 
 // Interface for subscribers
@@ -125,20 +125,6 @@ class RealtimeSubscription  extends Subscription {
 interface ResolutionSubscriberMap {
     [resolution : string] : Utils.ExtArray<Subscription>;
 }
-
-// Set of all supported time resolutions for faster sanity checks
-export const SupportedResolutions = new Set(["raw", "second", "minute", "hour", "day", "week", "month", "year"]);
-
-export const ResoltuionToMillisecs = {
-    raw: 1000,
-    second: 1000,
-    minute: 60 * 1000,
-    hour: 60 * 60 * 1000,
-    day: 24 * 60 * 60 * 1000,
-    week: 7 * 24 * 60 * 60 * 1000,
-    month: 31 * 24 * 60 * 60 * 1000,
-    year: 365 * 24 * 60 * 60 * 1000
-};
 
 const RealtimeResoulution = 'raw';
 
@@ -324,8 +310,8 @@ export class UpdateDispatcher {
             throw new Error("Unknown device");
         }
 
-        if(!SupportedResolutions.has(resolution)) {
-            throw new Error("Unsupported resolution");
+        if(!SupportedResolutions.contains(resolution)) {
+            throw new Error("Unsupported resolution: " + resolution);
         }
 
         if(this._subscribers[deviceID][sensorID][resolution] === undefined) {

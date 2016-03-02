@@ -1,3 +1,5 @@
+import {ExtArray} from './utils';
+
 export interface DeviceMap<U> {
     [deviceID : string] : U;
 }
@@ -35,6 +37,28 @@ export interface SensorUnitMap {
 }
 
 export interface MetadataTree extends DeviceMap<DeviceWithSensors> {};
+
+
+export const SupportedResolutions = new ExtArray("raw", "second", "minute", "hour", "day", "week", "month", "year");
+
+export var ResolutionsPerMode : {[resolution : string] : string[]} = {
+    "interval" : SupportedResolutions,
+    "slidingWindow" : SupportedResolutions.filter((res) => res !== "raw"),
+    "realtime" : ["raw"]
+}
+
+
+export enum ResoltuionToMillisecs {
+    raw = 1000,
+    second = raw,
+    minute = 60 * second,
+    hour = 60 * minute,
+    day = 24 * hour,
+    week = 7 * day,
+    month = 31 * day,
+    year = 365 * day
+};
+
 
 export function forEachSensor<U>(map : DeviceSensorMap<U>, f : {(deviceID : string, sensorID : string, data : U) : void}) {
     for(var deviceId in map) {

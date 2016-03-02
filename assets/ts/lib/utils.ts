@@ -1,5 +1,15 @@
 export class ExtArray<U> extends Array<U> {
 
+    constructor(...args : U[]) {
+        super(...args);
+
+        //TODO: Fix this sooner or later https://github.com/Microsoft/TypeScript/issues/7340
+        for(var arg of args) {
+            this.push(arg);
+        }
+    }
+
+
     public contains(element : U) : boolean {
         var i = this.indexOf(element);
         return i !== -1;
