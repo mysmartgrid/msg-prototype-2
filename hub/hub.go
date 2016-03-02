@@ -1,5 +1,11 @@
+// Package hub is used to allow different connections pertaining to the same user to communicate with each other.
+// To do so, every connection that is interested in communication may listen on the hub by subscribing to topics,
+// or it may send messages with arbitrary message content to a specific topic.
+//
+// The hub is used by the user and device API to broadcast updates of sensors values, sensor metadata and other information.
 package hub
 
+// Hub manages all subscriptions and communications for a single hub.
 type Hub struct {
 	subscribers map[string]map[*Conn]bool
 
@@ -15,12 +21,15 @@ type subscription struct {
 	conn  *Conn
 }
 
+// Value represents a message of arbitrary data to a specific topic sent through the hub.
 type Value struct {
 	Topic string
 	Data  interface{}
 }
 
+// Conn is used to get data out of the hub for a number of subscriptons by a single client.
 type Conn struct {
+	// All messeges published on the subscribed topics a passed to the Valeu channel by the hub.
 	Value <-chan Value
 
 	parent *Hub
@@ -34,6 +43,7 @@ func (h *Hub) doUnsubscribe(topic string, conn *Conn) {
 	}
 }
 
+// New creates a new hub and starts its management process.
 func New() *Hub {
 	hub := &Hub{
 		subscribers: make(map[string]map[*Conn]bool),
@@ -71,10 +81,12 @@ func New() *Hub {
 	return hub
 }
 
+// Publish publishes a new data entity to a specific topic to all subscribers to this topic on the hub.
 func (h *Hub) Publish(topic string, data interface{}) {
 	h.publish <- Value{topic, data}
 }
 
+// Connect creates a new connection to the hub with no subscriptions.
 func (h *Hub) Connect() *Conn {
 	r := &Conn{
 		parent: h,
@@ -85,14 +97,17 @@ func (h *Hub) Connect() *Conn {
 	return r
 }
 
+// Subscribe add a subscription to a specific topic to the connection.
 func (hc *Conn) Subscribe(topic string) {
 	hc.parent.subscribe <- subscription{topic, hc}
 }
 
+// Unsubscribe cancels the subscription to the given topic on the connection.
 func (hc *Conn) Unsubscribe(topic string) {
 	hc.parent.unsubscribe <- subscription{topic, hc}
 }
 
+// Close removes the connection from the hub and cancles all subsciptions.
 func (hc *Conn) Close() {
 	hc.parent.detach <- hc
 	close(hc.valueQ)

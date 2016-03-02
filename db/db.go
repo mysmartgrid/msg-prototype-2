@@ -58,6 +58,8 @@ func (db *db) manageBuffer() {
 
 	for {
 		select {
+
+		// Handle new measurement inputs to the buffer
 		case bval, ok := <-db.bufferInput:
 			if !ok {
 				return
@@ -70,22 +72,29 @@ func (db *db) manageBuffer() {
 			db.bufferedValues[bval.key] = append(slice, bval.value)
 			db.bufferedValueCount++
 
+			// Flush full buffer to database
 			if db.bufferedValueCount >= bufferSize {
 				db.flushBuffer()
 			}
 
+		// Remove a sensor from buffer management, dropping any buffered values
 		case key := <-db.bufferKill:
 			delete(db.bufferedValues, key)
 
+		// Add a new sensor to the buffer management
 		case key := <-db.bufferAdd:
 			db.bufferedValues[key] = make([]Value, 0, 4)
 
+		// Periodically flush buffer
 		case <-ticker.C:
 			db.flushBuffer()
 		}
 	}
 }
 
+// OpenDb opens a connection to the postgres database with the given parameters,
+// starts a process to manage its value buffer and adds all sensors in the database to the buffer manager.
+// Returns a Db struct on success or an error otherwise
 func OpenDb(sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
 	cfg := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
 		sqlUser,

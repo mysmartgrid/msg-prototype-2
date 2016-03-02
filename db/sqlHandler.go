@@ -46,6 +46,7 @@ var timeResTable map[timeRes]string = map[timeRes]string{
 	timeResYear:   "measure_aggregated_years",
 }
 
+// saveValuesAndClear write a set of measurements from different sensors to the database and empty the valueMap
 func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]Value) error {
 	tx, err := h.db.Begin()
 	if err != nil {
@@ -86,6 +87,7 @@ func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]Value) error {
 	return nil
 }
 
+// loadValues loads measurements for a set of sensors in a single timespan and for a single resolution
 func (h *sqlHandler) loadValues(since, until time.Time, resolution string, sensorSeqs []uint64) (map[uint64][]Value, error) {
 	if len(sensorSeqs) < 1 {
 		return make(map[uint64][]Value), nil

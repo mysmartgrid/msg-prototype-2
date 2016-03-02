@@ -129,7 +129,8 @@ func (tx *tx) Groups() map[string]Group {
 	return result
 }
 
-func (tx *tx) loadReadings(since, until time.Time, user User, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
+func (tx *tx) loadReadings(since, until time.Time, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
+	// Extract sensors database ids into a single array to query their values from the database
 	var keys []uint64
 	for _, sensors := range sensors {
 		for _, sensor := range sensors {
@@ -142,6 +143,7 @@ func (tx *tx) loadReadings(since, until time.Time, user User, resolution string,
 		return nil, err
 	}
 
+	// Sort retrived values by device before returning them
 	result := make(map[Device]map[Sensor][]Value)
 	for device, sensors := range sensors {
 		result[device] = make(map[Sensor][]Value)

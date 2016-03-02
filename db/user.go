@@ -169,5 +169,5 @@ func (u *user) Id() string {
 }
 
 func (u *user) LoadReadings(since, until time.Time, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
-	return u.tx.loadReadings(since, until, u, resolution, sensors)
+	return u.tx.loadReadings(since, until, resolution, sensors)
 }
