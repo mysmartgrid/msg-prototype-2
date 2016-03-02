@@ -15,6 +15,7 @@ import (
 	msgpdb "github.com/mysmartgrid/msg-prototype-2/db"
 	"github.com/mysmartgrid/msg-prototype-2/hub"
 	"github.com/mysmartgrid/msg-prototype-2/regdev"
+	"github.com/mysmartgrid/msg-prototype-2/oldapi"
 	"github.com/mysmartgrid/msg2api"
 	"html/template"
 	"io/ioutil"
@@ -758,6 +759,9 @@ func main() {
 		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(api_User_Device_Config_Get)).Methods("GET")
 		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(api_User_Device_Config_Set)).Methods("POST")
 		router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(api_User_Device_Sensor_Props_Set)).Methods("POST")
+
+		// old api
+		server.RegisterRoutes(router.PathPrefix("/oldapi").Subrouter())
 
 		router.HandleFunc("/admin", defaultHeaders(adminHandler))
 
