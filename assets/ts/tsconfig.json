@@ -23,6 +23,7 @@
         "directives/ui-elements/datetimepicker.ts",
         "directives/ui-elements/numberspinner.ts",
         "directives/ui-elements/timerangespinner.ts",
+        "directives/widget.ts",
         "lib/common.ts",
         "lib/msg2socket.ts",
         "lib/sensorvaluestore.ts",

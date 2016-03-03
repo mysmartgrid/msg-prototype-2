@@ -21,7 +21,6 @@ interface SensorGraphConfig {
 
 
 interface SensorGraphSettingsScope extends SensorGraphScope {
-	pickerModes : {[resoltuion : string] : string};
 	resolutions : {[mode : string] : Array<string>};
 	units : string[];
 	config : SensorGraphConfig;
@@ -44,6 +43,8 @@ class SensorGraphSettingsController {
 				config : SensorGraphConfig) {
 
 		$scope.devices = _dispatcher.devices;
+		$scope.units = _dispatcher.units;
+		$scope.sensorsByUnit = _dispatcher.sensorsByUnit;
 
 
 		$scope.resolutions = ResolutionsPerMode;
@@ -60,8 +61,6 @@ class SensorGraphSettingsController {
 			}
 		});
 
-		$scope.units = _dispatcher.units;
-		$scope.sensorsByUnit = _dispatcher.sensorsByUnit;
 
 		$scope.config = config;
 

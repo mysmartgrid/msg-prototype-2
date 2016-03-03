@@ -1,5 +1,3 @@
-import {ExtArray} from './utils';
-
 export interface DeviceMap<U> {
     [deviceID : string] : U;
 }
@@ -39,7 +37,7 @@ export interface SensorUnitMap {
 export interface MetadataTree extends DeviceMap<DeviceWithSensors> {};
 
 
-export const SupportedResolutions = new ExtArray("raw", "second", "minute", "hour", "day", "week", "month", "year");
+export const SupportedResolutions = ["raw", "second", "minute", "hour", "day", "week", "month", "year"];
 
 export var ResolutionsPerMode : {[resolution : string] : string[]} = {
     "interval" : SupportedResolutions,

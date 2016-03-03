@@ -123,7 +123,7 @@ class RealtimeSubscription  extends Subscription {
 
 // Map: time resolution to Array of subscribers
 interface ResolutionSubscriberMap {
-    [resolution : string] : Utils.ExtArray<Subscription>;
+    [resolution : string] : Subscription[];
 }
 
 const RealtimeResoulution = 'raw';
@@ -310,12 +310,12 @@ export class UpdateDispatcher {
             throw new Error("Unknown device");
         }
 
-        if(!SupportedResolutions.contains(resolution)) {
+        if(!Utils.contains(SupportedResolutions, resolution)) {
             throw new Error("Unsupported resolution: " + resolution);
         }
 
         if(this._subscribers[deviceID][sensorID][resolution] === undefined) {
-            this._subscribers[deviceID][sensorID][resolution] = new Utils.ExtArray<Subscription>();
+            this._subscribers[deviceID][sensorID][resolution] = [];
         }
 
         this._subscribers[deviceID][sensorID][resolution].push(subscription);
@@ -357,7 +357,8 @@ export class UpdateDispatcher {
             throw new Error("No subscribers for this resolution");
         }
 
-        this._subscribers[deviceID][sensorID][resolution].removeWhere((subscripton) => subscripton.getSubscriber() === subscriber);
+        Utils.removeWhere(this._subscribers[deviceID][sensorID][resolution],
+                            (subscripton) => subscripton.getSubscriber() === subscriber);
     }
 
     /**

@@ -1,35 +1,25 @@
-export class ExtArray<U> extends Array<U> {
-
-    constructor(...args : U[]) {
-        super(...args);
-
-        //TODO: Fix this sooner or later https://github.com/Microsoft/TypeScript/issues/7340
-        for(var arg of args) {
-            this.push(arg);
-        }
-    }
 
 
-    public contains(element : U) : boolean {
-        var i = this.indexOf(element);
-        return i !== -1;
-    }
+export function contains<U>(haystack : U[], needle : U) : boolean {
+    var i = haystack.indexOf(needle);
+    return i !== -1;
+}
 
-    public remove(element : U) : void {
-        var i = this.indexOf(element);
-        if(i !== -1) {
-            this.splice(i,1);
-        }
-    }
-
-    public removeWhere(pred: (element : U) => boolean) {
-        var i = this.findIndex(pred);
-        while(i !== -1) {
-            this.splice(i,1);
-            var i = this.findIndex(pred);
-        }
+export function remove<U>(haystack : U[], needle : U) : void {
+    var i = this.indexOf(needle);
+    if(i !== -1) {
+        this.splice(i,1);
     }
 }
+
+export function removeWhere<U>(haystack : U[], pred: (element : U) => boolean) {
+    var i = this.findIndex(pred);
+    while(i !== -1) {
+        this.splice(i,1);
+        var i = this.findIndex(pred);
+    }
+}
+
 
 export function updateProperties<U>(target : U, source: U) : boolean {
     var wasUpdated = false;

@@ -186,6 +186,8 @@ var SensorGraphSettingsController = (function () {
         this.$uibModalInstance = $uibModalInstance;
         this._dispatcher = _dispatcher;
         $scope.devices = _dispatcher.devices;
+        $scope.units = _dispatcher.units;
+        $scope.sensorsByUnit = _dispatcher.sensorsByUnit;
         $scope.resolutions = common_1.ResolutionsPerMode;
         $scope.$watch("config.mode", function () {
             var mode = $scope.config.mode;
@@ -196,8 +198,6 @@ var SensorGraphSettingsController = (function () {
                 $scope.config.resolution = 'raw';
             }
         });
-        $scope.units = _dispatcher.units;
-        $scope.sensorsByUnit = _dispatcher.sensorsByUnit;
         $scope.config = config;
         $scope.ok = function () {
             $uibModalInstance.close($scope.config);
@@ -686,10 +686,9 @@ var TimeRangeSpinnerDirective = (function () {
 
 },{}],6:[function(require,module,exports){
 "use strict";
-var utils_1 = require('./utils');
 ;
 ;
-exports.SupportedResolutions = new utils_1.ExtArray("raw", "second", "minute", "hour", "day", "week", "month", "year");
+exports.SupportedResolutions = ["raw", "second", "minute", "hour", "day", "week", "month", "year"];
 exports.ResolutionsPerMode = {
     "interval": exports.SupportedResolutions,
     "slidingWindow": exports.SupportedResolutions.filter(function (res) { return res !== "raw"; }),
@@ -720,7 +719,7 @@ function sensorEqual(a, b) {
 }
 exports.sensorEqual = sensorEqual;
 
-},{"./utils":10}],7:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 "use strict";
 var ApiVersion = "v5.user.msg";
 var Socket = (function () {
@@ -1173,11 +1172,11 @@ var UpdateDispatcher = (function () {
         if (this._devices[deviceID] === undefined) {
             throw new Error("Unknown device");
         }
-        if (!common_1.SupportedResolutions.contains(resolution)) {
+        if (!Utils.contains(common_1.SupportedResolutions, resolution)) {
             throw new Error("Unsupported resolution: " + resolution);
         }
         if (this._subscribers[deviceID][sensorID][resolution] === undefined) {
-            this._subscribers[deviceID][sensorID][resolution] = new Utils.ExtArray();
+            this._subscribers[deviceID][sensorID][resolution] = [];
         }
         this._subscribers[deviceID][sensorID][resolution].push(subscription);
         var now = Utils.now();
@@ -1203,7 +1202,7 @@ var UpdateDispatcher = (function () {
         if (this._subscribers[deviceID][sensorID][resolution] === undefined) {
             throw new Error("No subscribers for this resolution");
         }
-        this._subscribers[deviceID][sensorID][resolution].removeWhere(function (subscripton) { return subscripton.getSubscriber() === subscriber; });
+        Utils.removeWhere(this._subscribers[deviceID][sensorID][resolution], function (subscripton) { return subscripton.getSubscriber() === subscriber; });
     };
     UpdateDispatcher.prototype.onInitialMetadata = function (callback) {
         if (!this._hasInitialMetadata) {
@@ -1426,44 +1425,26 @@ exports.DummySubscriber = DummySubscriber;
 
 },{"./common":6,"./utils":10}],10:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
-var ExtArray = (function (_super) {
-    __extends(ExtArray, _super);
-    function ExtArray() {
-        var args = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-            args[_i - 0] = arguments[_i];
-        }
-        _super.apply(this, args);
-        for (var _a = 0, args_1 = args; _a < args_1.length; _a++) {
-            var arg = args_1[_a];
-            this.push(arg);
-        }
+function contains(haystack, needle) {
+    var i = haystack.indexOf(needle);
+    return i !== -1;
+}
+exports.contains = contains;
+function remove(haystack, needle) {
+    var i = this.indexOf(needle);
+    if (i !== -1) {
+        this.splice(i, 1);
     }
-    ExtArray.prototype.contains = function (element) {
-        var i = this.indexOf(element);
-        return i !== -1;
-    };
-    ExtArray.prototype.remove = function (element) {
-        var i = this.indexOf(element);
-        if (i !== -1) {
-            this.splice(i, 1);
-        }
-    };
-    ExtArray.prototype.removeWhere = function (pred) {
+}
+exports.remove = remove;
+function removeWhere(haystack, pred) {
+    var i = this.findIndex(pred);
+    while (i !== -1) {
+        this.splice(i, 1);
         var i = this.findIndex(pred);
-        while (i !== -1) {
-            this.splice(i, 1);
-            var i = this.findIndex(pred);
-        }
-    };
-    return ExtArray;
-}(Array));
-exports.ExtArray = ExtArray;
+    }
+}
+exports.removeWhere = removeWhere;
 function updateProperties(target, source) {
     var wasUpdated = false;
     for (var prop in target) {
