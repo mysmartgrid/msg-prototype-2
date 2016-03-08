@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lib/pq"
+	"github.com/mysmartgrid/msg2api"
 	"strconv"
 	"time"
 )
@@ -47,7 +48,7 @@ var timeResTable map[timeRes]string = map[timeRes]string{
 }
 
 // saveValuesAndClear write a set of measurements from different sensors to the database and empty the valueMap
-func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]Value) error {
+func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]msg2api.Measurement) error {
 	tx, err := h.db.Begin()
 	if err != nil {
 		return err
@@ -82,15 +83,15 @@ func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]Value) error {
 	}
 
 	for id := range valueMap {
-		valueMap[id] = make([]Value, 0, 1)
+		valueMap[id] = make([]msg2api.Measurement, 0, 1)
 	}
 	return nil
 }
 
 // loadValues loads measurements for a set of sensors in a single timespan and for a single resolution
-func (h *sqlHandler) loadValues(since, until time.Time, resolution string, sensorSeqs []uint64) (map[uint64][]Value, error) {
+func (h *sqlHandler) loadValues(since, until time.Time, resolution string, sensorSeqs []uint64) (map[uint64][]msg2api.Measurement, error) {
 	if len(sensorSeqs) < 1 {
-		return make(map[uint64][]Value), nil
+		return make(map[uint64][]msg2api.Measurement), nil
 	}
 
 	var valueQuery string
@@ -117,7 +118,7 @@ func (h *sqlHandler) loadValues(since, until time.Time, resolution string, senso
 		return nil, err
 	}
 
-	result := make(map[uint64][]Value)
+	result := make(map[uint64][]msg2api.Measurement)
 	if resolution == "raw" {
 		for rows.Next() {
 			var sensorid uint64
@@ -128,7 +129,7 @@ func (h *sqlHandler) loadValues(since, until time.Time, resolution string, senso
 			if err != nil {
 				return nil, err
 			}
-			result[sensorid] = append(result[sensorid], Value{timestamp, value})
+			result[sensorid] = append(result[sensorid], msg2api.Measurement{timestamp, value})
 		}
 	} else {
 		for rows.Next() {
@@ -141,7 +142,7 @@ func (h *sqlHandler) loadValues(since, until time.Time, resolution string, senso
 			if err != nil {
 				return nil, err
 			}
-			result[sensorid] = append(result[sensorid], Value{timestamp, sum / float64(count)})
+			result[sensorid] = append(result[sensorid], msg2api.Measurement{timestamp, sum / float64(count)})
 		}
 	}
 

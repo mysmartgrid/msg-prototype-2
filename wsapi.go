@@ -446,56 +446,31 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, sen
 			return notAuthorized
 		}
 
-		dbsensors := make(map[db.Device][]db.Sensor)
-		for device, sensors := range sensors {
-			dbdevice := user.Device(device)
-			dbsensors[dbdevice] = make([]db.Sensor, len(sensors))
-			for idx, sensor := range sensors {
-				dbsensors[dbdevice][idx] = dbdevice.Sensor(sensor)
-			}
-		}
-
-		readings, err := user.LoadReadings(since, until, resolution, dbsensors)
+		readings, err := user.LoadReadings(since, until, resolution, sensors)
 		if err != nil {
 			return err
 		}
 
-		var update msg2api.UserEventUpdateArgs
-		update.Resolution = resolution
-		update.Values = make(map[string]map[string][]msg2api.Measurement)
-		for dev, svalues := range readings {
-			update.Values[dev.Id()] = make(map[string][]msg2api.Measurement, len(svalues))
-			for sensor, values := range svalues {
-				supdate := make([]msg2api.Measurement, 0, len(values))
-				for _, val := range values {
-					supdate = append(supdate, msg2api.Measurement{Time: val.Time, Value: val.Value})
-				}
-				update.Values[dev.Id()][sensor.Id()] = supdate
-			}
+		update := msg2api.UserEventUpdateArgs{
+			Resolution: resolution,
+			Values:     readings,
 		}
 
-		// Append already aggregated second values
+		// Also send already aggregated second values as 'raw'
 		if resolution == "raw" {
-			addReadings, err := user.LoadReadings(since, until, "second", dbsensors)
+			secondReadings, err := user.LoadReadings(since, until, "second", sensors)
 			if err != nil {
 				return err
 			}
 
-			for dev, svalues := range addReadings {
-				if _, ok := update.Values[dev.Id()]; !ok {
-					update.Values[dev.Id()] = make(map[string][]msg2api.Measurement, len(svalues))
-				}
-				for sensor, values := range svalues {
-					supdate := make([]msg2api.Measurement, 0, len(values))
-					for _, val := range values {
-						supdate = append(supdate, msg2api.Measurement{Time: val.Time, Value: val.Value})
-					}
-					if _, ok := update.Values[dev.Id()][sensor.Id()]; ok {
-						update.Values[dev.Id()][sensor.Id()] = append(update.Values[dev.Id()][sensor.Id()], supdate...)
-					} else {
-						update.Values[dev.Id()][sensor.Id()] = supdate
-					}
-				}
+			secondUpdate := msg2api.UserEventUpdateArgs{
+				Resolution: resolution,
+				Values:     secondReadings,
+			}
+
+			err = api.server.SendUpdate(secondUpdate)
+			if err != nil {
+				return err
 			}
 		}
 

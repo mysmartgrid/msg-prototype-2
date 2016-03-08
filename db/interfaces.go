@@ -1,6 +1,9 @@
 package db
 
-import "time"
+import (
+	"github.com/mysmartgrid/msg2api"
+	"time"
+)
 
 // Db defines the interface to a database containing users, device, sensors and their measurment data.
 type Db interface {
@@ -98,10 +101,9 @@ type User interface {
 	// Returns the id that identifies the current user in the database.
 	Id() string
 
-	// LoadReadings loads measurements for the given timespan, resolution and sensors from the database.
-	// Returns a mapping from Devices to Sensors to Value arrays.
-	// Caution: Does not check if the sensors/devices actually belong to the user.
-	LoadReadings(since, until time.Time, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error)
+	// LoadReadings loads measurements for the given timespan, resolution and sensors identified by device and id from the database, if they belong to the user.
+	// Returns a mapping device id to sensorid to Value arrays.
+	LoadReadings(since, until time.Time, resolution string, sensors map[string][]string) (map[string]map[string][]msg2api.Measurement, error)
 }
 
 // Group provides a set of operations on groups as represented in the database.
@@ -214,10 +216,4 @@ type Sensor interface {
 
 	// IsVirtual returns the state of the virtual flag of the current sensor in the database.
 	IsVirtual() bool
-}
-
-// Value describes a single measurement with measurment time and measured value.
-type Value struct {
-	Time  time.Time
-	Value float64
 }

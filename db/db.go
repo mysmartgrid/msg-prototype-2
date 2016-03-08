@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/mysmartgrid/msg2api"
 	"log"
 	"time"
 )
@@ -23,7 +24,7 @@ var (
 type db struct {
 	sqldb sqlHandler
 
-	bufferedValues     map[uint64][]Value
+	bufferedValues     map[uint64][]msg2api.Measurement
 	bufferedValueCount uint32
 
 	bufferInput chan bufferValue
@@ -33,7 +34,7 @@ type db struct {
 
 type bufferValue struct {
 	key   uint64
-	value Value
+	value msg2api.Measurement
 }
 
 func (db *db) flushBuffer() {
@@ -83,7 +84,7 @@ func (db *db) manageBuffer() {
 
 		// Add a new sensor to the buffer management
 		case key := <-db.bufferAdd:
-			db.bufferedValues[key] = make([]Value, 0, 4)
+			db.bufferedValues[key] = make([]msg2api.Measurement, 0, 4)
 
 		// Periodically flush buffer
 		case <-ticker.C:
@@ -111,7 +112,7 @@ func OpenDb(sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
 
 	result := &db{
 		sqldb:          sqlHandler{postgres},
-		bufferedValues: make(map[uint64][]Value),
+		bufferedValues: make(map[uint64][]msg2api.Measurement),
 		bufferInput:    make(chan bufferValue),
 		bufferKill:     make(chan uint64),
 		bufferAdd:      make(chan uint64),
@@ -191,6 +192,6 @@ func (db *db) Update(fn func(Tx) error) error {
 }
 
 func (db *db) AddReading(sensor Sensor, time time.Time, value float64) error {
-	db.bufferInput <- bufferValue{sensor.DbId(), Value{time, value}}
+	db.bufferInput <- bufferValue{sensor.DbId(), msg2api.Measurement{time, value}}
 	return nil
 }

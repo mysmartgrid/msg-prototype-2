@@ -1,6 +1,7 @@
 package db
 
 import (
+	"github.com/mysmartgrid/msg2api"
 	"golang.org/x/crypto/bcrypt"
 	"time"
 )
@@ -168,6 +169,36 @@ func (u *user) Id() string {
 	return u.id
 }
 
-func (u *user) LoadReadings(since, until time.Time, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
-	return u.tx.loadReadings(since, until, resolution, sensors)
+func (u *user) LoadReadings(since, until time.Time, resolution string, sensors map[string][]string) (map[string]map[string][]msg2api.Measurement, error) {
+	var keys []uint64
+	sensorsByKey := make(map[uint64]Sensor)
+
+	for devID, sensorIDs := range sensors {
+		dev := u.Device(devID)
+		if dev != nil {
+			for _, sensorID := range sensorIDs {
+				sensor := dev.Sensor(sensorID)
+				if sensor != nil {
+					keys = append(keys, sensor.DbId())
+					sensorsByKey[sensor.DbId()] = sensor
+				}
+			}
+		}
+	}
+
+	readings, err := u.tx.db.sqldb.loadValues(since, until, resolution, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]map[string][]msg2api.Measurement)
+	for dbid, values := range readings {
+		devID := sensorsByKey[dbid].Device().Id()
+		if _, ok := result[devID]; !ok {
+			result[devID] = make(map[string][]msg2api.Measurement)
+		}
+		result[devID][sensorsByKey[dbid].Id()] = values
+	}
+
+	return result, nil
 }
