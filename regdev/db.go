@@ -17,6 +17,8 @@ type db struct {
 	store *bolt.DB
 }
 
+// Open opens the BoltDB database containing the device database in
+// the file located at path.
 func Open(path string) (Db, error) {
 	store, err := bolt.Open(path, 0600, nil)
 	if err != nil {

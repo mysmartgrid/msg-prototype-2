@@ -174,7 +174,7 @@ type Device interface {
 	// User retruns the struct to the user the device is associated with.
 	User() User
 
-	// Key returns the secret key that is uses for device authentication in the device api.
+	// Key returns the secret key that is used for device authentication in the device api.
 	Key() []byte
 
 	// Name returns the name given to the current device.
