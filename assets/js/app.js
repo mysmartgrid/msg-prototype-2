@@ -933,7 +933,7 @@ var SensorValueStore = (function () {
         }
         this._sensorMap[deviceId][sensorId] = index;
         this._series.push({
-            line: {
+            lines: {
                 color: this._pickColor(),
             },
             data: []
@@ -1004,7 +1004,7 @@ var SensorValueStore = (function () {
             colors[deviceId] = {};
             for (var sensorId in this._sensorMap[deviceId]) {
                 var index = this._sensorMap[deviceId][sensorId];
-                colors[deviceId][sensorId] = this._series[index].line.color;
+                colors[deviceId][sensorId] = this._series[index].lines.color;
             }
         }
         return colors;
