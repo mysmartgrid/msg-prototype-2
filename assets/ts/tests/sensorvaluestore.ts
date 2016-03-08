@@ -1,10 +1,5 @@
-/// <reference path="qunit/qunit.d.ts" />
-
-/// <reference path="../sensorvaluestore.ts"/>
-/// <reference path="../msg2socket.ts"/>
-/// <reference path="../common.ts"/>
-
-"use strict";
+import * as Store from '../lib/sensorvaluestore';
+import * as Utils from '../lib/utils';
 
 function errorCompare(msg : string) : (error : Error) => boolean {
 	return function(error : Error) : boolean {
@@ -22,8 +17,10 @@ QUnit.test("Constructor test", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
 	var data = store.getData();
-
 	assert.ok(data.length === 0, "The new store should be empty");
+
+	var colors = store.getColors();
+	assert.ok(Object.keys(colors).length === 0, "Color mapping should be empty");
 });
 
 
@@ -38,10 +35,15 @@ QUnit.test("Add sensor", function(assert : QUnitAssert) : void {
 
 	var data = store.getData();
 	assert.ok(data.length === 1, "There should be one timeseries");
-	assert.ok(data[0].line !== undefined, "The series should have a line property");
-	assert.ok(data[0].line.color !== undefined, "The series should have a line.color property");
+	assert.ok(data[0].lines !== undefined, "The series should have a line property");
+	assert.ok(data[0].lines.color !== undefined, "The series should have a line.color property");
 	assert.ok(data[0].data !== undefined, "The series should have a data array");
 	assert.ok(data[0].data.length === 0, "The data array should be empty");
+
+	var colors = store.getColors();
+	assert.ok(colors["ADevice"] !== undefined, "Device should be present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor"] !== undefined, "Sensor should be present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor"] === data[0].lines.color, "Color mapping should match line.color in series");
 })
 
 
@@ -71,6 +73,13 @@ QUnit.test("Remove sensor", function(assert : QUnitAssert) : void {
 	var data = store.getData();
 	assert.ok(data.length === 2, "There should still be 2 timeseries left.");
 
+	var colors = store.getColors();
+	assert.ok(colors["ADevice"] !== undefined, "Device should be present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor1"] !== undefined, "Sensor1 should be present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor1"] === data[0].lines.color, "Color mapping should match line.color in series");
+	assert.ok(colors["ADevice"]["ASensor2"] === undefined, "Sensor2 should no longer present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor3"] !== undefined, "Sensor3 should be present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor3"] === data[1].lines.color, "Color mapping should match line.color in series");
 });
 
 
@@ -100,7 +109,7 @@ QUnit.test("Add single value", function(assert : QUnitAssert) : void {
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
 
 	var data = store.getData();
@@ -114,7 +123,7 @@ QUnit.test("Add two values with different timestamps", function(assert : QUnitAs
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
 	store.addValue("ADevice", "ASensor1", timestamp - 1000, 84);
 
@@ -128,7 +137,7 @@ QUnit.test("Add values with same imestamps", function(assert : QUnitAssert) : vo
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 
 	store.addValue("ADevice", "ASensor1", timestamp - 3000, 23);
 	store.addValue("ADevice", "ASensor1", timestamp - 1000, 666);
@@ -159,7 +168,7 @@ QUnit.test("Clamp data - slinding window", function(assert : QUnitAssert) : void
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 	var oldTimestamp = timestamp - 6 * 60 * 1000;
 	store.addValue("ADevice", "ASensor1", oldTimestamp , 23);
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
@@ -209,7 +218,7 @@ QUnit.test("Test timeout past", function(assert : QUnitAssert) : void {
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 	var oldTimestamp = timestamp - 3 * 60 * 1000;
 	var middleTimestamp = timestamp - 1 * 60 * 1000;
 	store.addValue("ADevice", "ASensor1", oldTimestamp , 23);
@@ -234,7 +243,7 @@ QUnit.test("Test timeout future", function(assert : QUnitAssert) : void {
 
 	store.addSensor("ADevice", "ASensor1");
 
-	var timestamp = Common.now();
+	var timestamp = Utils.now();
 	var oldTimestamp = timestamp - 3 * 60 * 1000;
 	var middleTimestamp = timestamp - 1 * 60 * 1000;
 	store.addValue("ADevice", "ASensor1", timestamp, 42);
@@ -264,8 +273,8 @@ QUnit.test("Remove past timeout, reinsert in future", function(assert : QUnitAss
 	store.addSensor("ADevice", "ASensor1");
 
 
-	var lastTimestamp = Common.now();
-	var firstTimestamp = Common.now() - 60 * 1000;
+	var lastTimestamp = Utils.now();
+	var firstTimestamp = Utils.now() - 60 * 1000;
 	var middleTimestamp = firstTimestamp + 9 * 1000;
 
 	store.addValue("ADevice", "ASensor1", lastTimestamp, 0);
