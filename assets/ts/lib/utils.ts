@@ -6,17 +6,17 @@ export function contains<U>(haystack : U[], needle : U) : boolean {
 }
 
 export function remove<U>(haystack : U[], needle : U) : void {
-    var i = this.indexOf(needle);
+    var i = haystack.indexOf(needle);
     if(i !== -1) {
-        this.splice(i,1);
+        haystack.splice(i,1);
     }
 }
 
 export function removeWhere<U>(haystack : U[], pred: (element : U) => boolean) {
-    var i = this.findIndex(pred);
+    var i = haystack.findIndex(pred);
     while(i !== -1) {
-        this.splice(i,1);
-        var i = this.findIndex(pred);
+        haystack.splice(i,1);
+        i = haystack.findIndex(pred);
     }
 }
 

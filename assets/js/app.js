@@ -949,6 +949,13 @@ var SensorValueStore = (function () {
         }
         this._series.splice(index, 1);
         delete this._sensorMap[deviceId][sensorId];
+        for (deviceId in this._sensorMap) {
+            for (sensorId in this._sensorMap[deviceId]) {
+                if (this._sensorMap[deviceId][sensorId] > index) {
+                    this._sensorMap[deviceId][sensorId] -= 1;
+                }
+            }
+        }
     };
     SensorValueStore.prototype._findInsertionPos = function (data, timestamp) {
         for (var pos = 0; pos < data.length; pos++) {
@@ -1431,17 +1438,17 @@ function contains(haystack, needle) {
 }
 exports.contains = contains;
 function remove(haystack, needle) {
-    var i = this.indexOf(needle);
+    var i = haystack.indexOf(needle);
     if (i !== -1) {
-        this.splice(i, 1);
+        haystack.splice(i, 1);
     }
 }
 exports.remove = remove;
 function removeWhere(haystack, pred) {
-    var i = this.findIndex(pred);
+    var i = haystack.findIndex(pred);
     while (i !== -1) {
-        this.splice(i, 1);
-        var i = this.findIndex(pred);
+        haystack.splice(i, 1);
+        i = haystack.findIndex(pred);
     }
 }
 exports.removeWhere = removeWhere;

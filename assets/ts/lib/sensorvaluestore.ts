@@ -116,7 +116,7 @@ export class SensorValueStore {
 	}
 
 	public removeSensor(deviceId : string, sensorId : string) {
-		var index : number = this._getSensorIndex(deviceId, sensorId);
+		var index = this._getSensorIndex(deviceId, sensorId);
 
 		if(index === -1) {
 			throw new Error("No such sensor");
@@ -124,6 +124,15 @@ export class SensorValueStore {
 
 		this._series.splice(index,1);
 		delete this._sensorMap[deviceId][sensorId];
+
+		// Update remaining indices
+		for(deviceId in this._sensorMap) {
+			for(sensorId in this._sensorMap[deviceId]) {
+				if(this._sensorMap[deviceId][sensorId] > index) {
+					this._sensorMap[deviceId][sensorId] -= 1;
+				}
+			}
+		}
 	}
 
 

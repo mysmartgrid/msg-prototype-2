@@ -17,8 +17,10 @@ QUnit.test("Constructor test", function(assert : QUnitAssert) : void {
 	var store = new Store.SensorValueStore();
 
 	var data = store.getData();
-
 	assert.ok(data.length === 0, "The new store should be empty");
+
+	var colors = store.getColors();
+	assert.ok(Object.keys(colors).length === 0, "Color mapping should be empty");
 });
 
 
@@ -37,6 +39,11 @@ QUnit.test("Add sensor", function(assert : QUnitAssert) : void {
 	assert.ok(data[0].line.color !== undefined, "The series should have a line.color property");
 	assert.ok(data[0].data !== undefined, "The series should have a data array");
 	assert.ok(data[0].data.length === 0, "The data array should be empty");
+
+	var colors = store.getColors();
+	assert.ok(colors["ADevice"] !== undefined, "Device should be present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor"] !== undefined, "Sensor should be present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor"] === data[0].line.color, "Color mapping should match line.color in series");
 })
 
 
@@ -66,6 +73,13 @@ QUnit.test("Remove sensor", function(assert : QUnitAssert) : void {
 	var data = store.getData();
 	assert.ok(data.length === 2, "There should still be 2 timeseries left.");
 
+	var colors = store.getColors();
+	assert.ok(colors["ADevice"] !== undefined, "Device should be present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor1"] !== undefined, "Sensor1 should be present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor1"] === data[0].line.color, "Color mapping should match line.color in series");
+	assert.ok(colors["ADevice"]["ASensor2"] === undefined, "Sensor2 should no longer present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor3"] !== undefined, "Sensor3 should be present in color mapping");
+	assert.ok(colors["ADevice"]["ASensor3"] === data[1].line.color, "Color mapping should match line.color in series");
 });
 
 
