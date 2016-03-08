@@ -32,7 +32,7 @@
 			<div class="form-group">
 				<label for="sensors" class="col-sm-3 control-label">Sensors</label>
 				<div class="col-sm-9">
-					<select class="form-control"
+					<select id="sensors" class="form-control"
 						ng-options="devices[sensor.deviceID].name + ' : ' + devices[sensor.deviceID].sensors[sensor.sensorID].name for sensor in sensorsByUnit[config.unit]"
 						ng-model="config.sensors" multiple>
 					</select>
@@ -70,15 +70,15 @@
 		</form>
 	</div>
     <div class="modal-footer">
-    	<button class="btn btn-primary" type="button" ng-click="ok()">Save</button>
-        <button class="btn btn-warning" type="button" ng-click="cancel()">Cancel</button>
+    	<button id="save" class="btn btn-primary" type="button" ng-click="ok()">Save</button>
+        <button id="cancel" class="btn btn-warning" type="button" ng-click="cancel()">Cancel</button>
     </div>
 </script>
 
 <div style="width: 100%; height: 400px" class="sensor-graph">
 </div>
 
-<button class="btn btn-primary" ng-click="openSettings()">
+<button id="settings" class="btn btn-primary" ng-click="openSettings()">
 	<span class="glyphicon glyphicon-cog"></span>
 	Settings
 </button>
