@@ -44,8 +44,8 @@ type WsAPIContext struct {
 	devMtx  sync.RWMutex
 }
 
-// RegisterDevice registers a new device, accesable via WsDevAPI at the API context.
-// Returns the currently associated API and an error if the device is aready registered
+// RegisterDevice registers a new device, accessible via WsDevAPI at the API context.
+// Returns the currently associated API and an error if the device is already registered
 // or just the given API otherwise.
 func (ctx *WsAPIContext) RegisterDevice(dev *WsDevAPI) (*WsDevAPI, error) {
 	ctx.devMtx.Lock()
