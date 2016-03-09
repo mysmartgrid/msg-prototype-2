@@ -53,29 +53,29 @@ type Device struct {
 var deviceNotRegistered = errors.New("device not registered")
 
 var sensorDefinitons = [...]Sensor{
-	Sensor{Name: "Voltage L1", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Voltage L2", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Voltage L3", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Voltage L1", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Voltage L2", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Voltage L3", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 
-	Sensor{Name: "Current L1", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Current L2", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Current L3", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Current L1", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Current L2", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Current L3", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 
-	Sensor{Name: "Power L1", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Power L2", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Power L3", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power L1", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power L2", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power L3", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 
-	Sensor{Name: "Import L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Import L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Import L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Import L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Import L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Import L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 
-	Sensor{Name: "Export L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Export L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Export L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Export L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Export L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Export L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 
-	Sensor{Name: "Power Factor L1", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Power Factor L2", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Power Factor L3", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power Factor L1", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power Factor L2", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power Factor L3", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 }
 
 func (dev *Device) client() *msgp.DeviceClient {
@@ -374,7 +374,7 @@ func (dev *Device) UpdateSensors() error {
 
 func (dev *Device) SendRandomUpdates(interval time.Duration, count int64) error {
 	for ; count != 0; count-- {
-		for id, _ := range dev.Sensors {
+		for id := range dev.Sensors {
 			values := make(map[string][]msgp.Measurement, len(dev.Sensors))
 			values[id] = []msgp.Measurement{{time.Now(), rand.Float64()}}
 			if err := dev.client().Update(values); err != nil {
@@ -480,7 +480,7 @@ func (dev *Device) RenameSensors() error {
 }
 
 func (dev *Device) ReplaceSensors() error {
-	for id, _ := range dev.Sensors {
+	for id := range dev.Sensors {
 		err := dev.client().RemoveSensor(id)
 		switch e := err.(type) {
 		case *msgp.Error:

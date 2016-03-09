@@ -725,9 +725,9 @@ func api_User_Device_Sensor_Props_Set(w http.ResponseWriter, r *http.Request) {
 
 		apiCtx.Hub.Publish(user.Id(), msg2api.UserEventMetadataArgs{
 			Devices: map[string]msg2api.DeviceMetadata{
-				devId: msg2api.DeviceMetadata{
+				devId: {
 					Sensors: map[string]msg2api.SensorMetadata{
-						sensId: msg2api.SensorMetadata{
+						sensId: {
 							Name: &conf.Name,
 						},
 					},

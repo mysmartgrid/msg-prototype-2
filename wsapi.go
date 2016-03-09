@@ -275,9 +275,9 @@ func (api *WsDevApi) doAddSensor(name, unit string, port int32) *msg2api.Error {
 		}
 		api.ctx.Hub.Publish(api.User, msg2api.UserEventMetadataArgs{
 			Devices: map[string]msg2api.DeviceMetadata{
-				api.Device: msg2api.DeviceMetadata{
+				api.Device: {
 					Sensors: map[string]msg2api.SensorMetadata{
-						name: msg2api.SensorMetadata{
+						name: {
 							Name: &name,
 							Unit: &unit,
 							Port: &port,
@@ -297,7 +297,7 @@ func (api *WsDevApi) doRemoveSensor(name string) *msg2api.Error {
 		}
 		api.ctx.Hub.Publish(api.User, msg2api.UserEventMetadataArgs{
 			Devices: map[string]msg2api.DeviceMetadata{
-				api.Device: msg2api.DeviceMetadata{
+				api.Device: {
 					DeletedSensors: map[string]*string{
 						name: nil,
 					},
