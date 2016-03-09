@@ -8,7 +8,7 @@ import (
 // Tx provides a set of operations to interact with the database through the Db's 'Open' and 'View' methods.
 type Tx interface {
 	AddDevice(id string, key []byte) error
-	Device(devId string) RegisteredDevice
+	Device(devID string) RegisteredDevice
 	Devices() map[string]RegisteredDevice
 }
 
@@ -130,7 +130,7 @@ func (hb *Heartbeat) UnmarshalJSON(raw []byte) error {
 // RegisteredDevice provides methods to manage a device registered in the device database.
 type RegisteredDevice interface {
 	// Id returns the unique device id identifyin the device.
-	Id() string
+	ID() string
 	// Key returns the secret key that is used for device authentication.
 	Key() []byte
 

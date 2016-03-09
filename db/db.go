@@ -14,11 +14,8 @@ const (
 )
 
 var (
-	InvalidId = errors.New("id invalid")
-	IdExists  = errors.New("id exists")
-
-	noSensor            = errors.New("sensor not found")
-	deviceNotRegistered = errors.New("device not registered")
+	// ErrIDExists is returned after an attempt to insert a new object into the DB using an id which already exists in the DB.
+	ErrIDExists = errors.New("id exists")
 )
 
 type db struct {
@@ -192,6 +189,6 @@ func (db *db) Update(fn func(Tx) error) error {
 }
 
 func (db *db) AddReading(sensor Sensor, time time.Time, value float64) error {
-	db.bufferInput <- bufferValue{sensor.DbId(), msg2api.Measurement{time, value}}
+	db.bufferInput <- bufferValue{sensor.DbID(), msg2api.Measurement{time, value}}
 	return nil
 }

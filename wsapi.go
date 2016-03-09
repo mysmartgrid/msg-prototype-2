@@ -18,13 +18,11 @@ import (
 )
 
 var (
-	notAuthorized    = errors.New("not authorized")
-	apiNotAuthorized = &msg2api.Error{Code: notAuthorized.Error()}
+	errNotAuthorized    = errors.New("not authorized")
+	errAPINotAuthorized = &msg2api.Error{Code: errNotAuthorized.Error()}
 
-	deviceNotRegistered     = errors.New("device not registered")
-	deviceAlreadyRegistered = errors.New("device already registered")
-
-	noRealtime = errors.New("no realtime support for this resolution")
+	errDeviceNotRegistered     = errors.New("device not registered")
+	errDeviceAlreadyRegistered = errors.New("device already registered")
 )
 
 type measurementWithMetadata struct {
@@ -34,57 +32,57 @@ type measurementWithMetadata struct {
 	Resolution     string
 }
 
-type WsApiContext struct {
+type WsAPIContext struct {
 	Db  db.Db
 	Hub *hub.Hub
 
-	devices map[string]*WsDevApi
+	devices map[string]*WsDevAPI
 	devMtx  sync.RWMutex
 }
 
-func (ctx *WsApiContext) RegisterDevice(dev *WsDevApi) (error, *WsDevApi) {
+func (ctx *WsAPIContext) RegisterDevice(dev *WsDevAPI) (*WsDevAPI, error) {
 	ctx.devMtx.Lock()
 	defer ctx.devMtx.Unlock()
 
 	if ctx.devices == nil {
-		ctx.devices = make(map[string]*WsDevApi)
+		ctx.devices = make(map[string]*WsDevAPI)
 	}
 
 	if ctx.devices[dev.Device] != nil {
-		return deviceAlreadyRegistered, ctx.devices[dev.Device]
+		return ctx.devices[dev.Device], errDeviceAlreadyRegistered
 	}
 
 	ctx.devices[dev.Device] = dev
 	dev.ctx = ctx
 
-	return nil, dev
+	return dev, nil
 }
 
-func (ctx *WsApiContext) WithDevice(device string, fn func(dev *WsDevApi) error) error {
+func (ctx *WsAPIContext) WithDevice(device string, fn func(dev *WsDevAPI) error) error {
 	ctx.devMtx.RLock()
 	defer ctx.devMtx.RUnlock()
 
 	dev := ctx.devices[device]
 	if dev == nil {
-		return deviceNotRegistered
+		return errDeviceNotRegistered
 	}
 
 	return fn(dev)
 }
 
-func (ctx *WsApiContext) RemoveDevice(dev *WsDevApi) error {
+func (ctx *WsAPIContext) RemoveDevice(dev *WsDevAPI) error {
 	ctx.devMtx.Lock()
 	defer ctx.devMtx.Unlock()
 
 	if ctx.devices[dev.Device] == nil {
-		return deviceNotRegistered
+		return errDeviceNotRegistered
 	}
 	delete(ctx.devices, dev.Device)
 	return nil
 }
 
-type WsDevApi struct {
-	ctx    *WsApiContext
+type WsDevAPI struct {
+	ctx    *WsAPIContext
 	server *msg2api.DeviceServer
 
 	lastRealtimeUpdateRequest time.Time
@@ -98,19 +96,19 @@ type WsDevApi struct {
 	PostClient *http.Client
 }
 
-func (api *WsDevApi) Run() error {
+func (api *WsDevAPI) Run() error {
 	var key []byte
 
 	err := api.ctx.Db.View(func(tx db.Tx) error {
 		user := tx.User(api.User)
 		if user == nil {
-			http.Error(api.Writer, notAuthorized.Error(), http.StatusUnauthorized)
-			return notAuthorized
+			http.Error(api.Writer, errNotAuthorized.Error(), http.StatusUnauthorized)
+			return errNotAuthorized
 		}
 		device := user.Device(api.Device)
 		if device == nil {
-			http.Error(api.Writer, notAuthorized.Error(), http.StatusUnauthorized)
-			return notAuthorized
+			http.Error(api.Writer, errNotAuthorized.Error(), http.StatusUnauthorized)
+			return errNotAuthorized
 		}
 		key = device.Key()
 		key = append(make([]byte, 0, len(key)), key...)
@@ -133,29 +131,29 @@ func (api *WsDevApi) Run() error {
 	return api.server.Run(key)
 }
 
-func (api *WsDevApi) RequestRealtimeUpdates(req msg2api.DeviceCmdRequestRealtimeUpdatesArgs) {
+func (api *WsDevAPI) RequestRealtimeUpdates(req msg2api.DeviceCmdRequestRealtimeUpdatesArgs) {
 	if time.Now().Sub(api.lastRealtimeUpdateRequest) >= 25*time.Second && len(req) > 0 {
 		api.server.RequestRealtimeUpdates(req)
 		api.lastRealtimeUpdateRequest = time.Now()
 	}
 }
 
-func (api *WsDevApi) Close() {
+func (api *WsDevAPI) Close() {
 	if api.server != nil {
 		api.server.Close()
 	}
 }
 
-func (api *WsDevApi) viewDevice(fn func(tx db.Tx, user db.User, device db.Device) *msg2api.Error) (err *msg2api.Error) {
+func (api *WsDevAPI) viewDevice(fn func(tx db.Tx, user db.User, device db.Device) *msg2api.Error) (err *msg2api.Error) {
 	api.ctx.Db.View(func(tx db.Tx) error {
 		u := tx.User(api.User)
 		if u == nil {
-			err = apiNotAuthorized
+			err = errAPINotAuthorized
 			return err
 		}
 		d := u.Device(api.Device)
 		if d == nil {
-			err = apiNotAuthorized
+			err = errAPINotAuthorized
 			return err
 		}
 		err = fn(tx, u, d)
@@ -167,16 +165,16 @@ func (api *WsDevApi) viewDevice(fn func(tx db.Tx, user db.User, device db.Device
 	return
 }
 
-func (api *WsDevApi) updateDevice(fn func(tx db.Tx, user db.User, device db.Device) *msg2api.Error) (err *msg2api.Error) {
+func (api *WsDevAPI) updateDevice(fn func(tx db.Tx, user db.User, device db.Device) *msg2api.Error) (err *msg2api.Error) {
 	api.ctx.Db.Update(func(tx db.Tx) error {
 		u := tx.User(api.User)
 		if u == nil {
-			err = apiNotAuthorized
+			err = errAPINotAuthorized
 			return err
 		}
 		d := u.Device(api.Device)
 		if d == nil {
-			err = apiNotAuthorized
+			err = errAPINotAuthorized
 			return err
 		}
 		err = fn(tx, u, d)
@@ -188,7 +186,7 @@ func (api *WsDevApi) updateDevice(fn func(tx db.Tx, user db.User, device db.Devi
 	return
 }
 
-func (api *WsDevApi) postValuesToOldMSG(sensor string, values []msg2api.Measurement) *msg2api.Error {
+func (api *WsDevAPI) postValuesToOldMSG(sensor string, values []msg2api.Measurement) *msg2api.Error {
 	var buf bytes.Buffer
 	buf.WriteString(`{"measurements":[`)
 	writtenAny := false
@@ -231,7 +229,7 @@ func (api *WsDevApi) postValuesToOldMSG(sensor string, values []msg2api.Measurem
 	return nil
 }
 
-func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.Error {
+func (api *WsDevAPI) doUpdate(values map[string][]msg2api.Measurement) *msg2api.Error {
 	if len(values) != 1 {
 		return &msg2api.Error{Code: "invalid input", Extra: "exactly one sensor required"}
 	}
@@ -258,7 +256,7 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 				}
 
 				if time.Now().Sub(api.lastRealtimeUpdateRequest) < 40*time.Second {
-					api.ctx.Hub.Publish(api.User, measurementWithMetadata{device.Id(), s.Id(), value.Time, value.Value, "raw"})
+					api.ctx.Hub.Publish(api.User, measurementWithMetadata{device.ID(), s.ID(), value.Time, value.Value, "raw"})
 				}
 			}
 		}
@@ -267,7 +265,7 @@ func (api *WsDevApi) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 	})
 }
 
-func (api *WsDevApi) doAddSensor(name, unit string, port int32) *msg2api.Error {
+func (api *WsDevAPI) doAddSensor(name, unit string, port int32) *msg2api.Error {
 	return api.updateDevice(func(tx db.Tx, user db.User, device db.Device) *msg2api.Error {
 		_, err := device.AddSensor(name, unit, port)
 		if err != nil {
@@ -290,7 +288,7 @@ func (api *WsDevApi) doAddSensor(name, unit string, port int32) *msg2api.Error {
 	})
 }
 
-func (api *WsDevApi) doRemoveSensor(name string) *msg2api.Error {
+func (api *WsDevAPI) doRemoveSensor(name string) *msg2api.Error {
 	return api.updateDevice(func(tx db.Tx, user db.User, device db.Device) *msg2api.Error {
 		if err := device.RemoveSensor(name); err != nil {
 			return &msg2api.Error{Code: "operation failed", Extra: err.Error()}
@@ -308,7 +306,7 @@ func (api *WsDevApi) doRemoveSensor(name string) *msg2api.Error {
 	})
 }
 
-func (api *WsDevApi) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api.Error {
+func (api *WsDevAPI) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api.Error {
 	return api.updateDevice(func(tx db.Tx, user db.User, device db.Device) *msg2api.Error {
 		if metadata.Name != "" {
 			device.SetName(metadata.Name)
@@ -342,8 +340,8 @@ func (api *WsDevApi) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api
 	})
 }
 
-type WsUserApi struct {
-	Ctx    *WsApiContext
+type WsUserAPI struct {
+	Ctx    *WsAPIContext
 	server *msg2api.UserServer
 
 	User    string
@@ -351,7 +349,7 @@ type WsUserApi struct {
 	Request *http.Request
 }
 
-func (api *WsUserApi) Run() error {
+func (api *WsUserAPI) Run() error {
 	conn := api.Ctx.Hub.Connect()
 	defer conn.Close()
 	conn.Subscribe(api.User)
@@ -396,17 +394,17 @@ func (api *WsUserApi) Run() error {
 	return api.server.Run()
 }
 
-func (api *WsUserApi) Close() {
+func (api *WsUserAPI) Close() {
 	if api.server != nil {
 		api.server.Close()
 	}
 }
 
-func (api *WsUserApi) doGetMetadata() error {
+func (api *WsUserAPI) doGetMetadata() error {
 	return api.Ctx.Db.View(func(tx db.Tx) error {
 		user := tx.User(api.User)
 		if user == nil {
-			return notAuthorized
+			return errNotAuthorized
 		}
 		sensors := make(map[db.Device][]db.Sensor)
 		for _, dev := range user.Devices() {
@@ -428,7 +426,7 @@ func (api *WsUserApi) doGetMetadata() error {
 				name := sensor.Name()
 				unit := sensor.Unit()
 				port := sensor.Port()
-				meta[dev.Id()].Sensors[sid] = msg2api.SensorMetadata{
+				meta[dev.ID()].Sensors[sid] = msg2api.SensorMetadata{
 					Name: &name,
 					Unit: &unit,
 					Port: &port,
@@ -439,11 +437,11 @@ func (api *WsUserApi) doGetMetadata() error {
 	})
 }
 
-func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, sensors map[string][]string) error {
+func (api *WsUserAPI) doGetValues(since, until time.Time, resolution string, sensors map[string][]string) error {
 	return api.Ctx.Db.View(func(tx db.Tx) error {
 		user := tx.User(api.User)
 		if user == nil {
-			return notAuthorized
+			return errNotAuthorized
 		}
 
 		readings, err := user.LoadReadings(since, until, resolution, sensors)
@@ -478,13 +476,13 @@ func (api *WsUserApi) doGetValues(since, until time.Time, resolution string, sen
 	})
 }
 
-func (api *WsUserApi) doRequestRealtimeUpdates(sensors map[string][]string) error {
+func (api *WsUserAPI) doRequestRealtimeUpdates(sensors map[string][]string) error {
 	for dev, sensors := range sensors {
-		err := api.Ctx.WithDevice(dev, func(dev *WsDevApi) error {
+		err := api.Ctx.WithDevice(dev, func(dev *WsDevAPI) error {
 			dev.RequestRealtimeUpdates(sensors)
 			return nil
 		})
-		if err != nil && err != deviceNotRegistered {
+		if err != nil && err != errDeviceNotRegistered {
 			return err
 		}
 	}

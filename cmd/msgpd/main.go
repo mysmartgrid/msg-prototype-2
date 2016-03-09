@@ -79,7 +79,7 @@ var db msgpdb.Db
 var devdb regdev.Db
 var h = hub.New()
 
-var apiCtx msgp.WsApiContext
+var apiCtx msgp.WsAPIContext
 
 func init() {
 	flag.Parse()
@@ -205,7 +205,7 @@ func init() {
 		log.Fatal("error opening device db: ", err)
 	}
 
-	apiCtx = msgp.WsApiContext{Db: db, Hub: h}
+	apiCtx = msgp.WsAPIContext{Db: db, Hub: h}
 }
 
 func getSession(w http.ResponseWriter, r *http.Request) *sessions.Session {
@@ -255,7 +255,7 @@ func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 				removeSessionAndNotifyUser(w, r, session)
 				return nil
 			}
-			var url = scheme + r.Host + "/ws/user/" + user.Id() + "/" + session.Values["wsToken"].(string)
+			var url = scheme + r.Host + "/ws/user/" + user.ID() + "/" + session.Values["wsToken"].(string)
 			return templates.ExecuteTemplate(w, name, ctx{Ws: url, User: user})
 		})
 	})
@@ -276,7 +276,7 @@ func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	x := msgp.WsUserApi{
+	x := msgp.WsUserAPI{
 		Ctx:     &apiCtx,
 		User:    mux.Vars(r)["user"],
 		Writer:  w,
@@ -287,7 +287,7 @@ func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
-	x := msgp.WsDevApi{
+	x := msgp.WsDevAPI{
 		User:    mux.Vars(r)["user"],
 		Device:  mux.Vars(r)["device"],
 		Writer:  w,
@@ -616,9 +616,9 @@ func apiUserDevicesAdd(w http.ResponseWriter, r *http.Request) {
 			user := apiSessionUser(utx, session)
 			dev := apiDevice(dtx, devID)
 
-			apiAbortIf(400, dev.LinkTo(user.Id()))
+			apiAbortIf(400, dev.LinkTo(user.ID()))
 
-			_, err := user.AddDevice(dev.Id(), dev.Key(), false)
+			_, err := user.AddDevice(dev.ID(), dev.Key(), false)
 			apiAbortIf(500, err)
 
 			data := map[string]interface{}{
@@ -722,7 +722,7 @@ func apiUserDeviceSensorPropsSet(w http.ResponseWriter, r *http.Request) {
 		apiAbortIf(500, json.Unmarshal(data, &conf))
 		apiAbortIf(500, sens.SetName(conf.Name))
 
-		apiCtx.Hub.Publish(user.Id(), msg2api.UserEventMetadataArgs{
+		apiCtx.Hub.Publish(user.ID(), msg2api.UserEventMetadataArgs{
 			Devices: map[string]msg2api.DeviceMetadata{
 				devID: {
 					Sensors: map[string]msg2api.SensorMetadata{

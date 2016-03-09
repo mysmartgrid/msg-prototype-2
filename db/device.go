@@ -92,7 +92,7 @@ func (d *device) RemoveSensor(id string) error {
 	return err
 }
 
-func (d *device) Id() string {
+func (d *device) ID() string {
 	return d.id
 }
 

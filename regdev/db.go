@@ -6,11 +6,12 @@ import (
 )
 
 var (
-	InvalidId     = errors.New("id invalid")
-	IdExists      = errors.New("id exists")
-	AlreadyLinked = errors.New("already linked")
+	// ErrIDExists is returned after an attempt to insert a new object into the DB using an id which already exists in the DB.
+	ErrIDExists = errors.New("id exists")
+	// ErrAlreadyLinked is returned when trying to link a user to a device already associated with a user.
+	ErrAlreadyLinked = errors.New("already linked")
 
-	db_registeredDevices = []byte("registeredDevices")
+	dbRegisteredDevices = []byte("registeredDevices")
 )
 
 type db struct {
@@ -26,7 +27,7 @@ func Open(path string) (Db, error) {
 	}
 
 	store.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists(db_registeredDevices)
+		tx.CreateBucketIfNotExists(dbRegisteredDevices)
 		return nil
 	})
 

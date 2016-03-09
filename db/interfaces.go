@@ -96,10 +96,10 @@ type User interface {
 	Groups() map[string]Group
 
 	// IsGroupAdmin returns true if the current user is listed as an admin for the given group in the database, return false otherwise.
-	IsGroupAdmin(groupId string) bool
+	IsGroupAdmin(groupID string) bool
 
 	// Returns the id that identifies the current user in the database.
-	Id() string
+	ID() string
 
 	// LoadReadings loads measurements for the given timespan, resolution and sensors identified by device and id from the database, if they belong to the user.
 	// Returns a mapping device id to sensorid to Value arrays.
@@ -143,7 +143,7 @@ type Group interface {
 	GetSensors() []uint64
 
 	// Returns the id that identifies the current group in the database.
-	Id() string
+	ID() string
 }
 
 // Device provides a set of operations on devices as represented in the database.
@@ -169,7 +169,7 @@ type Device interface {
 	RemoveSensor(id string) error
 
 	// Id returns the device id that, in combination with the associated user, identifies the current device in the database.
-	Id() string
+	ID() string
 
 	// User retruns the struct to the user the device is associated with.
 	User() User
@@ -191,10 +191,10 @@ type Device interface {
 // It is meant to be used within the Update and View functions of a Db struct.
 type Sensor interface {
 	// Id return the sensor id the, in combination with the associated device, identifies the sensor.
-	Id() string
+	ID() string
 
 	// DbId returns the unique id the sensor has in the database.
-	DbId() uint64
+	DbID() uint64
 
 	// Device returns the struct to the device the sensor is associated with.
 	Device() Device
