@@ -94,7 +94,7 @@ type WsDevApi struct {
 	Request      *http.Request
 
 	Key        []byte
-	PostUrl    string
+	PostURL    string
 	PostClient *http.Client
 }
 
@@ -204,7 +204,7 @@ func (api *WsDevApi) postValuesToOldMSG(sensor string, values []msg2api.Measurem
 	mac := hmac.New(sha1.New, api.Key)
 	mac.Write(buf.Bytes())
 
-	req, err := http.NewRequest("POST", api.PostUrl+sensor, &buf)
+	req, err := http.NewRequest("POST", api.PostURL+sensor, &buf)
 	if err != nil {
 		return &msg2api.Error{Code: "operation failed", Extra: err.Error()}
 	}
