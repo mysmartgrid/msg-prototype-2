@@ -7,11 +7,11 @@ type sensor struct {
 	isVirtual bool
 }
 
-func (s *sensor) Id() string {
+func (s *sensor) ID() string {
 	return s.id
 }
 
-func (s *sensor) DbId() uint64 {
+func (s *sensor) DbID() uint64 {
 	return s.seq
 }
 

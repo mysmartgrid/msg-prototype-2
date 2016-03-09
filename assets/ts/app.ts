@@ -1,17 +1,11 @@
-/// <reference path="jquery.d.ts" />
-/// <reference path="angular.d.ts" />
-/// <reference path="bootstrap.d.ts" />
+import * as Msg2Socket from './lib/msg2socket';
+import * as UpdateDispatcher from './lib/updatedispatcher';
 
-/// <reference path="msg2socket.ts" />
-/// <reference path="updatedispatcher.ts"/>
-/// <reference path="sensorvaluestore.ts" />
+import NumberSpinnerFactory from './directives/ui-elements/numberspinner';
+import TimeRangeSpinnerFactory from './directives/ui-elements/timerangespinner';
+import DateTimePickerFactory from './directives/ui-elements/datetimepicker';
+import SensorGraphFactory from './directives/sensorgraph';
 
-/// <reference path="ui-elements/numberspinner.ts"/>
-/// <reference path="ui-elements/timerangespinner.ts"/>
-/// <reference path="ui-elements/datetimepicker.ts"/>
-/// <reference path="sensorgraph.ts"/>
-
-"use strict";
 
 
 angular.module("msgp", ['ui.bootstrap'])
@@ -25,10 +19,10 @@ angular.module("msgp", ['ui.bootstrap'])
 	return new Msg2Socket.Socket($rootScope);
 }])
 .factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
-.directive("numberSpinner", Directives.UserInterface.NumberSpinnerFactory())
-.directive("timeRangeSpinner", Directives.UserInterface.TimeRangeSpinnerFactory())
-.directive("dateTimePicker", Directives.UserInterface.DateTimePickerFactory())
-.directive("sensorGraph", Directives.SensorGraphFactory())
+.directive("numberSpinner", NumberSpinnerFactory())
+.directive("timeRangeSpinner", TimeRangeSpinnerFactory())
+.directive("dateTimePicker", DateTimePickerFactory())
+.directive("sensorGraph", SensorGraphFactory())
 .directive("deviceEditor", [function() {
 	return {
 		restrict: "A",

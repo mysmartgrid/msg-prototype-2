@@ -110,6 +110,6 @@ func (g *group) GetSensors() []uint64 {
 	return result
 }
 
-func (g *group) Id() string {
+func (g *group) ID() string {
 	return g.id
 }

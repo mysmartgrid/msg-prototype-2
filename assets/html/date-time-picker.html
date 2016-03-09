@@ -5,9 +5,10 @@
                 <input class="form-control"
                     id="intervalStart"
                     type="date"
-                    uib-datepicker-popup
+                    uib-datepicker-popup=""
                     is-open="pickerOpen"
                     ng-model="date"
+                    datepicker-options="pickerOptions"
                     ng-change="change()"/>
                 <span class="input-group-btn">
                     <button type="button" class="btn btn-default" ng-click="pickerOpen = true"><i class="glyphicon glyphicon-calendar"></i></button>
@@ -19,6 +20,7 @@
                 <div uib-timepicker=""
                     ng-model="date"
                     ng-change="change()"
+                    ng-disabled="disableTimepicker"
                     show-meridian="false">
                 </div>
             </div>

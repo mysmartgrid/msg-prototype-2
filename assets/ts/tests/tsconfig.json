@@ -1,12 +1,26 @@
 {
     "compilerOptions": {
-        "out": "./tests.js",
+        "outDir": "js_modules/",
         "target": "es5",
-        "sourceMap": true
+        "module": "commonjs"
+    },
+    "filesGlob": [
+        "**/*.ts",
+        "../definitions/es6-shim.d.ts",
+        "../lib/sensorvaluestore.ts",
+        "../lib/utils.ts"
+    ],
+    "scripts": {
+        "postbuild": "bash postbuild"
+    },
+    "atom": {
+        "rewriteTsconfig": true
     },
     "files": [
+        "qunit/qunit.d.ts",
         "sensorvaluestore.ts",
-        "../sensorvaluestore.ts",
-        "../common.ts"
+        "../definitions/es6-shim.d.ts",
+        "../lib/sensorvaluestore.ts",
+        "../lib/utils.ts"
     ]
 }

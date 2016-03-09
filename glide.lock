@@ -1,26 +1,26 @@
 hash: e804db3c0689aa3edf8a4d0567831ff4ec63312a7a425a31ed51731fb13373f5
-updated: 2016-02-23T17:13:21.137704003+01:00
+updated: 2016-03-09T15:59:45.849842022+01:00
 imports:
 - name: github.com/boltdb/bolt
-  version: 2f846c3551b76d7710f159be840d66c3d064abbe
+  version: b514920f8f2e0a68f857e5a12c774f385a59aef9
 - name: github.com/BurntSushi/toml
-  version: a4eecd407cf4129fc902ece859a0114e4cf1a7f4
+  version: bbd5bb678321a0d6e58f1099321dfa73391c1b6f
 - name: github.com/goburrow/modbus
   version: 2abd4f3eb317bb103b1943a9edc24fc39c69a9a0
 - name: github.com/goburrow/serial
   version: 709ae907b909ef40d069bb36d5f46c83f3fac5bd
 - name: github.com/gorilla/context
-  version: 1c83b3eabd45b6d76072b66b746c20815fb2872d
+  version: 1ea25387ff6f684839d82767c1733ff4d4d15d0a
 - name: github.com/gorilla/mux
-  version: 26a6070f849969ba72b72256e9f14cf519751690
+  version: acf3be1b335c8ce30b2c8d51300984666f0ceefa
 - name: github.com/gorilla/securecookie
-  version: e95799a481bbcc3d01c2ad5178524cb8bec9f370
+  version: 8dacca26977607e637262eb66b15b7d39f2d3009
 - name: github.com/gorilla/sessions
-  version: 715060ac0b7d99d95d1600df329f5da94809023a
+  version: 8cd570d8b4ed84b18bca9d8c3ae2db55885ccd8b
 - name: github.com/gorilla/websocket
-  version: 5c91b59efa232fa9a87b705d54101832c498a172
+  version: c45a635370221f34fea2d5163fd156fcb4e38e8a
 - name: github.com/lib/pq
-  version: 69552e54d2a9d4c6a2438926a774930f7bc398ec
+  version: 165a3529e799da61ab10faed1fabff3662d6193f
   subpackages:
   - oid
 - name: github.com/mattn/go-runewidth
@@ -28,18 +28,18 @@ imports:
 - name: github.com/mysmartgrid/gosdm630
   version: 86eb43b315da162ceaf8e7756ab2c3e52ac89b52
 - name: github.com/mysmartgrid/msg2api
-  version: 916a6265e61ee53aa74e62f2b0482732dcb539ee
+  version: 26e25a44529bd9450661171c4b4058649d85ba25
 - name: github.com/olekukonko/tablewriter
   version: cca8bbc0798408af109aaaa239cbd2634846b340
 - name: github.com/zfjagann/golang-ring
   version: 17637388c9f6665e2f475e4beec439e6fc19fee9
 - name: golang.org/x/crypto
-  version: 1f22c0103821b9390939b6776727195525381532
+  version: 5dc8cb4b8a8eb076cbb5a06bc3b8682c15bdbbd3
   subpackages:
   - bcrypt
   - blowfish
 - name: golang.org/x/sys
-  version: 5eaf0df67e70d6997a9fe0ed24383fa1b01638d3
+  version: 7a56174f0086b32866ebd746a794417edbc678a1
   subpackages:
   - unix
 devImports: []

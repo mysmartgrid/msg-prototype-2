@@ -27,60 +27,60 @@ import (
 
 var useSSL bool
 var tlsConfig tls.Config
-var dev *Device
+var dev *device
 
-type Sensor struct {
+type sensor struct {
 	Name                string
 	Unit                string
 	Port                int32
 	LastRealtimeRequest time.Time
 }
 
-type Device struct {
-	Id  string
+type device struct {
+	ID  string
 	Key []byte
 
 	User string
 
-	Sensors map[string]Sensor
+	Sensors map[string]sensor
 
-	api     string
-	client_ *msgp.DeviceClient
+	api    string
+	client *msgp.DeviceClient
 
-	regdevApi string
+	regdevAPI string
 }
 
-var deviceNotRegistered = errors.New("device not registered")
+var errDeviceNotRegistered = errors.New("device not registered")
 
-var sensorDefinitons = [...]Sensor{
-	Sensor{Name: "Voltage L1", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Voltage L2", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Voltage L3", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+var sensorDefinitons = [...]sensor{
+	{Name: "Voltage L1", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Voltage L2", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Voltage L3", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 
-	Sensor{Name: "Current L1", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Current L2", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Current L3", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Current L1", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Current L2", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Current L3", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 
-	Sensor{Name: "Power L1", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Power L2", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Power L3", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power L1", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power L2", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power L3", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 
-	Sensor{Name: "Import L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Import L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Import L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Import L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Import L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Import L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 
-	Sensor{Name: "Export L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Export L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Export L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Export L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Export L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Export L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 
-	Sensor{Name: "Power Factor L1", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Power Factor L2", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	Sensor{Name: "Power Factor L3", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power Factor L1", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power Factor L2", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power Factor L3", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
 }
 
-func (dev *Device) client() *msgp.DeviceClient {
-	if dev.client_ == nil {
-		client, err := msgp.NewDeviceClient(dev.api+"/"+dev.User+"/"+dev.Id, dev.Key, &tlsConfig)
+func (dev *device) getClient() *msgp.DeviceClient {
+	if dev.client == nil {
+		client, err := msgp.NewDeviceClient(dev.api+"/"+dev.User+"/"+dev.ID, dev.Key, &tlsConfig)
 		if err != nil {
 			log.Fatalf("Device::client: %v", err.Error())
 		}
@@ -94,13 +94,13 @@ func (dev *Device) client() *msgp.DeviceClient {
 			}
 		}
 
-		dev.client_ = client
+		dev.client = client
 	}
 
-	return dev.client_
+	return dev.client
 }
 
-func newRandomDevice() *Device {
+func newRandomDevice() *device {
 	var buf [32]byte
 
 	_, err := crand.Read(buf[:])
@@ -108,13 +108,13 @@ func newRandomDevice() *Device {
 		log.Fatalf("rand read: %v", err.Error())
 	}
 
-	return &Device{
-		Id:  hex.EncodeToString(buf[0:16]),
+	return &device{
+		ID:  hex.EncodeToString(buf[0:16]),
 		Key: buf[16:32],
 	}
 }
 
-func newSDM630Device() *Device {
+func newSDM630Device() *device {
 	var buf [32]byte
 
 	_, err := crand.Read(buf[:])
@@ -122,10 +122,10 @@ func newSDM630Device() *Device {
 		log.Fatalf("rand read: %v", err.Error())
 	}
 
-	device := Device{
-		Id:      hex.EncodeToString(buf[0:16]),
+	device := device{
+		ID:      hex.EncodeToString(buf[0:16]),
 		Key:     buf[16:32],
-		Sensors: make(map[string]Sensor),
+		Sensors: make(map[string]sensor),
 	}
 
 	for _, sensor := range sensorDefinitons {
@@ -147,9 +147,9 @@ func newSDM630Device() *Device {
 	return &device
 }
 
-func (dev *Device) GenerateRandomSensors(count int64) {
+func (dev *device) generateRandomSensors(count int64) {
 	if dev.Sensors == nil {
-		dev.Sensors = make(map[string]Sensor)
+		dev.Sensors = make(map[string]sensor)
 	}
 
 	for count > 0 {
@@ -164,7 +164,7 @@ func (dev *Device) GenerateRandomSensors(count int64) {
 			continue
 		}
 
-		dev.Sensors[id] = Sensor{
+		dev.Sensors[id] = sensor{
 			Name: fmt.Sprintf("Sensor %v", count),
 			Unit: []string{"U1", "U2"}[rand.Int31n(2)],
 			Port: int32(len(dev.Sensors)),
@@ -173,8 +173,8 @@ func (dev *Device) GenerateRandomSensors(count int64) {
 	}
 }
 
-func (dev *Device) Register() error {
-	req, err := http.NewRequest("POST", dev.regdevApi+"/"+dev.Id, nil)
+func (dev *device) register() error {
+	req, err := http.NewRequest("POST", dev.regdevAPI+"/"+dev.ID, nil)
 	if err != nil {
 		return err
 	}
@@ -236,7 +236,7 @@ func getUptime() uint64 {
 	return uint64(uptime)
 }
 
-func (dev *Device) Heartbeat() (map[string]interface{}, error) {
+func (dev *device) heartbeat() (map[string]interface{}, error) {
 	mac := hmac.New(sha256.New, dev.Key)
 	hbInfo := map[string]interface{}{
 		"Time":   time.Now().Unix(),
@@ -263,17 +263,17 @@ func (dev *Device) Heartbeat() (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	hbUrl, _ := url.Parse(dev.regdevApi + "/" + dev.Id + "/status")
+	hbURL, _ := url.Parse(dev.regdevAPI + "/" + dev.ID + "/status")
 	params := url.Values{
 		"ts": []string{strconv.FormatInt(time.Now().Unix(), 10)},
 	}
 	mac.Write([]byte(params["ts"][0]))
 	mac.Write(hbData)
 	params["sig"] = []string{hex.EncodeToString(mac.Sum(nil))}
-	hbUrl.RawQuery = params.Encode()
+	hbURL.RawQuery = params.Encode()
 	mac.Reset()
 
-	req, err := http.NewRequest("POST", hbUrl.String(), bytes.NewReader(hbData))
+	req, err := http.NewRequest("POST", hbURL.String(), bytes.NewReader(hbData))
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +335,7 @@ func (dev *Device) Heartbeat() (map[string]interface{}, error) {
 		return content, nil
 
 	case 404:
-		return nil, deviceNotRegistered
+		return nil, errDeviceNotRegistered
 
 	default:
 		body, _ := ioutil.ReadAll(resp.Body)
@@ -343,15 +343,15 @@ func (dev *Device) Heartbeat() (map[string]interface{}, error) {
 	}
 }
 
-func (dev *Device) RegisterSensors() error {
+func (dev *device) registerSensors() error {
 	for id, sens := range dev.Sensors {
-		if err := dev.client().AddSensor(id, sens.Unit, sens.Port); err != nil {
+		if err := dev.getClient().AddSensor(id, sens.Unit, sens.Port); err != nil {
 			return err
 		}
 		md := msgp.SensorMetadata{
 			Name: &sens.Name,
 		}
-		if err := dev.client().UpdateSensor(id, md); err != nil {
+		if err := dev.getClient().UpdateSensor(id, md); err != nil {
 			return err
 		}
 	}
@@ -359,12 +359,12 @@ func (dev *Device) RegisterSensors() error {
 	return nil
 }
 
-func (dev *Device) UpdateSensors() error {
+func (dev *device) updateSensors() error {
 	for id, sens := range dev.Sensors {
 		md := msgp.SensorMetadata{
 			Name: &sens.Name,
 		}
-		if err := dev.client().UpdateSensor(id, md); err != nil {
+		if err := dev.getClient().UpdateSensor(id, md); err != nil {
 			return err
 		}
 	}
@@ -372,12 +372,12 @@ func (dev *Device) UpdateSensors() error {
 	return nil
 }
 
-func (dev *Device) SendRandomUpdates(interval time.Duration, count int64) error {
+func (dev *device) sendRandomUpdates(interval time.Duration, count int64) error {
 	for ; count != 0; count-- {
-		for id, _ := range dev.Sensors {
+		for id := range dev.Sensors {
 			values := make(map[string][]msgp.Measurement, len(dev.Sensors))
 			values[id] = []msgp.Measurement{{time.Now(), rand.Float64()}}
-			if err := dev.client().Update(values); err != nil {
+			if err := dev.getClient().Update(values); err != nil {
 				return err
 			}
 		}
@@ -407,7 +407,7 @@ func initSDM639(serialDevice string, interval int) *sdm630.MeasurementCache {
 	return mc
 }
 
-func (dev *Device) SendSDM630Updates(interval time.Duration, count int64, serialDevice string) error {
+func (dev *device) sendSDM630Updates(interval time.Duration, count int64, serialDevice string) error {
 	mc := initSDM639(serialDevice, int(interval.Seconds()))
 
 	for ; count != 0; count-- {
@@ -457,7 +457,7 @@ func (dev *Device) SendSDM630Updates(interval time.Duration, count int64, serial
 				continue
 			}
 			values[id] = []msgp.Measurement{{time.Now(), float64(val)}}
-			if err := dev.client().Update(values); err != nil {
+			if err := dev.getClient().Update(values); err != nil {
 				return err
 			}
 		}
@@ -468,10 +468,10 @@ func (dev *Device) SendSDM630Updates(interval time.Duration, count int64, serial
 	return nil
 }
 
-func (dev *Device) RenameSensors() error {
+func (dev *device) renameSensors() error {
 	for id, sens := range dev.Sensors {
 		name := fmt.Sprintf("%v (%v)", sens.Name, rand.Int31n(1000))
-		if err := dev.client().UpdateSensor(id, msgp.SensorMetadata{Name: &name}); err != nil {
+		if err := dev.getClient().UpdateSensor(id, msgp.SensorMetadata{Name: &name}); err != nil {
 			return err
 		}
 	}
@@ -479,9 +479,9 @@ func (dev *Device) RenameSensors() error {
 	return nil
 }
 
-func (dev *Device) ReplaceSensors() error {
-	for id, _ := range dev.Sensors {
-		err := dev.client().RemoveSensor(id)
+func (dev *device) replaceSensors() error {
+	for id := range dev.Sensors {
+		err := dev.getClient().RemoveSensor(id)
 		switch e := err.(type) {
 		case *msgp.Error:
 			if e.Code != "operation failed" || e.Extra != "id invalid" {
@@ -495,22 +495,22 @@ func (dev *Device) ReplaceSensors() error {
 	}
 	count := len(dev.Sensors)
 	dev.Sensors = nil
-	dev.GenerateRandomSensors(int64(count))
+	dev.generateRandomSensors(int64(count))
 
-	if err := dev.RegisterSensors(); err != nil {
+	if err := dev.registerSensors(); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (dev *Device) Rename() error {
-	return dev.client().Rename(fmt.Sprintf("%v (%v)", dev.Id, rand.Int31n(100)))
+func (dev *device) rename() error {
+	return dev.getClient().Rename(fmt.Sprintf("%v (%v)", dev.ID, rand.Int31n(100)))
 }
 
-func (dev *Device) Wait(count uint64) error {
+func (dev *device) wait(count uint64) error {
 	for ; count > 0; count-- {
-		if err := dev.client().RunOnce(); err != nil {
+		if err := dev.getClient().RunOnce(); err != nil {
 			return err
 		}
 	}
@@ -550,13 +550,13 @@ func main() {
 
 		case "newRandom":
 			dev = newRandomDevice()
-			dev.regdevApi = "http://[::1]:8080/api/regdev/v1"
-			bailIf(dev.Register())
+			dev.regdevAPI = "http://[::1]:8080/api/regdev/v1"
+			bailIf(dev.register())
 
 		case "newSDM630":
 			dev = newSDM630Device()
-			dev.regdevApi = "http://[::1]:8080/api/regdev/v1"
-			bailIf(dev.Register())
+			dev.regdevAPI = "http://[::1]:8080/api/regdev/v1"
+			bailIf(dev.register())
 
 		case "print":
 			data, err := json.MarshalIndent(dev, "", "  ")
@@ -574,13 +574,13 @@ func main() {
 			next()
 			data, err := ioutil.ReadFile(os.Args[i])
 			bailIf(err)
-			dev = new(Device)
+			dev = new(device)
 			bailIf(json.Unmarshal(data, dev))
 			dev.api = "ws://[::1]:8080/ws/device"
-			dev.regdevApi = "http://[::1]:8080/api/regdev/v1"
+			dev.regdevAPI = "http://[::1]:8080/api/regdev/v1"
 
 		case "heartbeat":
-			info, err := dev.Heartbeat()
+			info, err := dev.heartbeat()
 			bailIf(err)
 			log.Println(info)
 
@@ -588,10 +588,10 @@ func main() {
 			next()
 			count, err := strconv.ParseInt(os.Args[i], 10, 32)
 			bailIf(err)
-			dev.GenerateRandomSensors(count)
+			dev.generateRandomSensors(count)
 
 		case "registerSensors":
-			bailIf(dev.RegisterSensors())
+			bailIf(dev.registerSensors())
 
 		case "sendRandomUpdates":
 			next("interval")
@@ -600,7 +600,7 @@ func main() {
 			next("count")
 			count, err := strconv.ParseInt(os.Args[i], 10, 32)
 			bailIf(err)
-			bailIf(dev.SendRandomUpdates(interval, count))
+			bailIf(dev.sendRandomUpdates(interval, count))
 
 		case "sendSDM630Updates":
 			next("interval")
@@ -610,22 +610,22 @@ func main() {
 			count, err := strconv.ParseInt(os.Args[i], 10, 32)
 			bailIf(err)
 			next()
-			bailIf(dev.SendSDM630Updates(interval, count, os.Args[i]))
+			bailIf(dev.sendSDM630Updates(interval, count, os.Args[i]))
 
 		case "renameSensors":
-			bailIf(dev.RenameSensors())
+			bailIf(dev.renameSensors())
 
 		case "replaceSensors":
-			bailIf(dev.ReplaceSensors())
+			bailIf(dev.replaceSensors())
 
 		case "rename":
-			bailIf(dev.Rename())
+			bailIf(dev.rename())
 
 		case "wait":
 			next("count")
 			count, err := strconv.ParseUint(os.Args[i], 10, 32)
 			bailIf(err)
-			bailIf(dev.Wait(count))
+			bailIf(dev.wait(count))
 
 		default:
 			log.Fatalf("bad command %v", cmdName)
