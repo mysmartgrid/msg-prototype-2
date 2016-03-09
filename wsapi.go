@@ -32,14 +32,21 @@ type measurementWithMetadata struct {
 	Resolution     string
 }
 
+// WsAPIContext is the basic container for the Websocket API.
+// It holds the Hub and Database and allows device management.
 type WsAPIContext struct {
-	Db  db.Db
+	// Bd is the user database associated with the context
+	Db db.Db
+	// Hub is the communication hub all associated APIs are using.
 	Hub *hub.Hub
 
 	devices map[string]*WsDevAPI
 	devMtx  sync.RWMutex
 }
 
+// RegisterDevice registers a new device, accesable via WsDevAPI at the API context.
+// Returns the currently associated API and an error if the device is aready registered
+// or just the given API otherwise.
 func (ctx *WsAPIContext) RegisterDevice(dev *WsDevAPI) (*WsDevAPI, error) {
 	ctx.devMtx.Lock()
 	defer ctx.devMtx.Unlock()
@@ -58,6 +65,8 @@ func (ctx *WsAPIContext) RegisterDevice(dev *WsDevAPI) (*WsDevAPI, error) {
 	return dev, nil
 }
 
+// WithDevice executes function fn using the WsDevAPI for the device with the given id registered at the API context.
+// Returns an error if the device is not registered.
 func (ctx *WsAPIContext) WithDevice(device string, fn func(dev *WsDevAPI) error) error {
 	ctx.devMtx.RLock()
 	defer ctx.devMtx.RUnlock()
@@ -70,6 +79,8 @@ func (ctx *WsAPIContext) WithDevice(device string, fn func(dev *WsDevAPI) error)
 	return fn(dev)
 }
 
+// RemoveDevice removes the given WsDevAPI from the API context.
+// Returns an error if the device API is not regsitered.
 func (ctx *WsAPIContext) RemoveDevice(dev *WsDevAPI) error {
 	ctx.devMtx.Lock()
 	defer ctx.devMtx.Unlock()
@@ -81,21 +92,31 @@ func (ctx *WsAPIContext) RemoveDevice(dev *WsDevAPI) error {
 	return nil
 }
 
+// WsDevAPI represents a websocket connection for a device.
+// It manages the msg2api device server, and all messages coming from the device.
 type WsDevAPI struct {
 	ctx    *WsAPIContext
 	server *msg2api.DeviceServer
 
 	lastRealtimeUpdateRequest time.Time
 
+	// User and Device id associated with the connection
 	User, Device string
-	Writer       http.ResponseWriter
-	Request      *http.Request
 
-	Key        []byte
+	// HTTP connection to communicate with the client.
+	Writer  http.ResponseWriter
+	Request *http.Request
+
+	// Secret device key for authentification
+	Key []byte
+
+	// URL and HTTP client to mirror values to the old mysmartgrid.
 	PostURL    string
 	PostClient *http.Client
 }
 
+// Run checks if the user associated to the API is authorized to access the associated device, posts an error to the HTTP connection and returns an error if not.
+// On success a new device server is created an run.
 func (api *WsDevAPI) Run() error {
 	var key []byte
 
@@ -131,6 +152,7 @@ func (api *WsDevAPI) Run() error {
 	return api.server.Run(key)
 }
 
+// RequestRealtimeUpdates forwards a realtime updates request to the device if enough time has passed since the last request.
 func (api *WsDevAPI) RequestRealtimeUpdates(req msg2api.DeviceCmdRequestRealtimeUpdatesArgs) {
 	if time.Now().Sub(api.lastRealtimeUpdateRequest) >= 25*time.Second && len(req) > 0 {
 		api.server.RequestRealtimeUpdates(req)
@@ -138,6 +160,7 @@ func (api *WsDevAPI) RequestRealtimeUpdates(req msg2api.DeviceCmdRequestRealtime
 	}
 }
 
+// Close closes the device servers connection to the device.
 func (api *WsDevAPI) Close() {
 	if api.server != nil {
 		api.server.Close()
@@ -340,15 +363,21 @@ func (api *WsDevAPI) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api
 	})
 }
 
+// WsUserAPI represents a websocket connection to a user.
+// It manages the msg2api user server and user messages.
 type WsUserAPI struct {
 	Ctx    *WsAPIContext
 	server *msg2api.UserServer
 
-	User    string
+	// User id associated with the API.
+	User string
+
+	// HTTP connection to communicate with the client.
 	Writer  http.ResponseWriter
 	Request *http.Request
 }
 
+// Run listens for messages for the user at the Hub and starts the user server.
 func (api *WsUserAPI) Run() error {
 	conn := api.Ctx.Hub.Connect()
 	defer conn.Close()
@@ -394,6 +423,7 @@ func (api *WsUserAPI) Run() error {
 	return api.server.Run()
 }
 
+// Close closes the user server connections.
 func (api *WsUserAPI) Close() {
 	if api.server != nil {
 		api.server.Close()

@@ -523,7 +523,7 @@ func loggedInSwitch(in, out func(http.ResponseWriter, *http.Request)) func(http.
 func userDevices(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	db.View(func(tx msgpdb.Tx) error {
-		u := tx.User(session.Values["user"].(string))
+		u := tx.User(session.Values["user"].(string)) //FIXME do string cast after nil check
 		if u == nil {
 			removeSessionAndNotifyUser(w, r, session)
 			return nil

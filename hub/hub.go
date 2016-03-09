@@ -29,7 +29,7 @@ type Value struct {
 
 // Conn is used to get data out of the hub for a number of subscriptons by a single client.
 type Conn struct {
-	// All messeges published on the subscribed topics a passed to the Valeu channel by the hub.
+	// All messages published on the subscribed topics a passed to the Valeu channel by the hub.
 	Value <-chan Value
 
 	parent *Hub
