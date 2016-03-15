@@ -156,6 +156,10 @@ angular.module("msgp", ['ui.bootstrap'])
     .controller("DeviceListController", ["$scope", "$http", "devices", function ($scope, $http, devices) {
         $scope.devices = devices;
         $scope.addDeviceId = "";
+        $scope.openAddDeviceModal = function () {
+            $scope.addDeviceId = "";
+            $('#addDeviceDialog').modal();
+        };
         $scope.addDevice = function (e) {
             var url = $(e.target).attr("data-add-device-prefix");
             $scope.errorAddingDevice = null;
