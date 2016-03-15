@@ -156,6 +156,10 @@ angular.module("msgp", ['ui.bootstrap'])
     .controller("DeviceListController", ["$scope", "$http", "devices", function ($scope, $http, devices) {
         $scope.devices = devices;
         $scope.addDeviceId = "";
+        $scope.openAddDeviceModal = function () {
+            $scope.addDeviceId = "";
+            $('#addDeviceDialog').modal();
+        };
         $scope.addDevice = function (e) {
             var url = $(e.target).attr("data-add-device-prefix");
             $scope.errorAddingDevice = null;
@@ -171,24 +175,28 @@ angular.module("msgp", ['ui.bootstrap'])
         };
     }]);
 
-},{"./directives/sensorgraph":2,"./directives/ui-elements/datetimepicker":3,"./directives/ui-elements/numberspinner":4,"./directives/ui-elements/timerangespinner":5,"./lib/msg2socket":7,"./lib/updatedispatcher":9}],2:[function(require,module,exports){
+},{"./directives/sensorgraph":2,"./directives/ui-elements/datetimepicker":3,"./directives/ui-elements/numberspinner":4,"./directives/ui-elements/timerangespinner":5,"./lib/msg2socket":8,"./lib/updatedispatcher":10}],2:[function(require,module,exports){
 "use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
 var Utils = require('../lib/utils');
 var Store = require('../lib/sensorvaluestore');
 var common_1 = require('../lib/common');
+var Widget = require('./widget');
 var SensorGraphSettingsFactory = ["$scope", "$uibModalInstance", "UpdateDispatcher", "config",
     function ($scope, $uibModalInstance, dispatcher, config) {
         return new SensorGraphSettingsController($scope, $uibModalInstance, dispatcher, config);
     }];
-var SensorGraphSettingsController = (function () {
+var SensorGraphSettingsController = (function (_super) {
+    __extends(SensorGraphSettingsController, _super);
     function SensorGraphSettingsController($scope, $uibModalInstance, _dispatcher, config) {
+        _super.call(this, $scope, $uibModalInstance, _dispatcher, config);
         this.$scope = $scope;
         this.$uibModalInstance = $uibModalInstance;
         this._dispatcher = _dispatcher;
-        $scope.devices = _dispatcher.devices;
-        $scope.units = _dispatcher.units;
-        $scope.sensorsByUnit = _dispatcher.sensorsByUnit;
-        $scope.resolutions = common_1.ResolutionsPerMode;
         $scope.$watch("config.mode", function () {
             var mode = $scope.config.mode;
             if ($scope.resolutions[mode].indexOf($scope.config.resolution) === -1) {
@@ -198,47 +206,31 @@ var SensorGraphSettingsController = (function () {
                 $scope.config.resolution = 'raw';
             }
         });
-        $scope.config = config;
-        $scope.ok = function () {
-            $uibModalInstance.close($scope.config);
-        };
-        $scope.cancel = function () {
-            $uibModalInstance.dismiss('cancel');
-        };
     }
+    SensorGraphSettingsController.prototype._checkConfig = function () {
+        return true;
+    };
     return SensorGraphSettingsController;
-}());
-var SensorGraphController = (function () {
-    function SensorGraphController($scope, $interval, $timeout, $uibModal, _dispatcher) {
+}(Widget.WidgetSettingsController));
+var SensorGraphController = (function (_super) {
+    __extends(SensorGraphController, _super);
+    function SensorGraphController($interval, $timeout, $scope, $uibModal, _dispatcher) {
         var _this = this;
-        this.$scope = $scope;
+        _super.call(this, $scope, _dispatcher, $uibModal);
         this.$interval = $interval;
         this.$timeout = $timeout;
+        this.$scope = $scope;
         this.$uibModal = $uibModal;
         this._dispatcher = _dispatcher;
         this._store = new Store.SensorValueStore();
         this._store.setSlidingWindowMode(true);
         this._store.setEnd(0);
-        this.$scope.devices = this._dispatcher.devices;
         this._dispatcher.onInitialMetadata(function () {
             _this._setDefaultConfig();
             _this._redrawGraph();
         });
-        this.$scope.openSettings = function () {
-            var modalInstance = $uibModal.open({
-                controller: SensorGraphSettingsFactory,
-                size: "lg",
-                templateUrl: 'sensor-graph-settings.html',
-                resolve: {
-                    config: function () {
-                        return Utils.deepCopyJSON(_this._config);
-                    }
-                }
-            });
-            modalInstance.result.then(function (config) {
-                _this._applyConfig(config);
-            });
-        };
+        this._settingsTemplate = 'sensor-graph-settings.html';
+        this._settingsControllerFactory = SensorGraphSettingsFactory;
         $interval(function () { return _this._store.clampData(); }, 60 * 1000);
     }
     Object.defineProperty(SensorGraphController.prototype, "graphNode", {
@@ -251,15 +243,6 @@ var SensorGraphController = (function () {
     SensorGraphController.prototype.updateValue = function (deviceID, sensorID, resolution, timestamp, value) {
         this._store.addValue(deviceID, sensorID, timestamp, value);
     };
-    SensorGraphController.prototype.updateDeviceMetadata = function (deviceID) { };
-    ;
-    SensorGraphController.prototype.updateSensorMetadata = function (deviceID, sensorID) {
-    };
-    ;
-    SensorGraphController.prototype.removeDevice = function (deviceID) { };
-    ;
-    SensorGraphController.prototype.removeSensor = function (deviceID, sensorID) { };
-    ;
     SensorGraphController.prototype._setDefaultConfig = function () {
         this._applyConfig({
             unit: this._dispatcher.units[0],
@@ -297,6 +280,8 @@ var SensorGraphController = (function () {
             config.intervalEnd === this._config.intervalEnd) {
             var addedSensors = Utils.difference(config.sensors, this._config.sensors, common_1.sensorEqual);
             var removedSensors = Utils.difference(this._config.sensors, config.sensors, common_1.sensorEqual);
+            console.log(addedSensors);
+            console.log(removedSensors);
             for (var _i = 0, addedSensors_1 = addedSensors; _i < addedSensors_1.length; _i++) {
                 var _a = addedSensors_1[_i], deviceID = _a.deviceID, sensorID = _a.sensorID;
                 this._subscribeSensor(config, deviceID, sensorID);
@@ -382,7 +367,7 @@ var SensorGraphController = (function () {
         this._timeout = this.$timeout(function () { return _this._redrawGraph(); }, delay);
     };
     return SensorGraphController;
-}());
+}(Widget.WidtgetController));
 exports.SensorGraphController = SensorGraphController;
 var SensorGraphDirective = (function () {
     function SensorGraphDirective() {
@@ -390,7 +375,7 @@ var SensorGraphDirective = (function () {
         this.restrict = "A";
         this.templateUrl = "/html/sensor-graph.html";
         this.scope = {};
-        this.controller = ["$scope", "$interval", "$timeout", "$uibModal", "UpdateDispatcher", SensorGraphController];
+        this.controller = ["$interval", "$timeout", "$scope", "$uibModal", "UpdateDispatcher", SensorGraphController];
         this.link = function ($scope, element, attrs, sensorGraph) {
             sensorGraph.graphNode = element;
         };
@@ -403,7 +388,7 @@ function SensorGraphFactory() {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = SensorGraphFactory;
 
-},{"../lib/common":6,"../lib/sensorvaluestore":8,"../lib/utils":10}],3:[function(require,module,exports){
+},{"../lib/common":7,"../lib/sensorvaluestore":9,"../lib/utils":11,"./widget":6}],3:[function(require,module,exports){
 "use strict";
 var DateTimePickerController = (function () {
     function DateTimePickerController($scope) {
@@ -686,6 +671,77 @@ var TimeRangeSpinnerDirective = (function () {
 
 },{}],6:[function(require,module,exports){
 "use strict";
+var Utils = require('../lib/utils');
+var common_1 = require('../lib/common');
+;
+var WidtgetController = (function () {
+    function WidtgetController($scope, _dispatcher, $uibModal) {
+        var _this = this;
+        this.$scope = $scope;
+        this._dispatcher = _dispatcher;
+        this.$uibModal = $uibModal;
+        $scope.devices = this._dispatcher.devices;
+        $scope.units = _dispatcher.units;
+        $scope.sensorsByUnit = _dispatcher.sensorsByUnit;
+        $scope.openSettings = function () { return _this._openSettings(); };
+    }
+    WidtgetController.prototype._openSettings = function () {
+        var _this = this;
+        var modalInstance = this.$uibModal.open({
+            controller: this._settingsControllerFactory,
+            size: "lg",
+            templateUrl: this._settingsTemplate,
+            resolve: {
+                config: function () {
+                    return Utils.deepCopyJSON(_this._config);
+                }
+            }
+        });
+        modalInstance.result.then(function (config) {
+            _this._applyConfig(config);
+        });
+    };
+    WidtgetController.prototype.updateValue = function (deviceID, sensorID, resolution, timestamp, value) { };
+    ;
+    WidtgetController.prototype.updateDeviceMetadata = function (deviceID) { };
+    ;
+    WidtgetController.prototype.updateSensorMetadata = function (deviceID, sensorID) { };
+    ;
+    WidtgetController.prototype.removeDevice = function (deviceID) { };
+    ;
+    WidtgetController.prototype.removeSensor = function (deviceID, sensorID) { };
+    ;
+    return WidtgetController;
+}());
+exports.WidtgetController = WidtgetController;
+var WidgetSettingsController = (function () {
+    function WidgetSettingsController($scope, $uibModalInstance, _dispatcher, config) {
+        var _this = this;
+        this.$scope = $scope;
+        this.$uibModalInstance = $uibModalInstance;
+        this._dispatcher = _dispatcher;
+        $scope.devices = _dispatcher.devices;
+        $scope.units = _dispatcher.units;
+        $scope.sensorsByUnit = _dispatcher.sensorsByUnit;
+        $scope.resolutions = common_1.ResolutionsPerMode;
+        $scope.config = config;
+        $scope.ok = function () { return _this._saveConfig(); };
+        $scope.cancel = function () { return _this._close(); };
+    }
+    WidgetSettingsController.prototype._saveConfig = function () {
+        if (this._checkConfig()) {
+            this.$uibModalInstance.close(this.$scope.config);
+        }
+    };
+    WidgetSettingsController.prototype._close = function () {
+        this.$uibModalInstance.dismiss('cancel');
+    };
+    return WidgetSettingsController;
+}());
+exports.WidgetSettingsController = WidgetSettingsController;
+
+},{"../lib/common":7,"../lib/utils":11}],7:[function(require,module,exports){
+"use strict";
 ;
 ;
 exports.SupportedResolutions = ["raw", "second", "minute", "hour", "day", "week", "month", "year"];
@@ -719,7 +775,7 @@ function sensorEqual(a, b) {
 }
 exports.sensorEqual = sensorEqual;
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 var ApiVersion = "v5.user.msg";
 var Socket = (function () {
@@ -864,7 +920,7 @@ var Socket = (function () {
 exports.Socket = Socket;
 ;
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict";
 var Utils = require('./utils');
 var ColorScheme = ['#00A8F0', '#C0D800', '#CB4B4B', '#4DA74D', '#9440ED'];
@@ -1013,7 +1069,7 @@ var SensorValueStore = (function () {
 }());
 exports.SensorValueStore = SensorValueStore;
 
-},{"./utils":10}],9:[function(require,module,exports){
+},{"./utils":11}],10:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -1430,7 +1486,7 @@ var DummySubscriber = (function () {
 }());
 exports.DummySubscriber = DummySubscriber;
 
-},{"./common":6,"./utils":10}],10:[function(require,module,exports){
+},{"./common":7,"./utils":11}],11:[function(require,module,exports){
 "use strict";
 function contains(haystack, needle) {
     var i = haystack.indexOf(needle);
