@@ -270,18 +270,10 @@ var SensorGraphController = (function (_super) {
         }
     };
     SensorGraphController.prototype._applyConfig = function (config) {
-        if (this._config !== undefined &&
-            config.mode === this._config.mode &&
-            config.resolution == this._config.resolution &&
-            config.unit === this._config.unit &&
-            config.windowStart === this._config.windowStart &&
-            config.windowEnd === this._config.windowEnd &&
-            config.intervalStart === this._config.intervalStart &&
-            config.intervalEnd === this._config.intervalEnd) {
+        var differences = Utils.differentProperties(this._config, config);
+        if (differences !== undefined && Utils.difference(differences, ["sensors", "unit"]).length === 0) {
             var addedSensors = Utils.difference(config.sensors, this._config.sensors, common_1.sensorEqual);
             var removedSensors = Utils.difference(this._config.sensors, config.sensors, common_1.sensorEqual);
-            console.log(addedSensors);
-            console.log(removedSensors);
             for (var _i = 0, addedSensors_1 = addedSensors; _i < addedSensors_1.length; _i++) {
                 var _a = addedSensors_1[_i], deviceID = _a.deviceID, sensorID = _a.sensorID;
                 this._subscribeSensor(config, deviceID, sensorID);
@@ -292,6 +284,7 @@ var SensorGraphController = (function (_super) {
                 this._dispatcher.unsubscribeSensor(deviceID, sensorID, config.resolution, this);
                 this._store.removeSensor(deviceID, sensorID);
             }
+            console.log("Sensor only change");
         }
         else {
             this._dispatcher.unsubscribeAll(this);
@@ -1542,8 +1535,60 @@ function deepCopyJSON(src) {
 }
 exports.deepCopyJSON = deepCopyJSON;
 function difference(a, b, equals) {
+    if (equals === undefined) {
+        equals = function (x, y) { return x === y; };
+    }
     return a.filter(function (a_element) { return b.findIndex(function (b_element) { return equals(a_element, b_element); }) === -1; });
 }
 exports.difference = difference;
+function addOnce(list, element) {
+    if (!contains(list, element)) {
+        list.push(element);
+    }
+}
+exports.addOnce = addOnce;
+function differentProperties(a, b) {
+    if (a === undefined || b === undefined) {
+        return undefined;
+    }
+    var differences = [];
+    var keys = Object.keys(a);
+    for (var key in b) {
+        addOnce(keys, key);
+    }
+    for (var _i = 0, keys_1 = keys; _i < keys_1.length; _i++) {
+        var key = keys_1[_i];
+        if (!(a.hasOwnProperty(key) && b.hasOwnProperty(key))) {
+            differences.push(key);
+        }
+        else if (typeof (a[key]) !== typeof (b[key])) {
+            differences.push(key);
+        }
+        else if (Array.isArray(a[key])) {
+            if (a[key].length !== b[key].length) {
+                differences.push(key);
+            }
+            else {
+                for (var i = 0; i < a[key].length; i++) {
+                    if (a[key][i] !== b[key][i]) {
+                        differences.push(key);
+                        break;
+                    }
+                }
+            }
+        }
+        else if (typeof (a[key]) === "object") {
+            var result = differentProperties(a[key], b[key]);
+            result = result.map(function (subkey) { return key + '.' + subkey; });
+            differences.concat(result);
+        }
+        else if (a[key] !== b[key]) {
+            differences.push(key);
+        }
+    }
+    console.log(differences);
+    return differences;
+}
+exports.differentProperties = differentProperties;
 
 },{}]},{},[1]);

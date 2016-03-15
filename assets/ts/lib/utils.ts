@@ -59,6 +59,71 @@ export function deepCopyJSON<T>(src : T) : T {
     return dst;
 }
 
-export function difference<T>(a : T[], b : T[], equals : (x : T, y : T) => boolean) : T[] {
+export function difference<T>(a : T[], b : T[], equals? : (x : T, y : T) => boolean) : T[] {
+    if(equals === undefined) {
+        equals = (x,y) => x === y;
+    }
+
     return a.filter((a_element) => b.findIndex((b_element) => equals(a_element , b_element)) === -1);
+}
+
+
+export function addOnce<T>(list : T[], element : T) {
+    if(!contains(list, element)) {
+        list.push(element);
+    }
+}
+
+export function differentProperties<T>(a : T, b : T) : string[] {
+    if(a === undefined || b === undefined) {
+        return undefined;
+    }
+
+    var differences = [];
+
+    var keys = Object.keys(a);
+    for(var key in b) {
+        addOnce(keys, key);
+    }
+
+    for(var key of keys) {
+        // Property is only present a or b
+        if(!(a.hasOwnProperty(key) && b.hasOwnProperty(key))) {
+            differences.push(key);
+        }
+        // Properties with different types
+        else if(typeof(a[key]) !== typeof(b[key])) {
+            differences.push(key);
+        }
+        // Both properties are arrays
+        else if(Array.isArray(a[key])) {
+            // Not the some length -> different
+            if(a[key].length !== b[key].length) {
+                differences.push(key);
+            }
+            else {
+                // Check if the elements at each position are equal
+                for(var i = 0; i < a[key].length; i++) {
+                    if(a[key][i] !== b[key][i]) {
+                        differences.push(key);
+                        break;
+                    }
+                }
+            }
+        }
+        // Both properties are objects -> recursive descent
+        else if(typeof(a[key]) === "object") {
+            var result = differentProperties(a[key], b[key]);
+            result = result.map((subkey) => key + '.' + subkey);
+            differences.concat(result);
+        }
+        // Both properties are primitive types -> compare them
+        else if(a[key] !== b[key]) {
+            differences.push(key);
+        }
+    }
+
+    console.log(differences);
+
+    return differences;
 }

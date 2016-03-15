@@ -147,22 +147,13 @@ export class SensorGraphController extends Widget.WidtgetController {
 
 
 	protected _applyConfig(config : SensorGraphConfig) {
+		var differences = Utils.differentProperties(this._config, config);
 
-		// Only sensors changed so no need to redo everything
-		if(this._config !== undefined &&
-			config.mode === this._config.mode &&
-			config.resolution == this._config.resolution &&
-			config.unit === this._config.unit &&
-			config.windowStart === this._config.windowStart &&
-			config.windowEnd === this._config.windowEnd &&
-			config.intervalStart === this._config.intervalStart &&
-			config.intervalEnd === this._config.intervalEnd) {
+		// Only sensors or unit changed so no need to redo everything
+		if(differences !== undefined && Utils.difference(differences, ["sensors", "unit"]).length === 0) {
 
 			var addedSensors = Utils.difference(config.sensors, this._config.sensors, sensorEqual);
 			var	removedSensors = Utils.difference(this._config.sensors, config.sensors, sensorEqual);
-
-			console.log(addedSensors);
-			console.log(removedSensors);
 
 			for(var {deviceID: deviceID, sensorID: sensorID} of addedSensors) {
 				this._subscribeSensor(config, deviceID, sensorID);
@@ -174,7 +165,6 @@ export class SensorGraphController extends Widget.WidtgetController {
 				this._dispatcher.unsubscribeSensor(deviceID, sensorID, config.resolution, this);
 				this._store.removeSensor(deviceID, sensorID);
 			}
-
 		} //Redo all the things !
 		else {
 			this._dispatcher.unsubscribeAll(this);
