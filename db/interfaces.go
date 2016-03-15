@@ -149,9 +149,9 @@ type Group interface {
 // Device provides a set of operations on devices as represented in the database.
 // It is meant to be used within the Update and View functions of a Db struct.
 type Device interface {
-	// AddSensor adds a new sensor with id, unit and port associated with the current device to the database.
+	// AddSensor adds a new sensor with id, unit, port and correction factor associated with the current device to the database.
 	// Returns the representing Sensors struct or an error if the the device already exists.
-	AddSensor(id, unit string, port int32) (Sensor, error)
+	AddSensor(id, unit string, port int32, factor float64) (Sensor, error)
 
 	// Sensor gets the sensor with id from the database if it is associated with the current device and creates the representing sensor struct.
 	// Returns nil if the seonsor does not exist in the database.
@@ -211,8 +211,11 @@ type Sensor interface {
 	// Port returns the physical port the sensor was assinged with on creation.
 	Port() int32
 
-	// Unit return the unit of the measured values of the sensors assinged on creation.
+	// Unit returns the unit of the measured values of the sensors assinged on creation.
 	Unit() string
+
+	// Factor returns the correction factor applied to a measurments when reading the sensor's values
+	Factor() float64
 
 	// IsVirtual returns the state of the virtual flag of the current sensor in the database.
 	IsVirtual() bool

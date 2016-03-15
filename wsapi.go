@@ -279,7 +279,7 @@ func (api *WsDevAPI) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 				}
 
 				if time.Now().Sub(api.lastRealtimeUpdateRequest) < 40*time.Second {
-					api.ctx.Hub.Publish(api.User, measurementWithMetadata{device.ID(), s.ID(), value.Time, value.Value, "raw"})
+					api.ctx.Hub.Publish(api.User, measurementWithMetadata{device.ID(), s.ID(), value.Time, value.Value * s.Factor(), "raw"})
 				}
 			}
 		}
@@ -288,9 +288,9 @@ func (api *WsDevAPI) doUpdate(values map[string][]msg2api.Measurement) *msg2api.
 	})
 }
 
-func (api *WsDevAPI) doAddSensor(name, unit string, port int32) *msg2api.Error {
+func (api *WsDevAPI) doAddSensor(name, unit string, port int32, factor float64) *msg2api.Error {
 	return api.updateDevice(func(tx db.Tx, user db.User, device db.Device) *msg2api.Error {
-		_, err := device.AddSensor(name, unit, port)
+		_, err := device.AddSensor(name, unit, port, factor)
 		if err != nil {
 			return &msg2api.Error{Code: "operation failed", Extra: err.Error()}
 		}
@@ -350,6 +350,10 @@ func (api *WsDevAPI) doUpdateMetadata(metadata *msg2api.DeviceMetadata) *msg2api
 			}
 			if sd.Port != nil {
 				return &msg2api.Error{Code: "failed", Extra: "port may not be changed"}
+			}
+
+			if sd.Factor != nil {
+				return &msg2api.Error{Code: "failed", Extra: "factor may nor be changed"}
 			}
 		}
 
