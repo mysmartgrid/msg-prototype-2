@@ -74,56 +74,73 @@ export function addOnce<T>(list : T[], element : T) {
     }
 }
 
-export function differentProperties<T>(a : T, b : T) : string[] {
+/*
+ * Recursively compare two json objects.
+ *
+ * Return values:
+ * [] = No difference (just contains the same values in the same structure; doesn't imply a und b are the same object)
+ * [''] = Root objects have different type or at least one root object is undefined
+ * ['foo'] = Property foo exists in one object but not the other,
+ *              or foo has a different value in the other object.
+ *              Arrays are assumed different if length, element values or the order differ.
+ * ['foo.bar'] = Property foo exists on both objects, is an object in differs in property bar.
+ */
+export function differentProperties<T>(a : T, b : T, prefix? : string) : string[] {
+    // Root objects have prefix ''
+    if(prefix === undefined) {
+        prefix = '';
+    }
+
+    // One at leats of both is undefined
     if(a === undefined || b === undefined) {
-        return undefined;
+        return [prefix];
     }
-
-    var differences = [];
-
-    var keys = Object.keys(a);
-    for(var key in b) {
-        addOnce(keys, key);
+    // Objects of different type
+    else if(typeof(a) !== typeof(b)) {
+        return [prefix];
     }
+    // Both are arrays
+    else if(Array.isArray(a)) {
 
-    for(var key of keys) {
-        // Property is only present a or b
-        if(!(a.hasOwnProperty(key) && b.hasOwnProperty(key))) {
-            differences.push(key);
+        // Lenghts are different
+        if((<any>a).length !== (<any>b).length) {
+            return [prefix];
         }
-        // Properties with different types
-        else if(typeof(a[key]) !== typeof(b[key])) {
-            differences.push(key);
-        }
-        // Both properties are arrays
-        else if(Array.isArray(a[key])) {
-            // Not the some length -> different
-            if(a[key].length !== b[key].length) {
-                differences.push(key);
-            }
-            else {
-                // Check if the elements at each position are equal
-                for(var i = 0; i < a[key].length; i++) {
-                    if(a[key][i] !== b[key][i]) {
-                        differences.push(key);
-                        break;
-                    }
+        else {
+            // Look for different elements
+            for(var i = 0; i < (<any>a).length; i++) {
+                // Recursive call just to check equaltity on complex values
+                if(differentProperties(a[i], b[i]).length !== 0) {
+                    return [prefix];
                 }
             }
         }
-        // Both properties are objects -> recursive descent
-        else if(typeof(a[key]) === "object") {
-            var result = differentProperties(a[key], b[key]);
-            result = result.map((subkey) => key + '.' + subkey);
-            differences.concat(result);
+    }
+    // Both are objects
+    else if(typeof(a) === 'object') {
+        var differences = [];
+
+        // Generate the union of both objects property sets
+        var keys = Object.keys(a);
+        for(var key of Object.keys(b)) {
+            addOnce(keys, key);
         }
-        // Both properties are primitive types -> compare them
-        else if(a[key] !== b[key]) {
-            differences.push(key);
+
+        // Check each key
+        for(var key of keys) {
+            // Extend the prefix for recursive call
+            var extendedPrefix = prefix !== '' ? prefix + '.' + key : key;
+            // Recurse. Returns [extencedPrefix] in case a or b does not have a property key
+            differences = differences.concat(differentProperties(a[key], b[key], extendedPrefix));
         }
+
+        return differences;
+    }
+    // Primitive values, just compare.
+    else if(a !== b) {
+        return [prefix];
     }
 
-    console.log(differences);
-
-    return differences;
+    // If we did not return until here, there are no differences.
+    return [];
 }

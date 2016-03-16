@@ -149,6 +149,8 @@ export class SensorGraphController extends Widget.WidtgetController {
 	protected _applyConfig(config : SensorGraphConfig) {
 		var differences = Utils.differentProperties(this._config, config);
 
+		console.log(differences);
+
 		// Only sensors or unit changed so no need to redo everything
 		if(differences !== undefined && Utils.difference(differences, ["sensors", "unit"]).length === 0) {
 
@@ -165,6 +167,8 @@ export class SensorGraphController extends Widget.WidtgetController {
 				this._dispatcher.unsubscribeSensor(deviceID, sensorID, config.resolution, this);
 				this._store.removeSensor(deviceID, sensorID);
 			}
+
+			console.log("Sensor/Unit change");
 		} //Redo all the things !
 		else {
 			this._dispatcher.unsubscribeAll(this);
@@ -191,9 +195,12 @@ export class SensorGraphController extends Widget.WidtgetController {
 
 				this._store.addSensor(deviceID, sensorID);
 			}
+
+			console.log("Redo all");
+
+			this._store.setTimeout(ResoltuionToMillisecs[config.resolution] * 60);
 		}
 
-		this._store.setTimeout(ResoltuionToMillisecs[config.resolution] * 60);
 
 		this._config = config;
 		this.$scope.sensorColors = this._store.getColors();

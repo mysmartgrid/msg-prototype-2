@@ -271,6 +271,7 @@ var SensorGraphController = (function (_super) {
     };
     SensorGraphController.prototype._applyConfig = function (config) {
         var differences = Utils.differentProperties(this._config, config);
+        console.log(differences);
         if (differences !== undefined && Utils.difference(differences, ["sensors", "unit"]).length === 0) {
             var addedSensors = Utils.difference(config.sensors, this._config.sensors, common_1.sensorEqual);
             var removedSensors = Utils.difference(this._config.sensors, config.sensors, common_1.sensorEqual);
@@ -284,7 +285,7 @@ var SensorGraphController = (function (_super) {
                 this._dispatcher.unsubscribeSensor(deviceID, sensorID, config.resolution, this);
                 this._store.removeSensor(deviceID, sensorID);
             }
-            console.log("Sensor only change");
+            console.log("Sensor/Unit change");
         }
         else {
             this._dispatcher.unsubscribeAll(this);
@@ -309,8 +310,9 @@ var SensorGraphController = (function (_super) {
                 this._subscribeSensor(config, deviceID, sensorID);
                 this._store.addSensor(deviceID, sensorID);
             }
+            console.log("Redo all");
+            this._store.setTimeout(common_1.ResoltuionToMillisecs[config.resolution] * 60);
         }
-        this._store.setTimeout(common_1.ResoltuionToMillisecs[config.resolution] * 60);
         this._config = config;
         this.$scope.sensorColors = this._store.getColors();
         this.$scope.sensors = config.sensors;
@@ -1547,47 +1549,46 @@ function addOnce(list, element) {
     }
 }
 exports.addOnce = addOnce;
-function differentProperties(a, b) {
+function differentProperties(a, b, prefix) {
+    if (prefix === undefined) {
+        prefix = '';
+    }
     if (a === undefined || b === undefined) {
-        return undefined;
+        return [prefix];
     }
-    var differences = [];
-    var keys = Object.keys(a);
-    for (var key in b) {
-        addOnce(keys, key);
+    else if (typeof (a) !== typeof (b)) {
+        return [prefix];
     }
-    for (var _i = 0, keys_1 = keys; _i < keys_1.length; _i++) {
-        var key = keys_1[_i];
-        if (!(a.hasOwnProperty(key) && b.hasOwnProperty(key))) {
-            differences.push(key);
+    else if (Array.isArray(a)) {
+        if (a.length !== b.length) {
+            return [prefix];
         }
-        else if (typeof (a[key]) !== typeof (b[key])) {
-            differences.push(key);
-        }
-        else if (Array.isArray(a[key])) {
-            if (a[key].length !== b[key].length) {
-                differences.push(key);
-            }
-            else {
-                for (var i = 0; i < a[key].length; i++) {
-                    if (a[key][i] !== b[key][i]) {
-                        differences.push(key);
-                        break;
-                    }
+        else {
+            for (var i = 0; i < a.length; i++) {
+                if (differentProperties(a[i], b[i]).length !== 0) {
+                    return [prefix];
                 }
             }
         }
-        else if (typeof (a[key]) === "object") {
-            var result = differentProperties(a[key], b[key]);
-            result = result.map(function (subkey) { return key + '.' + subkey; });
-            differences.concat(result);
-        }
-        else if (a[key] !== b[key]) {
-            differences.push(key);
-        }
     }
-    console.log(differences);
-    return differences;
+    else if (typeof (a) === 'object') {
+        var differences = [];
+        var keys = Object.keys(a);
+        for (var _i = 0, _a = Object.keys(b); _i < _a.length; _i++) {
+            var key = _a[_i];
+            addOnce(keys, key);
+        }
+        for (var _b = 0, keys_1 = keys; _b < keys_1.length; _b++) {
+            var key = keys_1[_b];
+            var extendedPrefix = prefix !== '' ? prefix + '.' + key : key;
+            differences = differences.concat(differentProperties(a[key], b[key], extendedPrefix));
+        }
+        return differences;
+    }
+    else if (a !== b) {
+        return [prefix];
+    }
+    return [];
 }
 exports.differentProperties = differentProperties;
 
