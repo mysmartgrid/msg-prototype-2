@@ -746,6 +746,7 @@ func main() {
 	} else {
 		router := mux.NewRouter()
 		server := regdev.DeviceServer{Db: devdb}
+		apiserver := oldapi.OldApiServer{Db: devdb}
 
 		router.HandleFunc("/", loggedInSwitch(wsTemplate("index_user"), staticTemplate("index_nouser"))).Methods("GET")
 		router.HandleFunc("/user/login", staticTemplate("user-login")).Methods("GET")
@@ -761,7 +762,7 @@ func main() {
 		router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(api_User_Device_Sensor_Props_Set)).Methods("POST")
 
 		// old api
-		server.RegisterRoutes(router.PathPrefix("/oldapi").Subrouter())
+		apiserver.RegisterRoutes(router.PathPrefix("/oldapi").Subrouter())
 
 		router.HandleFunc("/admin", defaultHeaders(adminHandler))
 
