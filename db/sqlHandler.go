@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/lib/pq"
+	"github.com/mysmartgrid/msg2api"
 	"strconv"
 	"time"
 )
@@ -46,7 +47,8 @@ var timeResTable map[timeRes]string = map[timeRes]string{
 	timeResYear:   "measure_aggregated_years",
 }
 
-func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]Value) error {
+// saveValuesAndClear write a set of measurements from different sensors to the database and empty the valueMap
+func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]msg2api.Measurement) error {
 	tx, err := h.db.Begin()
 	if err != nil {
 		return err
@@ -81,17 +83,17 @@ func (h *sqlHandler) saveValuesAndClear(valueMap map[uint64][]Value) error {
 	}
 
 	for id := range valueMap {
-		valueMap[id] = make([]Value, 0, 1)
+		valueMap[id] = make([]msg2api.Measurement, 0, 1)
 	}
 	return nil
 }
 
-func (h *sqlHandler) loadValues(since, until time.Time, resolution string, sensorSeqs []uint64) (map[uint64][]Value, error) {
+// loadValues loads measurements for a set of sensors in a single timespan and for a single resolution
+func (h *sqlHandler) loadValues(since, until time.Time, resolution string, sensorSeqs []uint64) (map[uint64][]msg2api.Measurement, error) {
 	if len(sensorSeqs) < 1 {
-		return make(map[uint64][]Value), nil
+		return make(map[uint64][]msg2api.Measurement), nil
 	}
 
-	var valueQuery string
 	var sensorSeqsList bytes.Buffer
 	for idx, seq := range sensorSeqs {
 		if idx != 0 {
@@ -99,6 +101,34 @@ func (h *sqlHandler) loadValues(since, until time.Time, resolution string, senso
 		}
 		sensorSeqsList.WriteString(strconv.FormatUint(seq, 10))
 	}
+
+	//Read correction factors
+	factorRows, err := h.db.Query(fmt.Sprintf(`SELECT "sensor_seq", "factor" FROM "sensors" WHERE "sensor_seq" in (%v)`, sensorSeqsList.String()))
+	if err != nil {
+		return nil, err
+	}
+
+	factorMap := make(map[uint64]float64)
+	for factorRows.Next() {
+		var sensorid uint64
+		var factor float64
+
+		err = factorRows.Scan(&sensorid, &factor)
+		if err != nil {
+			return nil, err
+		}
+
+		factorMap[sensorid] = factor
+	}
+
+	factorRows.Close()
+	err = factorRows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	//Read values
+	var valueQuery string
 
 	if resolution == "raw" {
 		valueQuery = fmt.Sprintf(`SELECT "sensor", "timestamp", "value" FROM "measure_raw" WHERE "sensor" IN (%v) AND "timestamp" BETWEEN $1 AND $2`, sensorSeqsList.String())
@@ -115,7 +145,7 @@ func (h *sqlHandler) loadValues(since, until time.Time, resolution string, senso
 		return nil, err
 	}
 
-	result := make(map[uint64][]Value)
+	result := make(map[uint64][]msg2api.Measurement)
 	if resolution == "raw" {
 		for rows.Next() {
 			var sensorid uint64
@@ -126,7 +156,7 @@ func (h *sqlHandler) loadValues(since, until time.Time, resolution string, senso
 			if err != nil {
 				return nil, err
 			}
-			result[sensorid] = append(result[sensorid], Value{timestamp, value})
+			result[sensorid] = append(result[sensorid], msg2api.Measurement{timestamp, value * factorMap[sensorid]})
 		}
 	} else {
 		for rows.Next() {
@@ -139,7 +169,7 @@ func (h *sqlHandler) loadValues(since, until time.Time, resolution string, senso
 			if err != nil {
 				return nil, err
 			}
-			result[sensorid] = append(result[sensorid], Value{timestamp, sum / float64(count)})
+			result[sensorid] = append(result[sensorid], msg2api.Measurement{timestamp, (sum / float64(count)) * factorMap[sensorid]})
 		}
 	}
 

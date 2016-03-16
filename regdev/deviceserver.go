@@ -17,12 +17,13 @@ import (
 	"time"
 )
 
+// DeviceServer manages web API interactions with the device database.
 type DeviceServer struct {
 	Db Db
 }
 
-var badHeartbeat = errors.New("invalid heartbeat")
-var badArgs = errors.New("bad arguments")
+var errBadHeartbeat = errors.New("invalid heartbeat")
+var errBadArgs = errors.New("bad arguments")
 
 func (s *DeviceServer) registerDevice(w http.ResponseWriter, r *http.Request) {
 	keys, hasKeys := r.Header["X-Key"]
@@ -50,7 +51,7 @@ func (s *DeviceServer) registerDevice(w http.ResponseWriter, r *http.Request) {
 func parseHeartbeatParams(r *http.Request) (ts time.Time, tsRaw []byte, sig []byte, err error) {
 	args := r.URL.Query()
 	if len(args["ts"]) != 1 || len(args["sig"]) != 1 {
-		err = badArgs
+		err = errBadArgs
 		return
 	}
 
@@ -70,7 +71,7 @@ func (s *DeviceServer) heartbeat(w http.ResponseWriter, r *http.Request) {
 		dev := tx.Device(mux.Vars(r)["device"])
 		if dev == nil {
 			http.Error(w, "not found", 404)
-			return badHeartbeat
+			return errBadHeartbeat
 		}
 
 		mac := hmac.New(sha256.New, dev.Key())
@@ -95,7 +96,7 @@ func (s *DeviceServer) heartbeat(w http.ResponseWriter, r *http.Request) {
 		mac.Write(body)
 		if !hmac.Equal(mac.Sum(nil), sig) {
 			http.Error(w, "bad request", 400)
-			return badHeartbeat
+			return errBadHeartbeat
 		}
 		mac.Reset()
 
@@ -153,6 +154,7 @@ func (s *DeviceServer) heartbeat(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// RegisterRoutes add the device speficif handler functions to the given router.
 func (s *DeviceServer) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/v1/{device}", s.registerDevice).Methods("POST")
 	r.HandleFunc("/v1/{device}/status", s.heartbeat).Methods("POST")

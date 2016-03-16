@@ -17,46 +17,46 @@ type registeredDevice struct {
 }
 
 var (
-	registeredDevice_key       = []byte("key")
-	registeredDevice_user      = []byte("user")
-	registeredDevice_network   = []byte("network")
-	registeredDevice_heartbeat = []byte("heartbeat")
+	registeredDeviceKey       = []byte("key")
+	registeredDeviceUser      = []byte("user")
+	registeredDeviceNetwork   = []byte("network")
+	registeredDeviceHeartbeat = []byte("heartbeat")
 
-	badNetworkConfig = errors.New("bad network config")
+	errBadNetworkConfig = errors.New("bad network config")
 )
 
 func (r *registeredDevice) init(key []byte) {
-	r.b.Put(registeredDevice_key, key)
-	r.b.CreateBucket(registeredDevice_heartbeat)
+	r.b.Put(registeredDeviceKey, key)
+	r.b.CreateBucket(registeredDeviceHeartbeat)
 }
 
-func (r *registeredDevice) Id() string {
+func (r *registeredDevice) ID() string {
 	return r.id
 }
 
 func (r *registeredDevice) Key() []byte {
-	return r.b.Get(registeredDevice_key)
+	return r.b.Get(registeredDeviceKey)
 }
 
 func (r *registeredDevice) UserLink() (string, bool) {
-	if uid := r.b.Get(registeredDevice_user); uid != nil {
+	if uid := r.b.Get(registeredDeviceUser); uid != nil {
 		return string(uid), true
 	}
 	return "", false
 }
 
 func (r *registeredDevice) LinkTo(uid string) error {
-	if r.b.Get(registeredDevice_user) != nil {
-		return AlreadyLinked
+	if r.b.Get(registeredDeviceUser) != nil {
+		return ErrAlreadyLinked
 	}
-	return r.b.Put(registeredDevice_user, []byte(uid))
+	return r.b.Put(registeredDeviceUser, []byte(uid))
 }
 
 func (r *registeredDevice) Unlink() error {
-	if err := r.b.Delete(registeredDevice_user); err != nil {
+	if err := r.b.Delete(registeredDeviceUser); err != nil {
 		return err
 	}
-	return r.b.Delete(registeredDevice_network)
+	return r.b.Delete(registeredDeviceNetwork)
 }
 
 func (r *registeredDevice) RegisterHeartbeat(hb Heartbeat) error {
@@ -69,7 +69,7 @@ func (r *registeredDevice) RegisterHeartbeat(hb Heartbeat) error {
 		hb.Config = nil
 	}
 
-	bucket := r.b.Bucket(registeredDevice_heartbeat)
+	bucket := r.b.Bucket(registeredDeviceHeartbeat)
 	value, err := json.Marshal(hb)
 	if err != nil {
 		return err
@@ -82,7 +82,7 @@ func (r *registeredDevice) GetHeartbeats(maxCount uint64) (result []Heartbeat) {
 		maxCount = 0xFFFFFFFFFFFFFFFF
 	}
 
-	cursor := r.b.Bucket(registeredDevice_heartbeat).Cursor()
+	cursor := r.b.Bucket(registeredDeviceHeartbeat).Cursor()
 	key, value := cursor.Last()
 	maxCount--
 	for ; maxCount > 0 && key != nil; maxCount-- {
@@ -104,7 +104,7 @@ func (r *registeredDevice) GetHeartbeats(maxCount uint64) (result []Heartbeat) {
 func (r *registeredDevice) GetNetworkConfig() DeviceConfigNetwork {
 	var result DeviceConfigNetwork
 
-	data := r.b.Get(registeredDevice_network)
+	data := r.b.Get(registeredDeviceNetwork)
 	if data == nil || json.Unmarshal(data, &result) != nil {
 		return DeviceConfigNetwork{}
 	}
@@ -177,12 +177,12 @@ func checkConfigWifi(conf *DeviceConfigNetWifi) bool {
 
 func (r *registeredDevice) SetNetworkConfig(conf *DeviceConfigNetwork) error {
 	if !checkConfigLan(conf.LAN) || !checkConfigWifi(conf.Wifi) {
-		return badNetworkConfig
+		return errBadNetworkConfig
 	}
 
 	data, err := json.Marshal(conf)
 	if err != nil {
 		return err
 	}
-	return r.b.Put(registeredDevice_network, data)
+	return r.b.Put(registeredDeviceNetwork, data)
 }
