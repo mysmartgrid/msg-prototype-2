@@ -10,11 +10,21 @@ update-deps:
 	glide up
 
 gofmt-all:
-	find . -iname '*.go' -and -not -ipath './Godeps/*' |\
+	find . -iname '*.go' -and -not -ipath './vendor/*' |\
 		xargs dirname |\
 		sort |\
 		uniq |\
-		xargs godep go fmt
+		xargs gofmt -w -e -s
+
+golint-all:
+	find . -iname '*.go' -and -not -ipath './vendor/*' |\
+		xargs dirname |\
+		sort |\
+		uniq |\
+		while read package;\
+		do\
+			golint $$package;\
+		done;
 
 .build/msgpc:
 	go build ./cmd/msgpc
