@@ -19,6 +19,7 @@
         "definitions/bootstrap.d.ts",
         "definitions/es6-shim.d.ts",
         "definitions/jquery.d.ts",
+        "directives/devicelist.ts",
         "directives/sensorgraph.ts",
         "directives/ui-elements/datetimepicker.ts",
         "directives/ui-elements/numberspinner.ts",

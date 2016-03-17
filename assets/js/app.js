@@ -6,6 +6,7 @@ var numberspinner_1 = require('./directives/ui-elements/numberspinner');
 var timerangespinner_1 = require('./directives/ui-elements/timerangespinner');
 var datetimepicker_1 = require('./directives/ui-elements/datetimepicker');
 var sensorgraph_1 = require('./directives/sensorgraph');
+var devicelist_1 = require('./directives/devicelist');
 angular.module("msgp", ['ui.bootstrap'])
     .config(function ($interpolateProvider) {
     $interpolateProvider.startSymbol("%%");
@@ -32,107 +33,7 @@ angular.module("msgp", ['ui.bootstrap'])
             }
         };
     }])
-    .directive("deviceList", ["$http", "$interval", function ($http, $interval) {
-        return {
-            restrict: "A",
-            templateUrl: "/html/device-list.html",
-            scope: {
-                devices: "="
-            },
-            link: function (scope, element, attrs) {
-                scope.showSpinner = false;
-                scope.encodeURIComponent = encodeURIComponent;
-                scope.deviceEditorSave = function () {
-                    $http.post(scope.editedDeviceURL, scope.editedDeviceProps)
-                        .success(function (data, status, headers, config) {
-                        scope.devices[scope.editedDeviceId].name = scope.editedDeviceProps.name;
-                        scope.devices[scope.editedDeviceId].lan = scope.editedDeviceProps.lan;
-                        scope.devices[scope.editedDeviceId].wifi = scope.editedDeviceProps.wifi;
-                        scope.editedDeviceId = undefined;
-                        scope.errorSavingSettings = null;
-                        $("#deviceEditDialog").modal('hide');
-                    })
-                        .error(function (data, status, headers, config) {
-                        scope.errorSavingSettings = data;
-                    });
-                };
-                var flash = function (element) {
-                    element.removeClass("ng-hide");
-                    $interval(function () {
-                        element.addClass("ng-hide");
-                    }, 3000, 1);
-                };
-                scope.editDev = function (e) {
-                    var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
-                    var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-netconf-url");
-                    scope.showSpinner = true;
-                    $http.get(url)
-                        .success(function (data, status, headers, config) {
-                        scope.showSpinner = false;
-                        scope.errorLoadingSettings = null;
-                        scope.errorSavingSettings = null;
-                        scope.editedDeviceId = id;
-                        scope.editedDeviceURL = url;
-                        scope.editedDeviceProps = {
-                            name: scope.devices[id].name,
-                            lan: data.lan || {},
-                            wifi: data.wifi || {}
-                        };
-                        $("#deviceEditDialog").modal('show');
-                    })
-                        .error(function (data, status, headers, config) {
-                        scope.showSpinner = false;
-                        scope.errorLoadingSettings = data;
-                    });
-                };
-                scope.remove = function (e) {
-                    var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-remove-url");
-                    var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
-                    scope.showSpinner = true;
-                    $http.delete(url)
-                        .success(function (data, status, headers, config) {
-                        scope.showSpinner = false;
-                        delete scope.devices[id];
-                        flash($(e.target).parents(".device-list-").first().find(".device-deleted-"));
-                    })
-                        .error(function (data, status, headers, config) {
-                        scope.showSpinner = false;
-                        scope.error = data;
-                    });
-                };
-                scope.editSensor = function (e) {
-                    var devId = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
-                    var sensId = $(e.target).parents("tr[data-sensor-id]").first().attr("data-sensor-id");
-                    var url = $(e.target).parents("tr[data-sensor-conf-url]").first().attr("data-sensor-conf-url");
-                    scope.errorSavingSensor = null;
-                    scope.editedSensor = {
-                        name: scope.devices[devId].sensors[sensId].name,
-                        confUrl: url,
-                        devId: devId,
-                        sensId: sensId,
-                    };
-                    $("#sensorEditDialog").modal('show');
-                };
-                scope.saveSensor = function () {
-                    var props = {
-                        name: scope.editedSensor.name
-                    };
-                    scope.showSpinner = true;
-                    $http.post(scope.editedSensor.confUrl, props)
-                        .success(function (data, status, headers, config) {
-                        scope.showSpinner = false;
-                        scope.devices[scope.editedSensor.devId].sensors[scope.editedSensor.sensId].name = props.name;
-                        scope.editedSensor = null;
-                        $("#sensorEditDialog").modal('hide');
-                    })
-                        .error(function (data, status, headers, config) {
-                        scope.showSpinner = false;
-                        scope.errorSavingSensor = data;
-                    });
-                };
-            }
-        };
-    }])
+    .directive("deviceList", devicelist_1.default())
     .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", function (wsclient, wsurl, $http, $timeout, $uibModal) {
         wsclient.connect(wsurl);
         var modalInstance = null;
@@ -175,7 +76,128 @@ angular.module("msgp", ['ui.bootstrap'])
         };
     }]);
 
-},{"./directives/sensorgraph":2,"./directives/ui-elements/datetimepicker":3,"./directives/ui-elements/numberspinner":4,"./directives/ui-elements/timerangespinner":5,"./lib/msg2socket":8,"./lib/updatedispatcher":10}],2:[function(require,module,exports){
+},{"./directives/devicelist":2,"./directives/sensorgraph":3,"./directives/ui-elements/datetimepicker":4,"./directives/ui-elements/numberspinner":5,"./directives/ui-elements/timerangespinner":6,"./lib/msg2socket":9,"./lib/updatedispatcher":11}],2:[function(require,module,exports){
+"use strict";
+var DeviceListController = (function () {
+    function DeviceListController($scope, $interval, $http) {
+        this.$scope = $scope;
+        this.$interval = $interval;
+        this.$http = $http;
+        $scope.showSpinner = false;
+        $scope.encodeURIComponent = encodeURIComponent;
+        $scope.deviceEditorSave = function () {
+            $http.post($scope.editedDeviceURL, $scope.editedDeviceProps)
+                .success(function (data, status, headers, config) {
+                $scope.devices[$scope.editedDeviceId].name = $scope.editedDeviceProps.name;
+                $scope.devices[$scope.editedDeviceId].lan = $scope.editedDeviceProps.lan;
+                $scope.devices[$scope.editedDeviceId].wifi = $scope.editedDeviceProps.wifi;
+                $scope.editedDeviceId = undefined;
+                $scope.errorSavingSettings = null;
+                $("#deviceEditDialog").modal('hide');
+            })
+                .error(function (data, status, headers, config) {
+                $scope.errorSavingSettings = data;
+            });
+        };
+        var flash = function (element) {
+            element.removeClass("ng-hide");
+            $interval(function () {
+                element.addClass("ng-hide");
+            }, 3000, 1);
+        };
+        $scope.editDev = function (e) {
+            var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
+            var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-netconf-url");
+            $scope.showSpinner = true;
+            $http.get(url)
+                .success(function (data, status, headers, config) {
+                $scope.showSpinner = false;
+                $scope.errorLoadingSettings = null;
+                $scope.errorSavingSettings = null;
+                $scope.editedDeviceId = id;
+                $scope.editedDeviceURL = url;
+                $scope.editedDeviceProps = {
+                    name: $scope.devices[id].name,
+                    lan: data.lan || {},
+                    wifi: data.wifi || {}
+                };
+                $("#deviceEditDialog").modal('show');
+            })
+                .error(function (data, status, headers, config) {
+                $scope.showSpinner = false;
+                $scope.errorLoadingSettings = data;
+            });
+        };
+        $scope.remove = function (e) {
+            var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-remove-url");
+            var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
+            $scope.showSpinner = true;
+            $http.delete(url)
+                .success(function (data, status, headers, config) {
+                $scope.showSpinner = false;
+                delete $scope.devices[id];
+                flash($(e.target).parents(".device-list").first().find(".device-deleted"));
+            })
+                .error(function (data, status, headers, config) {
+                $scope.showSpinner = false;
+                $scope.error = data;
+            });
+        };
+        $scope.editSensor = function (e) {
+            var devId = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
+            var sensId = $(e.target).parents("tr[data-sensor-id]").first().attr("data-sensor-id");
+            var url = $(e.target).parents("tr[data-sensor-conf-url]").first().attr("data-sensor-conf-url");
+            $scope.errorSavingSensor = null;
+            $scope.editedSensor = {
+                name: $scope.devices[devId].sensors[sensId].name,
+                confUrl: url,
+                devId: devId,
+                sensId: sensId,
+            };
+            $("#sensorEditDialog").modal('show');
+        };
+        $scope.saveSensor = function () {
+            var props = {
+                name: $scope.editedSensor.name
+            };
+            $scope.showSpinner = true;
+            $http.post($scope.editedSensor.confUrl, props)
+                .success(function (data, status, headers, config) {
+                $scope.showSpinner = false;
+                $scope.devices[$scope.editedSensor.devId].sensors[$scope.editedSensor.sensId].name = props.name;
+                $scope.editedSensor = null;
+                $("#sensorEditDialog").modal('hide');
+            })
+                .error(function (data, status, headers, config) {
+                $scope.showSpinner = false;
+                $scope.errorSavingSensor = data;
+            });
+        };
+    }
+    return DeviceListController;
+}());
+var DeviceListDirective = (function () {
+    function DeviceListDirective() {
+        this.require = "deviceList";
+        this.restrict = "A";
+        this.templateUrl = "/html/device-list.html";
+        this.scope = {
+            devices: "="
+        };
+        this.controller = ['$scope', '$interval', '$http', DeviceListController];
+        this.link = function ($scope, element, attrs, deviceList) {
+            deviceList.element = element;
+        };
+    }
+    return DeviceListDirective;
+}());
+function DeviceListFactory() {
+    return function () { return new DeviceListDirective(); };
+}
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = DeviceListFactory;
+
+},{}],3:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -383,7 +405,7 @@ function SensorGraphFactory() {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = SensorGraphFactory;
 
-},{"../lib/common":7,"../lib/sensorvaluestore":9,"../lib/utils":11,"./widget":6}],3:[function(require,module,exports){
+},{"../lib/common":8,"../lib/sensorvaluestore":10,"../lib/utils":12,"./widget":7}],4:[function(require,module,exports){
 "use strict";
 var DateTimePickerController = (function () {
     function DateTimePickerController($scope) {
@@ -460,7 +482,7 @@ var DateTimePickerDirective = (function () {
     return DateTimePickerDirective;
 }());
 
-},{}],4:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 "use strict";
 var NumberSpinnerController = (function () {
     function NumberSpinnerController($scope) {
@@ -548,7 +570,7 @@ var NumberSpinnerDirective = (function () {
     return NumberSpinnerDirective;
 }());
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 "use strict";
 var TimeUnits = ["years", "days", "hours", "minutes"];
 var UnitsToMillisecs = {
@@ -664,7 +686,7 @@ var TimeRangeSpinnerDirective = (function () {
     return TimeRangeSpinnerDirective;
 }());
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 "use strict";
 var Utils = require('../lib/utils');
 var common_1 = require('../lib/common');
@@ -735,7 +757,7 @@ var WidgetSettingsController = (function () {
 }());
 exports.WidgetSettingsController = WidgetSettingsController;
 
-},{"../lib/common":7,"../lib/utils":11}],7:[function(require,module,exports){
+},{"../lib/common":8,"../lib/utils":12}],8:[function(require,module,exports){
 "use strict";
 ;
 ;
@@ -770,7 +792,7 @@ function sensorEqual(a, b) {
 }
 exports.sensorEqual = sensorEqual;
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict";
 var ApiVersion = "v5.user.msg";
 var Socket = (function () {
@@ -915,7 +937,7 @@ var Socket = (function () {
 exports.Socket = Socket;
 ;
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 var Utils = require('./utils');
 var ColorScheme = ['#00A8F0', '#C0D800', '#CB4B4B', '#4DA74D', '#9440ED'];
@@ -1064,7 +1086,7 @@ var SensorValueStore = (function () {
 }());
 exports.SensorValueStore = SensorValueStore;
 
-},{"./utils":11}],10:[function(require,module,exports){
+},{"./utils":12}],11:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -1481,7 +1503,7 @@ var DummySubscriber = (function () {
 }());
 exports.DummySubscriber = DummySubscriber;
 
-},{"./common":7,"./utils":11}],11:[function(require,module,exports){
+},{"./common":8,"./utils":12}],12:[function(require,module,exports){
 "use strict";
 function contains(haystack, needle) {
     var i = haystack.indexOf(needle);
