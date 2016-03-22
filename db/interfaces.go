@@ -11,6 +11,7 @@ type Tx interface {
 	RemoveGroup(id string) error
 	Group(id string) Group
 	Groups() map[string]Group
+	Sensor(id string) Sensor
 }
 
 type Db interface {

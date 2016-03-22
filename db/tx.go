@@ -129,6 +129,21 @@ func (tx *tx) Groups() map[string]Group {
 	return result
 }
 
+func (tx *tx) Sensor(id string) Sensor {
+	var deviceId string
+	var userId   string
+	err := tx.QueryRow(`SELECT device_id,user_id FROM sensors WHERE sensor_id = $1`, id).Scan(&deviceId, &userId)
+	if err != nil {
+		return nil
+	}
+	user := tx.User(userId)	
+	if( user != nil ) {
+		device := user.Device(deviceId)
+		return device.Sensor(id)
+	}
+	return nil
+}
+
 func (tx *tx) loadReadings(since, until time.Time, user User, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
 	var keys []uint64
 	for _, sensors := range sensors {
