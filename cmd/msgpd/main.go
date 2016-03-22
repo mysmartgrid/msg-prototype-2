@@ -54,7 +54,7 @@ type serverConfig struct {
 	TemplatesDir      string          `toml:"templates-dir"`
 	DbDir             string          `toml:"db-dir"`
 	Postgres          postgresConfig  `toml:"postgres"`
-	Tls               tlsConfig       `toml:"tls"`
+	TLS               tlsConfig       `toml:"tls"`
 	DeviceProxyConfig string          `toml:"device-proxy-config"`
 	EnableAdminOps    bool            `toml:"motherlode"`
 	Benchmark         benchmarkConfig `toml:"benchmark"`
@@ -71,16 +71,16 @@ var config serverConfig
 var templates *template.Template
 var cookieStore = sessions.NewCookieStore([]byte("test-key"))
 var proxyConf struct {
-	PostUrl    string
+	PostURL    string
 	CertPath   string
 	DeviceKeys map[string]string
 }
-var oldApiPostClient *http.Client
+var oldAPIPostClient *http.Client
 var db msgpdb.Db
 var devdb regdev.Db
 var h = hub.New()
 
-var apiCtx msgp.WsApiContext
+var apiCtx msgp.WsAPIContext
 
 func init() {
 	flag.Parse()
@@ -105,7 +105,7 @@ func init() {
 		if err := json.Unmarshal(configData, &proxyConf); err != nil {
 			log.Fatalf("could not load device key map: %v", err.Error())
 		}
-		oldApiPostClient = &http.Client{
+		oldAPIPostClient = &http.Client{
 			Timeout: 2 * time.Second,
 		}
 		if proxyConf.CertPath != "" {
@@ -122,7 +122,7 @@ func init() {
 			tlsConfig := &tls.Config{
 				RootCAs: certPool,
 			}
-			oldApiPostClient.Transport = &http.Transport{TLSClientConfig: tlsConfig}
+			oldAPIPostClient.Transport = &http.Transport{TLSClientConfig: tlsConfig}
 		}
 	}
 
@@ -151,10 +151,10 @@ func init() {
 		os.Exit(1)
 	}
 
-	if config.Tls.Key != "" && config.Tls.Cert == "" {
+	if config.TLS.Key != "" && config.TLS.Cert == "" {
 		log.Fatal("tls cert missing")
 	}
-	if config.Tls.Cert != "" && config.Tls.Key == "" {
+	if config.TLS.Cert != "" && config.TLS.Key == "" {
 		log.Fatal("tls key missing")
 	}
 
@@ -164,9 +164,8 @@ func init() {
 		"activeIfAt": func(this, page string) template.HTMLAttr {
 			if strings.SplitN(page, ":", 2)[0] == this {
 				return `class="active"`
-			} else {
-				return ""
 			}
+			return ""
 		},
 		"sessionFlag": func(flag, set string) bool {
 			for _, sflag := range strings.Split(set, ":")[1:] {
@@ -207,7 +206,7 @@ func init() {
 		log.Fatal("error opening device db: ", err)
 	}
 
-	apiCtx = msgp.WsApiContext{Db: db, Hub: h}
+	apiCtx = msgp.WsAPIContext{Db: db, Hub: h}
 }
 
 func getSession(w http.ResponseWriter, r *http.Request) *sessions.Session {
@@ -237,7 +236,7 @@ func removeSessionAndNotifyUser(w http.ResponseWriter, r *http.Request, session 
 func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 	return defaultHeaders(func(w http.ResponseWriter, r *http.Request) {
 		session := getSession(w, r)
-		userId, found := session.Values["user"]
+		userID, found := session.Values["user"]
 		if !found {
 			removeSessionAndNotifyUser(w, r, session)
 			return
@@ -252,12 +251,12 @@ func wsTemplate(name string) func(http.ResponseWriter, *http.Request) {
 			User    msgpdb.User
 		}
 		db.View(func(tx msgpdb.Tx) error {
-			user := tx.User(userId.(string))
+			user := tx.User(userID.(string))
 			if user == nil {
 				removeSessionAndNotifyUser(w, r, session)
 				return nil
 			}
-			var url = scheme + r.Host + "/ws/user/" + user.Id() + "/" + session.Values["wsToken"].(string)
+			var url = scheme + r.Host + "/ws/user/" + user.ID() + "/" + session.Values["wsToken"].(string)
 			return templates.ExecuteTemplate(w, name, ctx{Ws: url, User: user})
 		})
 	})
@@ -278,7 +277,7 @@ func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	x := msgp.WsUserApi{
+	x := msgp.WsUserAPI{
 		Ctx:     &apiCtx,
 		User:    mux.Vars(r)["user"],
 		Writer:  w,
@@ -289,16 +288,16 @@ func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func wsHandlerDevice(w http.ResponseWriter, r *http.Request) {
-	x := msgp.WsDevApi{
+	x := msgp.WsDevAPI{
 		User:    mux.Vars(r)["user"],
 		Device:  mux.Vars(r)["device"],
 		Writer:  w,
 		Request: r,
 	}
-	if oldApiPostClient != nil {
+	if oldAPIPostClient != nil {
 		x.Key = []byte(proxyConf.DeviceKeys[x.Device])
-		x.PostUrl = proxyConf.PostUrl
-		x.PostClient = oldApiPostClient
+		x.PostURL = proxyConf.PostURL
+		x.PostClient = oldAPIPostClient
 	}
 	apiCtx.RegisterDevice(&x)
 	defer func() {
@@ -425,14 +424,14 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 `
 
 	session := getSession(w, r)
-	userId, found := session.Values["user"]
+	userID, found := session.Values["user"]
 	if !found {
 		removeSessionAndNotifyUser(w, r, session)
 		return
 	}
 
 	db.View(func(utx msgpdb.Tx) error {
-		user := utx.User(userId.(string))
+		user := utx.User(userID.(string))
 		if user == nil || !user.IsAdmin() {
 			http.Error(w, "unauthorized", 401)
 			return nil
@@ -474,7 +473,7 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func adminUser_Add(w http.ResponseWriter, r *http.Request) {
+func adminUserAdd(w http.ResponseWriter, r *http.Request) {
 	user := mux.Vars(r)["user"]
 	password := r.FormValue("password")
 
@@ -487,10 +486,10 @@ func adminUser_Add(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func adminUser_Set(w http.ResponseWriter, r *http.Request) {
-	userId := mux.Vars(r)["user"]
+func adminUserSet(w http.ResponseWriter, r *http.Request) {
+	userID := mux.Vars(r)["user"]
 	db.Update(func(tx msgpdb.Tx) error {
-		user := tx.User(userId)
+		user := tx.User(userID)
 		if user == nil {
 			http.Error(w, "not found", 404)
 			return errors.New("")
@@ -525,7 +524,7 @@ func loggedInSwitch(in, out func(http.ResponseWriter, *http.Request)) func(http.
 func userDevices(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	db.View(func(tx msgpdb.Tx) error {
-		u := tx.User(session.Values["user"].(string))
+		u := tx.User(session.Values["user"].(string)) //FIXME do string cast after nil check
 		if u == nil {
 			removeSessionAndNotifyUser(w, r, session)
 			return nil
@@ -585,7 +584,7 @@ func apiAbortIf(code int, err error) {
 	}
 }
 
-func api_Session_User(tx msgpdb.Tx, s *sessions.Session) msgpdb.User {
+func apiSessionUser(tx msgpdb.Tx, s *sessions.Session) msgpdb.User {
 	user := tx.User(s.Values["user"].(string))
 	if user == nil {
 		apiAbort(401, "not authorized")
@@ -593,39 +592,39 @@ func api_Session_User(tx msgpdb.Tx, s *sessions.Session) msgpdb.User {
 	return user
 }
 
-func api_Device(tx regdev.Tx, devId string) regdev.RegisteredDevice {
-	dev := tx.Device(devId)
+func apiDevice(tx regdev.Tx, devID string) regdev.RegisteredDevice {
+	dev := tx.Device(devID)
 	if dev == nil {
 		apiAbort(404, "no such device")
 	}
 	return dev
 }
 
-func api_User_Device(user msgpdb.User, devId string) msgpdb.Device {
-	dev := user.Device(devId)
+func apiUserDevice(user msgpdb.User, devID string) msgpdb.Device {
+	dev := user.Device(devID)
 	if dev == nil {
 		apiAbort(404, "no such device")
 	}
 	return dev
 }
 
-func api_User_Devices_Add(w http.ResponseWriter, r *http.Request) {
+func apiUserDevicesAdd(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
-	devId := mux.Vars(r)["device"]
+	devID := mux.Vars(r)["device"]
 
 	db.Update(func(utx msgpdb.Tx) error {
 		return devdb.Update(func(dtx regdev.Tx) error {
-			user := api_Session_User(utx, session)
-			dev := api_Device(dtx, devId)
+			user := apiSessionUser(utx, session)
+			dev := apiDevice(dtx, devID)
 
-			apiAbortIf(400, dev.LinkTo(user.Id()))
+			apiAbortIf(400, dev.LinkTo(user.ID()))
 
-			_, err := user.AddDevice(dev.Id(), dev.Key(), false)
+			_, err := user.AddDevice(dev.ID(), dev.Key(), false)
 			apiAbortIf(500, err)
 
 			data := map[string]interface{}{
-				devId: map[string]interface{}{
-					"name": user.Device(devId).Name(),
+				devID: map[string]interface{}{
+					"name": user.Device(devID).Name(),
 				},
 			}
 			raw, _ := json.Marshal(data)
@@ -635,30 +634,30 @@ func api_User_Devices_Add(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func api_User_Devices_Remove(w http.ResponseWriter, r *http.Request) {
+func apiUserDevicesRemove(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
-	devId := mux.Vars(r)["device"]
+	devID := mux.Vars(r)["device"]
 
 	db.Update(func(utx msgpdb.Tx) error {
 		return devdb.Update(func(dtx regdev.Tx) error {
-			user := api_Session_User(utx, session)
-			dev := api_Device(dtx, devId)
+			user := apiSessionUser(utx, session)
+			dev := apiDevice(dtx, devID)
 
 			apiAbortIf(500, dev.Unlink())
-			apiAbortIf(500, user.RemoveDevice(devId))
+			apiAbortIf(500, user.RemoveDevice(devID))
 			return nil
 		})
 	})
 }
 
-func api_User_Device_Config_Get(w http.ResponseWriter, r *http.Request) {
+func apiUserDeviceConfigGet(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
-	devId := mux.Vars(r)["device"]
+	devID := mux.Vars(r)["device"]
 	db.View(func(utx msgpdb.Tx) error {
 		return devdb.View(func(dtx regdev.Tx) error {
-			user := api_Session_User(utx, session)
-			rdev := api_Device(dtx, devId)
-			dev := api_User_Device(user, devId)
+			user := apiSessionUser(utx, session)
+			rdev := apiDevice(dtx, devID)
+			dev := apiUserDevice(user, devID)
 
 			netconf := rdev.GetNetworkConfig()
 			conf := map[string]interface{}{
@@ -674,14 +673,14 @@ func api_User_Device_Config_Get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func api_User_Device_Config_Set(w http.ResponseWriter, r *http.Request) {
+func apiUserDeviceConfigSet(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
-	devId := mux.Vars(r)["device"]
+	devID := mux.Vars(r)["device"]
 	db.Update(func(utx msgpdb.Tx) error {
 		return devdb.Update(func(dtx regdev.Tx) error {
-			user := api_Session_User(utx, session)
-			rdev := api_Device(dtx, devId)
-			dev := api_User_Device(user, devId)
+			user := apiSessionUser(utx, session)
+			rdev := apiDevice(dtx, devID)
+			dev := apiUserDevice(user, devID)
 
 			var conf regdev.DeviceConfigNetwork
 			var name struct {
@@ -701,15 +700,15 @@ func api_User_Device_Config_Set(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func api_User_Device_Sensor_Props_Set(w http.ResponseWriter, r *http.Request) {
+func apiUserDeviceSensorPropsSet(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
-	devId := mux.Vars(r)["device"]
-	sensId := mux.Vars(r)["sensor"]
+	devID := mux.Vars(r)["device"]
+	sensID := mux.Vars(r)["sensor"]
 	db.Update(func(utx msgpdb.Tx) error {
-		user := api_Session_User(utx, session)
-		dev := api_User_Device(user, devId)
+		user := apiSessionUser(utx, session)
+		dev := apiUserDevice(user, devID)
 
-		sens := dev.Sensor(sensId)
+		sens := dev.Sensor(sensID)
 		if sens == nil {
 			apiAbort(404, "no such sensor")
 		}
@@ -724,11 +723,11 @@ func api_User_Device_Sensor_Props_Set(w http.ResponseWriter, r *http.Request) {
 		apiAbortIf(500, json.Unmarshal(data, &conf))
 		apiAbortIf(500, sens.SetName(conf.Name))
 
-		apiCtx.Hub.Publish(user.Id(), msg2api.UserEventMetadataArgs{
+		apiCtx.Hub.Publish(user.ID(), msg2api.UserEventMetadataArgs{
 			Devices: map[string]msg2api.DeviceMetadata{
-				devId: msg2api.DeviceMetadata{
+				devID: {
 					Sensors: map[string]msg2api.SensorMetadata{
-						sensId: msg2api.SensorMetadata{
+						sensID: {
 							Name: &conf.Name,
 						},
 					},
@@ -755,11 +754,11 @@ func main() {
 		router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
 		router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
 		router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
-		router.HandleFunc("/api/user/v1/device/{device}", apiBlock(api_User_Devices_Add)).Methods("POST")
-		router.HandleFunc("/api/user/v1/device/{device}", apiBlock(api_User_Devices_Remove)).Methods("DELETE")
-		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(api_User_Device_Config_Get)).Methods("GET")
-		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(api_User_Device_Config_Set)).Methods("POST")
-		router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(api_User_Device_Sensor_Props_Set)).Methods("POST")
+		router.HandleFunc("/api/user/v1/device/{device}", apiBlock(apiUserDevicesAdd)).Methods("POST")
+		router.HandleFunc("/api/user/v1/device/{device}", apiBlock(apiUserDevicesRemove)).Methods("DELETE")
+		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(apiUserDeviceConfigGet)).Methods("GET")
+		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(apiUserDeviceConfigSet)).Methods("POST")
+		router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(apiUserDeviceSensorPropsSet)).Methods("POST")
 
 		// old api
 		apiserver.RegisterRoutes(router.PathPrefix("/oldapi").Subrouter())
@@ -767,8 +766,8 @@ func main() {
 		router.HandleFunc("/admin", defaultHeaders(adminHandler))
 
 		if config.EnableAdminOps {
-			router.HandleFunc("/admin/user/{user}", adminUser_Add).Methods("PUT")
-			router.HandleFunc("/admin/user/{user}/props", adminUser_Set).Methods("POST")
+			router.HandleFunc("/admin/user/{user}", adminUserAdd).Methods("PUT")
+			router.HandleFunc("/admin/user/{user}/props", adminUserSet).Methods("POST")
 		}
 
 		router.HandleFunc("/ws/user/{user}/{token}", wsHandlerUser)
@@ -779,10 +778,10 @@ func main() {
 		http.Handle("/", router)
 
 		log.Print("Listening on ", config.ListenAddr)
-		if config.Tls.Cert != "" {
-			log.Printf("Using SSL cert and key %v, %v", config.Tls.Cert, config.Tls.Key)
+		if config.TLS.Cert != "" {
+			log.Printf("Using SSL cert and key %v, %v", config.TLS.Cert, config.TLS.Key)
 
-			if err := http.ListenAndServeTLS(config.ListenAddr, config.Tls.Cert, config.Tls.Key, nil); err != nil {
+			if err := http.ListenAndServeTLS(config.ListenAddr, config.TLS.Cert, config.TLS.Key, nil); err != nil {
 				log.Fatalf("failed: %v", err.Error())
 			}
 		} else {

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/mysmartgrid/msg2api"
 	"log"
 	"time"
 )
@@ -13,17 +14,14 @@ const (
 )
 
 var (
-	InvalidId = errors.New("id invalid")
-	IdExists  = errors.New("id exists")
-
-	noSensor            = errors.New("sensor not found")
-	deviceNotRegistered = errors.New("device not registered")
+	// ErrIDExists is returned after an attempt to insert a new object into the DB using an id which already exists in the DB.
+	ErrIDExists = errors.New("id exists")
 )
 
 type db struct {
 	sqldb sqlHandler
 
-	bufferedValues     map[uint64][]Value
+	bufferedValues     map[uint64][]msg2api.Measurement
 	bufferedValueCount uint32
 
 	bufferInput chan bufferValue
@@ -33,7 +31,7 @@ type db struct {
 
 type bufferValue struct {
 	key   uint64
-	value Value
+	value msg2api.Measurement
 }
 
 func (db *db) flushBuffer() {
@@ -58,6 +56,8 @@ func (db *db) manageBuffer() {
 
 	for {
 		select {
+
+		// Handle new measurement inputs to the buffer
 		case bval, ok := <-db.bufferInput:
 			if !ok {
 				return
@@ -70,22 +70,29 @@ func (db *db) manageBuffer() {
 			db.bufferedValues[bval.key] = append(slice, bval.value)
 			db.bufferedValueCount++
 
+			// Flush full buffer to database
 			if db.bufferedValueCount >= bufferSize {
 				db.flushBuffer()
 			}
 
+		// Remove a sensor from buffer management, dropping any buffered values
 		case key := <-db.bufferKill:
 			delete(db.bufferedValues, key)
 
+		// Add a new sensor to the buffer management
 		case key := <-db.bufferAdd:
-			db.bufferedValues[key] = make([]Value, 0, 4)
+			db.bufferedValues[key] = make([]msg2api.Measurement, 0, 4)
 
+		// Periodically flush buffer
 		case <-ticker.C:
 			db.flushBuffer()
 		}
 	}
 }
 
+// OpenDb opens a connection to the postgres database with the given parameters,
+// starts a process to manage its value buffer and adds all sensors in the database to the buffer manager.
+// Returns a Db struct on success or an error otherwise
 func OpenDb(sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
 	cfg := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
 		sqlUser,
@@ -102,7 +109,7 @@ func OpenDb(sqlAddr, sqlPort, sqlDb, sqlUser, sqlPass string) (Db, error) {
 
 	result := &db{
 		sqldb:          sqlHandler{postgres},
-		bufferedValues: make(map[uint64][]Value),
+		bufferedValues: make(map[uint64][]msg2api.Measurement),
 		bufferInput:    make(chan bufferValue),
 		bufferKill:     make(chan uint64),
 		bufferAdd:      make(chan uint64),
@@ -182,6 +189,6 @@ func (db *db) Update(fn func(Tx) error) error {
 }
 
 func (db *db) AddReading(sensor Sensor, time time.Time, value float64) error {
-	db.bufferInput <- bufferValue{sensor.DbId(), Value{time, value}}
+	db.bufferInput <- bufferValue{sensor.DbID(), msg2api.Measurement{time, value}}
 	return nil
 }

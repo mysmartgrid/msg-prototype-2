@@ -1,0 +1,7 @@
+#!/bin/bash
+unset NODE_ENV
+unset NODE_PATH
+
+export PATH=$HOME/local/bin:$PATH
+
+browserify -o ../js/app.js ../js_modules/app.js

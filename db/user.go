@@ -1,6 +1,7 @@
 package db
 
 import (
+	"github.com/mysmartgrid/msg2api"
 	"golang.org/x/crypto/bcrypt"
 	"time"
 )
@@ -52,9 +53,9 @@ func (u *user) RemoveDevice(id string) error {
 }
 
 func (u *user) Device(id string) Device {
-	var deviceId string
+	var deviceID string
 	var isVirtual bool
-	err := u.tx.QueryRow(`SELECT device_id, is_virtual FROM devices WHERE user_id = $1 and device_id = $2`, u.id, id).Scan(&deviceId, &isVirtual)
+	err := u.tx.QueryRow(`SELECT device_id, is_virtual FROM devices WHERE user_id = $1 and device_id = $2`, u.id, id).Scan(&deviceID, &isVirtual)
 	if err != nil {
 		return nil
 	}
@@ -141,9 +142,9 @@ func (u *user) Groups() map[string]Group {
 	return result
 }
 
-func (u *user) IsGroupAdmin(groupId string) bool {
+func (u *user) IsGroupAdmin(groupID string) bool {
 	var isAdmin bool
-	err := u.tx.QueryRow(`SELECT is_admin FROM user_groups WHERE user_id = $1 AND group_id = $2`, u.id, groupId).Scan(&isAdmin)
+	err := u.tx.QueryRow(`SELECT is_admin FROM user_groups WHERE user_id = $1 AND group_id = $2`, u.id, groupID).Scan(&isAdmin)
 	if err == nil {
 		return isAdmin
 	}
@@ -164,10 +165,40 @@ func (u *user) SetAdmin(b bool) error {
 	return err
 }
 
-func (u *user) Id() string {
+func (u *user) ID() string {
 	return u.id
 }
 
-func (u *user) LoadReadings(since, until time.Time, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
-	return u.tx.loadReadings(since, until, u, resolution, sensors)
+func (u *user) LoadReadings(since, until time.Time, resolution string, sensors map[string][]string) (map[string]map[string][]msg2api.Measurement, error) {
+	var keys []uint64
+	sensorsByKey := make(map[uint64]Sensor)
+
+	for devID, sensorIDs := range sensors {
+		dev := u.Device(devID)
+		if dev != nil {
+			for _, sensorID := range sensorIDs {
+				sensor := dev.Sensor(sensorID)
+				if sensor != nil {
+					keys = append(keys, sensor.DbID())
+					sensorsByKey[sensor.DbID()] = sensor
+				}
+			}
+		}
+	}
+
+	readings, err := u.tx.db.sqldb.loadValues(since, until, resolution, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]map[string][]msg2api.Measurement)
+	for dbid, values := range readings {
+		devID := sensorsByKey[dbid].Device().ID()
+		if _, ok := result[devID]; !ok {
+			result[devID] = make(map[string][]msg2api.Measurement)
+		}
+		result[devID][sensorsByKey[dbid].ID()] = values
+	}
+
+	return result, nil
 }

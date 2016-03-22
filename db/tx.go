@@ -2,7 +2,6 @@ package db
 
 import (
 	"database/sql"
-	"time"
 )
 
 type tx struct {
@@ -12,7 +11,7 @@ type tx struct {
 
 func (tx *tx) AddUser(id, password string) (User, error) {
 	if tx.User(id) != nil {
-		return nil, IdExists
+		return nil, ErrIDExists
 	}
 
 	_, err := tx.Exec(`INSERT INTO users(user_id, is_admin) VALUES($1, false)`, id)
@@ -29,8 +28,8 @@ func (tx *tx) AddUser(id, password string) (User, error) {
 }
 
 func (tx *tx) User(id string) User {
-	var userId string
-	err := tx.QueryRow(`SELECT user_id FROM users WHERE user_id = $1`, id).Scan(&userId)
+	var userID string
+	err := tx.QueryRow(`SELECT user_id FROM users WHERE user_id = $1`, id).Scan(&userID)
 	if err != nil {
 		return nil
 	}
@@ -73,7 +72,7 @@ func (tx *tx) Users() map[string]User {
 
 func (tx *tx) AddGroup(id string) (Group, error) {
 	if tx.Group(id) != nil {
-		return nil, IdExists
+		return nil, ErrIDExists
 	}
 
 	_, err := tx.Exec(`INSERT INTO groups VALUES($1)`, id)
@@ -92,8 +91,8 @@ func (tx *tx) RemoveGroup(id string) error {
 }
 
 func (tx *tx) Group(id string) Group {
-	var groupId string
-	err := tx.QueryRow(`SELECT group_id FROM groups WHERE group_id = $1`, id).Scan(&groupId)
+	var groupID string
+	err := tx.QueryRow(`SELECT group_id FROM groups WHERE group_id = $1`, id).Scan(&groupID)
 	if err != nil {
 		return nil
 	}
@@ -142,28 +141,4 @@ func (tx *tx) Sensor(id string) Sensor {
 		return device.Sensor(id)
 	}
 	return nil
-}
-
-func (tx *tx) loadReadings(since, until time.Time, user User, resolution string, sensors map[Device][]Sensor) (map[Device]map[Sensor][]Value, error) {
-	var keys []uint64
-	for _, sensors := range sensors {
-		for _, sensor := range sensors {
-			keys = append(keys, sensor.DbId())
-		}
-	}
-
-	queryResult, err := tx.db.sqldb.loadValues(since, until, resolution, keys)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[Device]map[Sensor][]Value)
-	for device, sensors := range sensors {
-		result[device] = make(map[Sensor][]Value)
-		for _, sensor := range sensors {
-			result[device][sensor] = queryResult[sensor.DbId()]
-		}
-	}
-
-	return result, nil
 }
