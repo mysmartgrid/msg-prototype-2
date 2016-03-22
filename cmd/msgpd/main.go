@@ -746,7 +746,7 @@ func main() {
 	} else {
 		router := mux.NewRouter()
 		server := regdev.DeviceServer{Db: devdb}
-		apiserver := oldapi.OldApiServer{Db: devdb}
+		apiserver := oldapi.OldApiServer{Db: devdb, Udb: db}
 
 		router.HandleFunc("/", loggedInSwitch(wsTemplate("index_user"), staticTemplate("index_nouser"))).Methods("GET")
 		router.HandleFunc("/user/login", staticTemplate("user-login")).Methods("GET")

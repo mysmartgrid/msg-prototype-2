@@ -17,10 +17,12 @@ import (
         "strconv"
         "time"
 	"github.com/mysmartgrid/msg-prototype-2/regdev"
+	"github.com/mysmartgrid/msg-prototype-2/db"
 )
 
 type OldApiServer struct {
 	Db regdev.Db
+	Udb db.Db
 }
 
 var (
@@ -30,6 +32,7 @@ var (
 // checkSignature
 func (s *OldApiServer) CheckSignature(r *http.Request, body []byte, device string, key []byte) (error,int) {
 	// check signature
+	log.Print("   CheckSignature for device '", device, "' !")
 	digests, hasKeys := r.Header["X-Digest"]
 	log.Print("Check Request for device: %", device)
 	if !hasKeys {
@@ -58,6 +61,7 @@ func (s *OldApiServer) CheckSignature(r *http.Request, body []byte, device strin
 // decodeRequest
 func (s *OldApiServer) CheckRequest(w http.ResponseWriter, r *http.Request, body []byte, device string) (error) {
 	// fetch device from database
+	log.Print("   CheckRequest for device '", device, "' !")
 	s.Db.View(func(tx regdev.Tx) error {
 		dev := tx.Device(device)
 		if dev == nil {
@@ -112,13 +116,16 @@ func (s *OldApiServer) Device_Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.CheckRequest(w, r, body, device); err != nil {
-		log.Print("Check Request failed...")
-		return
+	// check first for X-Token
+	accessToken, hasKeys := r.Header["X-Token"]
+	if !hasKeys {
+		if err := s.CheckRequest(w, r, body, device); err != nil {
+			log.Print("Check Request failed...")
+			return
+		}
 	}
-
+        log.Print("Check token: ", accessToken)
 	log.Print(string(body))
-	
 }
 
 // device registration, heartbeat
@@ -156,19 +163,35 @@ func (s *OldApiServer) Device_Post(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Print("got an heartbeat.")
-		resp := HeartbeatResponse{
-			Upgrade:  0,
-			Time:     time.Now(),
-		}
-		data, err := json.Marshal(resp)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		w.Write(data)
+		s.Db.View(func(tx regdev.Tx) error {
+			dev := tx.Device(device)
+			if dev == nil {
+				log.Print("Device '", device, "' not found: ")
+				http.Error(w, httpErrorNotFound.Error(), httpErrorNotFoundNo)
+				return nil
+			}
+			username,err := dev.UserLink()
+			if (err) {
+				log.Print("    Device linkto '", username, "' ")
+				resp := HeartbeatResponse{
+					Upgrade:  0,
+					Time:     time.Now(),
+				}
+				data, err := json.Marshal(resp)
+				if err != nil {
+					http.Error(w, err.Error(), 500)
+					return nil
+				}
+				w.Write(data)
+			} else {
+				http.Error(w, httpErrorNotFound.Error(), httpErrorNotFoundNo)
+			}
+			return nil		
+		})
 	} else {
 		log.Print("got an registration request.")
-		s.Db.View(func(tx regdev.Tx) error {
+		// register device now
+		s.Db.Update(func(tx regdev.Tx) error {
 			dev := tx.Device(device)
 			if dev == nil {
 				log.Print("Device '", device, "' not found: ")
@@ -178,35 +201,35 @@ func (s *OldApiServer) Device_Post(w http.ResponseWriter, r *http.Request) {
 					return err
 				}
 				log.Print("Insert device into database")
-				// register device now
-				s.Db.Update(func(tx regdev.Tx) error {
-					log.Print("	Insert device into database - 1")
-					err := tx.AddDevice(device, []byte(reg.Key))
-					if err != nil {
-						log.Print("	Insert device into database - failed")
-						http.Error(w, httpErrorBadRequest.Error(),  httpErrorBadRequestNo)
-						return httpErrorBadRequest
-					}
-					log.Print("	Insert device into database - success")
-					resp := DeviceRegistrationResponse{
-						Upgrade:  1,
-						Time:     time.Now(),
-					}
-					data, err := json.Marshal(resp)
-					if err != nil {
-						http.Error(w, err.Error(), 500)
-						return err
-					}
-					w.Write(data)
-					return nil
-				})
+				log.Print("	Insert device into database - 1")
+				err := tx.AddDevice(device, []byte(reg.Key))
+				if err != nil {
+					log.Print("	Insert device into database - failed")
+					http.Error(w, httpErrorBadRequest.Error(),  httpErrorBadRequestNo)
+					return httpErrorBadRequest
+				}
+				log.Print("	Insert device into database - success")
+				resp := DeviceRegistrationResponse{
+					Upgrade:  1,
+					Time:     time.Now(),
+				}
+				log.Print("	Insert device into database - success2")
+				data, err := json.Marshal(resp)
+				if err != nil {
+					http.Error(w, err.Error(), 500)
+					return err
+				}
+				log.Print("	Insert device into database - success3")
+				w.Write(data)
+				log.Print("	Insert device into database - success4")
 			} else {
+				log.Print("Device '", device, "' found: ")
 			}
-			return nil
-
+			return nil	
 		})
-
+		log.Print("  Device view finished '", device, "' found: ")
 	}
+	log.Print("Device POST finished")
 }
 
 // device deletion
@@ -254,27 +277,87 @@ func (s *OldApiServer) Sensor_Get(w http.ResponseWriter, r *http.Request) {
 // Sensor Measurements Registration
 func (s *OldApiServer) Sensor_Post(w http.ResponseWriter, r *http.Request) {
 	// can be sensorconfigration or sensor measurements
-	sensor := mux.Vars(r)["sensor"]
+	sensorId := mux.Vars(r)["sensor"]
 
-	log.Print("Got Sensor-POST...%", sensor)
+	log.Print("Got Sensor-POST...%", sensorId)
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	var sc SensorConfig
+	log.Print(string(body))
+	var sc SensorPost
 	if err := json.Unmarshal(body, &sc); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	if err := s.CheckRequest(w, r, body, sc.Device); err != nil {
+	var device string
+	if (sc.Config.Device != "") {
+		device = sc.Config.Device		
+	} else {
+		s.Udb.View(func(tx db.Tx) error {
+			//i := 0
+			sensor := tx.Sensor(sensorId)
+			if sensor != nil {
+				log.Print(" got the sensorreturn...")
+				l := len(sc.Measurements)
+				for i:=0; i<l; i++ {
+					s.Udb.AddReading(sensor, sc.Measurements[i].Timestamp,sc.Measurements[i].Value)
+					log.Print("    Value: ", sc.Measurements[i].Value)
+				}
+				log.Print("  added successfully the readings: ", sensor.Name())
+			} else {
+				log.Print("  sensor was not found...: ", sensorId)
+				http.Error(w, httpErrorNotFound.Error(), httpErrorNotFoundNo)
+			}
+			return nil
+		})
+		return		
+	}
+
+	if err := s.CheckRequest(w, r, body, device); err != nil {
 		log.Print("Check Request failed...")
 		return
 	}
 
-	log.Print(string(body))
+	if( device != "" ) {
+		// add the sensor config
+		//{"config":{"type":"electricity","constant":1000,
+	        //            "device":"3461d00337cdfdaa92700f4294cadbe4","class":"pulse",
+        	//            "port":5,"enable":0}}
+		s.Db.View(func(tx regdev.Tx) error {
+			log.Print("    Search for device '", sc.Config.Device, "'")
+			dev := tx.Device(sc.Config.Device)
+			if dev == nil {
+				log.Print("Device '", sc.Config.Device, "' not found: ")
+				http.Error(w, httpErrorNotFound.Error(), httpErrorNotFoundNo)
+				return nil
+			}
+			s.Udb.Update(func(tx db.Tx) error {
+				username,err := dev.UserLink()
+				log.Print("    Search for User '", username, "'")
+				if( err) {
+					log.Print("    Search for User '", username, "'  - found")
+					user := tx.User(username)
+					if user == nil {
+						http.Error(w, httpErrorNotFound.Error(), httpErrorNotFoundNo)
+						return nil
+					}
+					udev := user.Device(dev.Id())
+					udev.AddSensor(sensorId, sc.Config.Unit, sc.Config.Port)
+				} else {
+					log.Print("    Search for User '", username, "'  - not found")
+					http.Error(w, httpErrorNotFound.Error(), httpErrorNotFoundNo)
+					return nil
+				}
+				return nil
+			})
+			return nil
+		})
+	}
+
 }
 
 // Sensor Removal

@@ -116,21 +116,31 @@ type EventResponse struct {
 
 // Sensor configuration
 type SensorConfig struct {
-//	Config struct {
-		Device     string
-		Externalid string    `json:"externalid,omitempty"`
-		Function   string    `json:"function,omitempty"`
-		Class      string
-		Voltage    int       `json:"voltage,omitempty"`
-		Current    int       `json:"current,omitempty"`
-		Constant   int       `json:"constant,omitempty"`
-		Description     string  `json:"description,omitempty"`
-		Unit            string  `json:"unit,omitempty"`
-		Port            int     `json:"port,omitempty"`
-		Enable          int
-		Type            string  `json:"type,omitempty"`
-//  }
+	Device     string
+	Externalid string    `json:"externalid,omitempty"`
+	Function   string    `json:"function,omitempty"`
+	Class      string
+	Voltage    int       `json:"voltage,omitempty"`
+	Current    int       `json:"current,omitempty"`
+	Constant   int       `json:"constant,omitempty"`
+	Description     string  `json:"description,omitempty"`
+	Unit            string  `json:"unit,omitempty"`
+	Port            int32   `json:"port,omitempty"`
+	Enable          int
+	Type            string  `json:"type,omitempty"`
 }
+
+
+type SensorMeasurements struct {
+	Timestamp time.Time
+	Value	  float64
+}
+
+type SensorPost struct {
+	Config       SensorConfig         `json:"config,omitempty"`
+	Measurements []SensorMeasurements `json:"measurements,omitempty"`
+}
+
 
 /*
 // Heartbeat
@@ -272,21 +282,29 @@ type drrData struct {
 }
 
 type scData struct {
-	Config struct {
-		Device       string
-		Externalid   string
-		Function     string
-		Class        string
-		Voltage      int
-		Current      int
-		Constant     int
-		Description  string
-		Unit            string
-		Port            int
-		Enable          int
-		Type            string
-	}
+	Device       string
+	Externalid   string
+	Function     string
+	Class        string
+	Voltage      int
+	Current      int
+	Constant     int
+	Description  string
+	Unit            string
+	Port            int32
+	Enable          int
+	Type            string
 }
+
+type smData struct {
+	item [][]int `json:"measurements,omitempty"`
+}
+
+type sensorData struct {
+	Config       scData     `json:"config,omitempty"`
+	Measurements [][]int    `json:"measurements,omitempty"`
+}
+
 
 // Device Query Response
 type dqrData struct {
@@ -329,7 +347,7 @@ func (dr *DeviceRegistration) UnmarshalJSON(raw []byte) error {
 		return err
 	}
 	if data.Key != "" {
-		log.Print("Unmarshal succeeded.")
+		log.Print("Unmarshal succeeded with key: '", data.Key, "' .")
 
 		*dr = DeviceRegistration{
 			Key:      data.Key,
@@ -381,27 +399,39 @@ func (evr EventResponse) MarshalJSON() ([]byte, error) {
 }
 
 // Sensor Config
-func (sc *SensorConfig) UnmarshalJSON(raw []byte) error {
-	var data scData
+func (sp *SensorPost) UnmarshalJSON(raw []byte) error {
+	var data sensorData
 	if err := json.Unmarshal(raw, &data); err != nil {
 		log.Print("Unmarshal failed.", err.Error())
 		return err
 	}
-	*sc = SensorConfig{
-//		Config{
-		Device:	    data.Config.Device,
-		Externalid: data.Config.Externalid,
-		Function:    data.Config.Function,
-		Class:       data.Config.Class,
-		Voltage:     data.Config.Voltage,
-		Current:     data.Config.Current,
-		Constant:    data.Config.Constant,
-		Description: data.Config.Description,
-		Unit:        data.Config.Unit,
-		Port:        data.Config.Port,
-		Enable:      data.Config.Enable,
-		Type:        data.Config.Type,
-//		},
+	if ( data.Config.Device != "" ) {
+		log.Print("   Have SensorConfig data.")
+		sc := SensorConfig{
+			Device:	    data.Config.Device,
+			Externalid: data.Config.Externalid,
+			Function:    data.Config.Function,
+			Class:       data.Config.Class,
+			Voltage:     data.Config.Voltage,
+			Current:     data.Config.Current,
+			Constant:    data.Config.Constant,
+			Description: data.Config.Description,
+			Unit:        data.Config.Unit,
+			Port:        data.Config.Port,
+			Enable:      data.Config.Enable,
+			Type:        data.Config.Type,
+		}
+		*sp = SensorPost{Config: sc}
+	}
+	if ( data.Measurements != nil ) {
+		log.Print("   Have SensorMeasurements data - ", len(data.Measurements))
+		log.Print("   Have SensorMeasurements ", data.Measurements[0][0], " - ", data.Measurements[0][1])
+		l := len(data.Measurements)
+		var sm []SensorMeasurements
+		for i:=0; i<l; i++ {
+			sm = append(sm, SensorMeasurements{Timestamp: time.Unix(int64(data.Measurements[i][0]), 0), Value: float64(data.Measurements[i][1])})
+		}
+		*sp = SensorPost{Measurements: sm}
 	}
 	return nil
 }
