@@ -39,3 +39,5 @@ import:
   version: master
   subpackages:
   - unix
+- package: golang.org/x/tools/go/exact
+  version: master

@@ -1,8 +1,8 @@
-hash: e804db3c0689aa3edf8a4d0567831ff4ec63312a7a425a31ed51731fb13373f5
-updated: 2016-03-15T14:26:44.563251007+01:00
+hash: 8b9c894bd477b751c33cee80c1641547dec0f5f3b3573f064b7c5cbf9d953ac6
+updated: 2016-03-23T16:04:17.258891931+01:00
 imports:
 - name: github.com/boltdb/bolt
-  version: 0fd4c0547d204c7b1cad6db6f3adad5f2cf453e5
+  version: 5d3cf801479c151f007912db7984f6225aa238be
 - name: github.com/BurntSushi/toml
   version: bbd5bb678321a0d6e58f1099321dfa73391c1b6f
 - name: github.com/goburrow/modbus
@@ -12,7 +12,7 @@ imports:
 - name: github.com/gorilla/context
   version: 1ea25387ff6f684839d82767c1733ff4d4d15d0a
 - name: github.com/gorilla/mux
-  version: acf3be1b335c8ce30b2c8d51300984666f0ceefa
+  version: 0eeaf8392f5b04950925b8a69fe70f110fa7cbfc
 - name: github.com/gorilla/securecookie
   version: 8dacca26977607e637262eb66b15b7d39f2d3009
 - name: github.com/gorilla/sessions
@@ -20,7 +20,7 @@ imports:
 - name: github.com/gorilla/websocket
   version: e2e3d8414d0fbae04004f151979f4e27c6747fe7
 - name: github.com/lib/pq
-  version: 165a3529e799da61ab10faed1fabff3662d6193f
+  version: 3cd0097429be7d611bb644ef85b42bfb102ceea4
   subpackages:
   - oid
 - name: github.com/mattn/go-runewidth
@@ -34,12 +34,16 @@ imports:
 - name: github.com/zfjagann/golang-ring
   version: 17637388c9f6665e2f475e4beec439e6fc19fee9
 - name: golang.org/x/crypto
-  version: 6025851c7c2bf210daf74d22300c699b16541847
+  version: c197bcf24cde29d3f73c7b4ac6fd41f4384e8af6
   subpackages:
   - bcrypt
   - blowfish
 - name: golang.org/x/sys
-  version: 7a56174f0086b32866ebd746a794417edbc678a1
+  version: afce3de5756ca82699128ebae46ac95ad59d6297
   subpackages:
   - unix
+- name: golang.org/x/tools
+  version: 21cc49bd030cf5c6ebaca2fa0e3323628efed6d8
+  subpackages:
+  - go/exact
 devImports: []
