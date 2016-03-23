@@ -1,8 +1,8 @@
 <div class="device-list">
-	<div class="ng-hide modal-spinner-overlay" data-ng-show="showSpinner">
+	<div class="ng-hide modal-spinner-overlay" ng-show="showSpinner">
 	</div>
-	<div class="ng-hide alert alert-danger" data-ng-show="error">%%error%%</div>
-	<div class="ng-hide alert alert-danger" data-ng-show="errorLoadingSettings">Error loading settings: %%error%%</div>
+	<div class="ng-hide alert alert-danger" ng-show="error">%%error%%</div>
+	<div class="ng-hide alert alert-danger" ng-show="errorLoadingSettings">Error loading settings: %%error%%</div>
 	<div class="ng-hide alert alert-success device-deleted">
 		Device removed
 	</div>
@@ -11,19 +11,19 @@
 		<div class="modal-dialog" role="document">
 			<div class="modal-content">
 				<div class="modal-header">
-					<button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+					<button type="button" class="close" dismiss="modal"><span>&times;</span></button>
 					<h4 class="modal-title">Edit device</h4>
 				</div>
 				<div class="modal-body">
-					<div class="ng-hide alert alert-danger" data-ng-show="errorSavingSettings">
+					<div class="ng-hide alert alert-danger" ng-show="errorSavingSettings">
 						Error saving settings: %%errorSavingSettings%%
 					</div>
-					<div data-device-editor="" data-device="editedDeviceProps">
+					<div device-editor="" device="editedDeviceProps">
 					</div>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-					<button type="button" class="btn btn-primary" data-ng-click="deviceEditorSave()">Save changes</button>
+					<button type="button" class="btn btn-default" ng-click="deviceEditorDismiss()">Close</button>
+					<button type="button" class="btn btn-primary" ng-click="deviceEditorSave()">Save changes</button>
 				</div>
 			</div>
 		</div>
@@ -33,19 +33,19 @@
 		<div class="modal-dialog" role="document">
 			<div class="modal-content">
 				<div class="modal-header">
-					<button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+					<button type="button" class="close" dismiss="modal"><span>&times;</span></button>
 					<h4 class="modal-title">Edit sensor</h4>
 				</div>
 				<div class="modal-body">
-					<div class="ng-hide alert alert-danger" data-ng-show="errorSavingSensor">Error: %%errorSavingSensor%%</div>
+					<div class="ng-hide alert alert-danger" ng-show="errorSavingSensor">Error: %%errorSavingSensor%%</div>
 					<div class="form-group">
 						<label for="sensorNameField">Name</label>
-						<input type="text" id="sensorNameField" data-ng-model="editedSensor.name" class="form-control" />
+						<input type="text" id="sensorNameField" ng-model="editedSensor.name" class="form-control" />
 					</div>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-					<button type="button" class="btn btn-primary" data-ng-click="saveSensor()">Save changes</button>
+					<button type="button" class="btn btn-default" ng-click="dismissSensor()">Close</button>
+					<button type="button" class="btn btn-primary" ng-click="saveSensor()">Save changes</button>
 				</div>
 			</div>
 		</div>
@@ -61,24 +61,22 @@
 			</tr>
 		</thead>
 		<tbody>
-			<tr data-ng-repeat-start="(dev, props) in devices"
-				data-device-id="%%dev%%"
-				data-device-netconf-url="/api/user/v1/device/%%encodeURIComponent(dev)%%/config"
-				data-device-remove-url="/api/user/v1/device/%%encodeURIComponent(dev)%%">
-				<td>%%dev%%</td>
+			<tr ng-repeat-start="(deviceID, props) in devices"
+				device-id="%%deviceID%%">
+				<td>%%deviceID%%</td>
 				<td>%%props.name%%</td>
 				<td>
-					<a class="btn btn-primary btn-sm" data-ng-click="editDev($event)">
+					<a class="btn btn-primary btn-sm" ng-click="editDevice(deviceID)">
 						<span class="glyphicon glyphicon-pencil" />
 					</a>
 				</td>
 				<td>
-					<a class="btn btn-danger btn-sm" data-ng-click="remove($event)">
+					<a class="btn btn-danger btn-sm" ng-click="remove(deviceID)">
 						<span class="glyphicon glyphicon-remove" />
 					</a>
 				</td>
 			</tr>
-			<tr data-ng-repeat-end="" data-device-id="%%dev%%">
+			<tr ng-repeat-end="" device-id="%%deviceID%%">
 				<td colspan="4" style="padding-left: 10%">
 					<table class="table table-condensed">
 						<thead>
@@ -91,15 +89,13 @@
 							</tr>
 						</thead>
 						<tbody>
-							<tr data-ng-repeat="(id, props) in props.sensors"
-								data-sensor-id="%%id%%"
-								data-sensor-conf-url="/api/user/v1/sensor/%%encodeURIComponent(dev)%%/%%encodeURIComponent(id)%%/props">
-								<td>%%id%%</td>
+							<tr ng-repeat="(sensorID, props) in props.sensors"
+								<td>%%sensorID%%</td>
 								<td>%%props.name%%</td>
 								<td>%%props.unit%%</td>
 								<td>%%props.port <= 0 ? "" : props.port%%</td>
 								<td>
-									<a class="btn btn-primary btn-sm" data-ng-click="editSensor($event)">
+									<a class="btn btn-primary btn-sm" ng-click="editSensor(deviceID, sensorID)">
 										<span class="glyphicon glyphicon-pencil" />
 									</a>
 								</td>

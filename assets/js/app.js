@@ -78,8 +78,18 @@ angular.module("msgp", ['ui.bootstrap'])
 
 },{"./directives/devicelist":2,"./directives/sensorgraph":3,"./directives/ui-elements/datetimepicker":4,"./directives/ui-elements/numberspinner":5,"./directives/ui-elements/timerangespinner":6,"./lib/msg2socket":9,"./lib/updatedispatcher":11}],2:[function(require,module,exports){
 "use strict";
+function deviceConfigUrl(deviceID) {
+    return '/api/user/v1/device/' + encodeURIComponent(deviceID) + '/config';
+}
+function deviceRemoveUrl(deviceID) {
+    return '/api/user/v1/device/' + encodeURIComponent(deviceID);
+}
+function sensorConfigUrl(deviceID, sensorID) {
+    return '/api/user/v1/sensor/' + encodeURIComponent(deviceID) + '/' + encodeURIComponent(sensorID) + '/props';
+}
 var DeviceListController = (function () {
     function DeviceListController($scope, $interval, $http) {
+        var _this = this;
         this.$scope = $scope;
         this.$interval = $interval;
         this.$http = $http;
@@ -99,25 +109,21 @@ var DeviceListController = (function () {
                 $scope.errorSavingSettings = data;
             });
         };
-        var flash = function (element) {
-            element.removeClass("ng-hide");
-            $interval(function () {
-                element.addClass("ng-hide");
-            }, 3000, 1);
+        $scope.deviceEditorDismiss = function () {
+            $("#deviceEditDialog").modal('hide');
         };
-        $scope.editDev = function (e) {
-            var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
-            var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-netconf-url");
+        $scope.editDevice = function (deviceID) {
+            var url = deviceConfigUrl(deviceID);
             $scope.showSpinner = true;
             $http.get(url)
                 .success(function (data, status, headers, config) {
                 $scope.showSpinner = false;
                 $scope.errorLoadingSettings = null;
                 $scope.errorSavingSettings = null;
-                $scope.editedDeviceId = id;
+                $scope.editedDeviceId = deviceID;
                 $scope.editedDeviceURL = url;
                 $scope.editedDeviceProps = {
-                    name: $scope.devices[id].name,
+                    name: $scope.devices[deviceID].name,
                     lan: data.lan || {},
                     wifi: data.wifi || {}
                 };
@@ -128,31 +134,28 @@ var DeviceListController = (function () {
                 $scope.errorLoadingSettings = data;
             });
         };
-        $scope.remove = function (e) {
-            var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-remove-url");
-            var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
+        $scope.remove = function (deviceID) {
+            var url = deviceRemoveUrl(deviceID);
             $scope.showSpinner = true;
             $http.delete(url)
                 .success(function (data, status, headers, config) {
                 $scope.showSpinner = false;
-                delete $scope.devices[id];
-                flash($(e.target).parents(".device-list").first().find(".device-deleted"));
+                _this.flash(_this.element.find(".device-deleted"));
+                delete $scope.devices[deviceID];
             })
                 .error(function (data, status, headers, config) {
                 $scope.showSpinner = false;
                 $scope.error = data;
             });
         };
-        $scope.editSensor = function (e) {
-            var devId = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
-            var sensId = $(e.target).parents("tr[data-sensor-id]").first().attr("data-sensor-id");
-            var url = $(e.target).parents("tr[data-sensor-conf-url]").first().attr("data-sensor-conf-url");
+        $scope.editSensor = function (deviceID, sensorID) {
+            var url = sensorConfigUrl(deviceID, sensorID);
             $scope.errorSavingSensor = null;
             $scope.editedSensor = {
-                name: $scope.devices[devId].sensors[sensId].name,
+                name: $scope.devices[deviceID].sensors[sensorID].name,
                 confUrl: url,
-                devId: devId,
-                sensId: sensId,
+                devId: deviceID,
+                sensId: sensorID,
             };
             $("#sensorEditDialog").modal('show');
         };
@@ -173,7 +176,14 @@ var DeviceListController = (function () {
                 $scope.errorSavingSensor = data;
             });
         };
+        $scope.dismissSensor = function () {
+            $("#sensorEditDialog").modal('hide');
+        };
     }
+    DeviceListController.prototype.flash = function (element) {
+        element.removeClass("ng-hide");
+        this.$interval(function () { return element.addClass("ng-hide"); }, 3000, 1);
+    };
     return DeviceListController;
 }());
 var DeviceListDirective = (function () {

@@ -20,6 +20,7 @@ interface DeviceListScope extends ng.IScope {
     encodeURIComponent : (uriComponent : string) => string;
 
     deviceEditorSave : () => void;
+    deviceEditorDismiss : () => void;
     editedDeviceURL : string;
     editedDeviceProps : DeviceProps;
     editedDeviceId : string;
@@ -30,16 +31,31 @@ interface DeviceListScope extends ng.IScope {
 
     devices : {[deviceID : string] : Device};
 
-    editDev : ($event : Event) => void;
-    remove : ($event : Event) => void;
-    editSensor : ($event : Event) => void;
+    editDevice : (deviceID : string) => void;
+    remove : (deviceID : string) => void;
+    editSensor : (deviceID : string, sensorID : string) => void;
     saveSensor : () => void;
+    dismissSensor : () => void;
 
     error : string;
 
     editedSensor : Sensor;
 }
 
+
+function deviceConfigUrl(deviceID : string) : string {
+    return '/api/user/v1/device/' + encodeURIComponent(deviceID) + '/config';
+}
+
+
+function deviceRemoveUrl(deviceID : string) : string {
+    return '/api/user/v1/device/' + encodeURIComponent(deviceID);
+}
+
+
+function sensorConfigUrl(deviceID : string, sensorID : string) : string {
+    return '/api/user/v1/sensor/' + encodeURIComponent(deviceID) + '/' + encodeURIComponent(sensorID) + '/props';
+}
 
 class DeviceListController {
     public element : ng.IAugmentedJQuery;
@@ -48,9 +64,9 @@ class DeviceListController {
         $scope.showSpinner = false;
         $scope.encodeURIComponent = encodeURIComponent;
 
-        $scope.deviceEditorSave = function() {
+        $scope.deviceEditorSave = () => {
             $http.post($scope.editedDeviceURL, $scope.editedDeviceProps)
-                .success(function(data, status, headers, config) {
+                .success((data, status, headers, config) => {
                     $scope.devices[$scope.editedDeviceId].name = $scope.editedDeviceProps.name;
                     $scope.devices[$scope.editedDeviceId].lan = $scope.editedDeviceProps.lan;
                     $scope.devices[$scope.editedDeviceId].wifi = $scope.editedDeviceProps.wifi;
@@ -58,76 +74,71 @@ class DeviceListController {
                     $scope.errorSavingSettings = null;
                     $("#deviceEditDialog").modal('hide');
                 })
-                .error(function(data, status, headers, config) {
+                .error((data, status, headers, config) => {
                     $scope.errorSavingSettings = data;
                 });
         };
 
-        var flash = function(element) {
-            element.removeClass("ng-hide");
-            $interval(function() {
-                element.addClass("ng-hide");
-            }, 3000, 1);
-        };
+        $scope.deviceEditorDismiss = () => {
+            $("#deviceEditDialog").modal('hide');
+        }
 
-        $scope.editDev = function(e) {
-            var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
-            var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-netconf-url");
+        $scope.editDevice = (deviceID) => {
+            var url = deviceConfigUrl(deviceID);
 
             $scope.showSpinner = true;
             $http.get(url)
-                .success(function(data : DeviceProps, status, headers, config) {
+                .success((data : DeviceProps, status, headers, config) => {
                     $scope.showSpinner = false;
                     $scope.errorLoadingSettings = null;
                     $scope.errorSavingSettings = null;
 
-                    $scope.editedDeviceId = id;
+                    $scope.editedDeviceId = deviceID;
                     $scope.editedDeviceURL = url;
                     $scope.editedDeviceProps = {
-                        name: $scope.devices[id].name,
+                        name: $scope.devices[deviceID].name,
                         lan: data.lan || {},
                         wifi: data.wifi || {}
                     };
                     $("#deviceEditDialog").modal('show');
                 })
-                .error(function(data, status, headers, config) {
+                .error((data, status, headers, config) => {
                     $scope.showSpinner = false;
                     $scope.errorLoadingSettings = data;
                 });
         };
 
-        $scope.remove = function(e) {
-            var url = $(e.target).parents("tr[data-device-id]").first().attr("data-device-remove-url");
-            var id = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
+        $scope.remove = (deviceID) => {
+            var url = deviceRemoveUrl(deviceID);
             $scope.showSpinner = true;
             $http.delete(url)
-                .success(function(data, status, headers, config) {
+                .success((data, status, headers, config) => {
                     $scope.showSpinner = false;
-                    delete $scope.devices[id];
-                    flash($(e.target).parents(".device-list").first().find(".device-deleted"));
+
+                    this.flash(this.element.find(".device-deleted"));
+
+                    delete $scope.devices[deviceID];
                 })
-                .error(function(data, status, headers, config) {
+                .error((data, status, headers, config) => {
                     $scope.showSpinner = false;
                     $scope.error = data;
                 });
         };
 
-        $scope.editSensor = function(e) {
-            var devId = $(e.target).parents("tr[data-device-id]").first().attr("data-device-id");
-            var sensId = $(e.target).parents("tr[data-sensor-id]").first().attr("data-sensor-id");
-            var url = $(e.target).parents("tr[data-sensor-conf-url]").first().attr("data-sensor-conf-url");
+        $scope.editSensor = (deviceID, sensorID) => {
+            var url = sensorConfigUrl(deviceID, sensorID);
 
             $scope.errorSavingSensor = null;
             $scope.editedSensor = {
-                name: $scope.devices[devId].sensors[sensId].name,
+                name: $scope.devices[deviceID].sensors[sensorID].name,
                 confUrl: url,
-                devId: devId,
-                sensId: sensId,
+                devId: deviceID,
+                sensId: sensorID,
             };
             $("#sensorEditDialog").modal('show');
         };
 
-        $scope.saveSensor = function() {
+        $scope.saveSensor = () => {
             var props = {
                 name: $scope.editedSensor.name
             };
@@ -145,6 +156,15 @@ class DeviceListController {
                     $scope.errorSavingSensor = data;
                 });
         };
+
+        $scope.dismissSensor = () => {
+            $("#sensorEditDialog").modal('hide');
+        }
+    }
+
+    private flash(element : ng.IAugmentedJQuery) : void {
+        element.removeClass("ng-hide");
+        this.$interval(() => element.addClass("ng-hide"), 3000, 1);
     }
 }
 
