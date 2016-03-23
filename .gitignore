@@ -1,5 +1,12 @@
 *.sw*
 /msgpd
 /msgpdevd
-config.toml
+/msgdbd
+/msgpc
+/users.db
+/devices.db
+/config.toml
 /assets/js_modules
+/vendor
+/randomdevice.conf
+/msgdbd.toml
