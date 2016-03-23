@@ -4,6 +4,7 @@ type sensor struct {
 	device    *device
 	id        string
 	seq       uint64
+	factor    float64
 	isVirtual bool
 }
 
@@ -75,6 +76,10 @@ func (s *sensor) Unit() string {
 		return ""
 	}
 	return unit
+}
+
+func (s *sensor) Factor() float64 {
+	return s.factor
 }
 
 func (s *sensor) IsVirtual() bool {

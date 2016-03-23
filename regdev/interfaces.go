@@ -129,7 +129,7 @@ func (hb *Heartbeat) UnmarshalJSON(raw []byte) error {
 
 // RegisteredDevice provides methods to manage a device registered in the device database.
 type RegisteredDevice interface {
-	// Id returns the unique device id identifyin the device.
+	// Id returns the unique device id identifying the device.
 	ID() string
 	// Key returns the secret key that is used for device authentication.
 	Key() []byte
@@ -143,7 +143,7 @@ type RegisteredDevice interface {
 	Unlink() error
 
 	// RegisterHeartbeat writes a new heartbeat from the device to the database
-	// and updates the devices network config in the database if neccessary.
+	// and updates the devices network config in the database if necessary.
 	RegisterHeartbeat(hb Heartbeat) error
 	// GetHeartbeats return the last 'maxCount' heartbeats received from the device or
 	// all of them if maxCount is zero.

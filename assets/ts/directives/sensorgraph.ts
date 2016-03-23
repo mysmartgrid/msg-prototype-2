@@ -5,10 +5,13 @@ import * as Store from '../lib/sensorvaluestore';
 import {SensorSpecifier, MetadataTree, SensorUnitMap, DeviceSensorMap,
 		sensorEqual, SupportedResolutions, ResoltuionToMillisecs, ResolutionsPerMode} from '../lib/common';
 
+
+import * as Widget from './widget';
+
 declare var Flotr : any;
 
 
-interface SensorGraphConfig {
+interface SensorGraphConfig extends Widget.WidgetConfig{
 	unit : string,
 	resolution : string;
 	sensors : SensorSpecifier[];
@@ -20,13 +23,8 @@ interface SensorGraphConfig {
 }
 
 
-interface SensorGraphSettingsScope extends SensorGraphScope {
-	resolutions : {[mode : string] : Array<string>};
-	units : string[];
+interface SensorGraphSettingsScope extends Widget.WidgetSettingsScope {
 	config : SensorGraphConfig;
-	sensorsByUnit : SensorUnitMap;
-	ok : () => void;
-	cancel : () => void;
 }
 
 
@@ -36,19 +34,13 @@ const SensorGraphSettingsFactory = ["$scope", "$uibModalInstance", "UpdateDispat
 										dispatcher : UpdateDispatcher.UpdateDispatcher,
 										config : SensorGraphConfig) => new SensorGraphSettingsController($scope, $uibModalInstance, dispatcher, config)];
 
-class SensorGraphSettingsController {
-	constructor(private $scope : SensorGraphSettingsScope,
-				private $uibModalInstance : angular.ui.bootstrap.IModalServiceInstance,
-				private _dispatcher : UpdateDispatcher.UpdateDispatcher,
+class SensorGraphSettingsController extends Widget.WidgetSettingsController {
+	constructor(protected $scope : SensorGraphSettingsScope,
+				protected $uibModalInstance : angular.ui.bootstrap.IModalServiceInstance,
+				protected _dispatcher : UpdateDispatcher.UpdateDispatcher,
 				config : SensorGraphConfig) {
 
-		$scope.devices = _dispatcher.devices;
-		$scope.units = _dispatcher.units;
-		$scope.sensorsByUnit = _dispatcher.sensorsByUnit;
-
-
-		$scope.resolutions = ResolutionsPerMode;
-
+		super($scope, $uibModalInstance, _dispatcher, config);
 
 		$scope.$watch("config.mode", () : void => {
 			var mode = $scope.config.mode;
@@ -60,32 +52,22 @@ class SensorGraphSettingsController {
 				$scope.config.resolution = 'raw';
 			}
 		});
+	}
 
-
-		$scope.config = config;
-
-		$scope.ok = () : void => {
-			$uibModalInstance.close($scope.config);
-		};
-
-		$scope.cancel = () : void => {
-			$uibModalInstance.dismiss('cancel');
-		};
+	protected _checkConfig() {
+		return true;
 	}
 
 }
 
-interface SensorGraphScope  extends ng.IScope {
-	openSettings : () => void;
-
+interface SensorGraphScope  extends Widget.WidgetScope {
 	sensors : SensorSpecifier[];
 	sensorColors : DeviceSensorMap<string>;
-	devices : MetadataTree;
 }
 
-export class SensorGraphController implements UpdateDispatcher.Subscriber{
+export class SensorGraphController extends Widget.WidtgetController {
 	private _store : Store.SensorValueStore;
-	private _config : SensorGraphConfig;
+	protected _config : SensorGraphConfig;
 	private _graphNode : HTMLElement;
 	private _timeout : ng.IPromise<any>;
 
@@ -93,19 +75,17 @@ export class SensorGraphController implements UpdateDispatcher.Subscriber{
 		this._graphNode = element.find(".sensor-graph").get(0);
 	}
 
-	constructor(private $scope : SensorGraphScope,
-				private $interval : ng.IIntervalService,
+	constructor(private $interval : ng.IIntervalService,
 				private $timeout: ng.ITimeoutService,
-				private $uibModal : angular.ui.bootstrap.IModalService,
-				private _dispatcher : UpdateDispatcher.UpdateDispatcher) {
+				protected $scope : SensorGraphScope,
+				protected $uibModal : angular.ui.bootstrap.IModalService,
+				protected _dispatcher : UpdateDispatcher.UpdateDispatcher) {
 
+		super($scope, _dispatcher, $uibModal);
 
 		this._store = new Store.SensorValueStore();
 		this._store.setSlidingWindowMode(true);
 		this._store.setEnd(0);
-
-		this.$scope.devices = this._dispatcher.devices;
-
 
 		this._dispatcher.onInitialMetadata(() => {
 			//TODO: Add on config callback here
@@ -113,22 +93,8 @@ export class SensorGraphController implements UpdateDispatcher.Subscriber{
 			this._redrawGraph();
 		});
 
-		this.$scope.openSettings = () => {
-			var modalInstance = $uibModal.open({
-				controller: SensorGraphSettingsFactory,
-				size: "lg",
-			    templateUrl: 'sensor-graph-settings.html',
-				resolve: {
-						config: () : SensorGraphConfig => {
-						return Utils.deepCopyJSON(this._config);
-						}
-				}
-			});
-
-			modalInstance.result.then((config : SensorGraphConfig) : void => {
-				this._applyConfig(config);
-			});
-		};
+		this._settingsTemplate = 'sensor-graph-settings.html';
+		this._settingsControllerFactory = SensorGraphSettingsFactory;
 
 		$interval(() => this._store.clampData(), 60 * 1000);
 	}
@@ -137,15 +103,6 @@ export class SensorGraphController implements UpdateDispatcher.Subscriber{
 	public updateValue(deviceID : string, sensorID : string, resolution : string, timestamp : number, value : number) : void {
 		this._store.addValue(deviceID, sensorID, timestamp, value);
 	}
-
-	public updateDeviceMetadata(deviceID : string) : void {};
-
-	public updateSensorMetadata(deviceID : string, sensorID : string) {
-	};
-
-	public removeDevice(deviceID : string) {};
-
-	public removeSensor(deviceID : string, sensorID : string) {};
 
 	private _setDefaultConfig() {
 		this._applyConfig({
@@ -189,7 +146,7 @@ export class SensorGraphController implements UpdateDispatcher.Subscriber{
 	}
 
 
-	private _applyConfig(config : SensorGraphConfig) {
+	protected _applyConfig(config : SensorGraphConfig) {
 
 		// Only sensors changed so no need to redo everything
 		if(this._config !== undefined &&
@@ -203,6 +160,9 @@ export class SensorGraphController implements UpdateDispatcher.Subscriber{
 
 			var addedSensors = Utils.difference(config.sensors, this._config.sensors, sensorEqual);
 			var	removedSensors = Utils.difference(this._config.sensors, config.sensors, sensorEqual);
+
+			console.log(addedSensors);
+			console.log(removedSensors);
 
 			for(var {deviceID: deviceID, sensorID: sensorID} of addedSensors) {
 				this._subscribeSensor(config, deviceID, sensorID);
@@ -310,7 +270,7 @@ class SensorGraphDirective implements ng.IDirective {
 	public templateUrl : string = "/html/sensor-graph.html"
 	public scope = {}
 
-	public controller = ["$scope", "$interval", "$timeout", "$uibModal", "UpdateDispatcher", SensorGraphController];
+	public controller = ["$interval", "$timeout", "$scope", "$uibModal", "UpdateDispatcher", SensorGraphController];
 
 	// Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
 	public link:Function  = ($scope : SensorGraphScope,

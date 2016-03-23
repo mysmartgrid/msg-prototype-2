@@ -125,7 +125,7 @@ func (d *db) benchAddSensors(count int) map[User]map[Device][]Sensor {
 			devices := user.Devices()
 			for _, device := range devices {
 				for i := 0; i < count; i++ {
-					sensor, err := device.AddSensor(names[i], "JW", 1)
+					sensor, err := device.AddSensor(names[i], "JW", 1, 1.0)
 					if err != nil {
 						return err
 					}

@@ -33,6 +33,7 @@ type sensor struct {
 	Name                string
 	Unit                string
 	Port                int32
+	Factor              float64
 	LastRealtimeRequest time.Time
 }
 
@@ -53,29 +54,29 @@ type device struct {
 var errDeviceNotRegistered = errors.New("device not registered")
 
 var sensorDefinitons = [...]sensor{
-	{Name: "Voltage L1", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Voltage L2", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Voltage L3", Unit: "V", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Voltage L1", Unit: "V", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Voltage L2", Unit: "V", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Voltage L3", Unit: "V", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
 
-	{Name: "Current L1", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Current L2", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Current L3", Unit: "A", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Current L1", Unit: "A", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Current L2", Unit: "A", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Current L3", Unit: "A", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
 
-	{Name: "Power L1", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Power L2", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Power L3", Unit: "W", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power L1", Unit: "W", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power L2", Unit: "W", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power L3", Unit: "W", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
 
-	{Name: "Import L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Import L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Import L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Import L1", Unit: "kWh", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Import L2", Unit: "kWh", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Import L3", Unit: "kWh", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
 
-	{Name: "Export L1", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Export L2", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Export L3", Unit: "kWh", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Export L1", Unit: "kWh", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Export L2", Unit: "kWh", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Export L3", Unit: "kWh", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
 
-	{Name: "Power Factor L1", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Power Factor L2", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
-	{Name: "Power Factor L3", Unit: "", Port: 1, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power Factor L1", Unit: "", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power Factor L2", Unit: "", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
+	{Name: "Power Factor L3", Unit: "", Port: 1, Factor: 1.0, LastRealtimeRequest: time.Unix(0, 0)},
 }
 
 func (dev *device) getClient() *msgp.DeviceClient {
@@ -165,9 +166,10 @@ func (dev *device) generateRandomSensors(count int64) {
 		}
 
 		dev.Sensors[id] = sensor{
-			Name: fmt.Sprintf("Sensor %v", count),
-			Unit: []string{"U1", "U2"}[rand.Int31n(2)],
-			Port: int32(len(dev.Sensors)),
+			Name:   fmt.Sprintf("Sensor %v", count),
+			Unit:   []string{"U1", "U2"}[rand.Int31n(2)],
+			Port:   int32(len(dev.Sensors)),
+			Factor: 1.0,
 		}
 		count--
 	}
@@ -345,7 +347,7 @@ func (dev *device) heartbeat() (map[string]interface{}, error) {
 
 func (dev *device) registerSensors() error {
 	for id, sens := range dev.Sensors {
-		if err := dev.getClient().AddSensor(id, sens.Unit, sens.Port); err != nil {
+		if err := dev.getClient().AddSensor(id, sens.Unit, sens.Port, sens.Factor); err != nil {
 			return err
 		}
 		md := msgp.SensorMetadata{
