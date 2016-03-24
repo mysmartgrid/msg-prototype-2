@@ -10,10 +10,10 @@ type tx struct {
 }
 
 func (tx *tx) AddDevice(id string, key []byte) error {
-	if tx.Bucket(db_registeredDevices).Bucket([]byte(id)) != nil {
-		return IdExists
+	if tx.Bucket(dbRegisteredDevices).Bucket([]byte(id)) != nil {
+		return ErrIDExists
 	}
-	db, err := tx.Bucket(db_registeredDevices).CreateBucket([]byte(id))
+	db, err := tx.Bucket(dbRegisteredDevices).CreateBucket([]byte(id))
 	if err != nil {
 		return err
 	}
@@ -21,16 +21,16 @@ func (tx *tx) AddDevice(id string, key []byte) error {
 	return nil
 }
 
-func (tx *tx) Device(devId string) RegisteredDevice {
-	if db := tx.Bucket(db_registeredDevices).Bucket([]byte(devId)); db != nil {
-		return &registeredDevice{db, devId}
+func (tx *tx) Device(devID string) RegisteredDevice {
+	if db := tx.Bucket(dbRegisteredDevices).Bucket([]byte(devID)); db != nil {
+		return &registeredDevice{db, devID}
 	}
 	return nil
 }
 
 func (tx *tx) Devices() map[string]RegisteredDevice {
 	result := make(map[string]RegisteredDevice)
-	b := tx.Bucket(db_registeredDevices)
+	b := tx.Bucket(dbRegisteredDevices)
 	b.ForEach(func(k, v []byte) error {
 		result[string(k)] = &registeredDevice{b.Bucket(k), string(k)}
 		return nil

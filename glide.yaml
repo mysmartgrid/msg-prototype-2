@@ -1,0 +1,41 @@
+package: github.com/mysmartgrid/msg-prototype-2
+import:
+- package: github.com/BurntSushi/toml
+  version: master
+- package: github.com/boltdb/bolt
+  version: master
+- package: github.com/goburrow/modbus
+  version: master
+- package: github.com/goburrow/serial
+  version: master
+- package: github.com/gorilla/context
+  version: master
+- package: github.com/gorilla/mux
+  version: master
+- package: github.com/gorilla/securecookie
+  version: master
+- package: github.com/gorilla/sessions
+  version: master
+- package: github.com/gorilla/websocket
+  version: master
+- package: github.com/lib/pq
+  version: master
+- package: github.com/mattn/go-runewidth
+  version: master
+- package: github.com/mysmartgrid/gosdm630
+  version: master
+- package: github.com/mysmartgrid/msg2api
+  version: master
+- package: github.com/olekukonko/tablewriter
+  version: master
+- package: github.com/zfjagann/golang-ring
+  version: master
+- package: golang.org/x/crypto
+  version: master
+  subpackages:
+  - bcrypt
+  - blowfish
+- package: golang.org/x/sys
+  version: master
+  subpackages:
+  - unix

@@ -1,0 +1,45 @@
+hash: e804db3c0689aa3edf8a4d0567831ff4ec63312a7a425a31ed51731fb13373f5
+updated: 2016-03-15T14:26:44.563251007+01:00
+imports:
+- name: github.com/boltdb/bolt
+  version: 0fd4c0547d204c7b1cad6db6f3adad5f2cf453e5
+- name: github.com/BurntSushi/toml
+  version: bbd5bb678321a0d6e58f1099321dfa73391c1b6f
+- name: github.com/goburrow/modbus
+  version: 2abd4f3eb317bb103b1943a9edc24fc39c69a9a0
+- name: github.com/goburrow/serial
+  version: 927256b561dfb4105053d85e87016efaacfdae5e
+- name: github.com/gorilla/context
+  version: 1ea25387ff6f684839d82767c1733ff4d4d15d0a
+- name: github.com/gorilla/mux
+  version: acf3be1b335c8ce30b2c8d51300984666f0ceefa
+- name: github.com/gorilla/securecookie
+  version: 8dacca26977607e637262eb66b15b7d39f2d3009
+- name: github.com/gorilla/sessions
+  version: 8cd570d8b4ed84b18bca9d8c3ae2db55885ccd8b
+- name: github.com/gorilla/websocket
+  version: e2e3d8414d0fbae04004f151979f4e27c6747fe7
+- name: github.com/lib/pq
+  version: 165a3529e799da61ab10faed1fabff3662d6193f
+  subpackages:
+  - oid
+- name: github.com/mattn/go-runewidth
+  version: d6bea18f789704b5f83375793155289da36a3c7f
+- name: github.com/mysmartgrid/gosdm630
+  version: 86eb43b315da162ceaf8e7756ab2c3e52ac89b52
+- name: github.com/mysmartgrid/msg2api
+  version: b99659e227432243f19e5454e40daf52d7de4895
+- name: github.com/olekukonko/tablewriter
+  version: cca8bbc0798408af109aaaa239cbd2634846b340
+- name: github.com/zfjagann/golang-ring
+  version: 17637388c9f6665e2f475e4beec439e6fc19fee9
+- name: golang.org/x/crypto
+  version: 6025851c7c2bf210daf74d22300c699b16541847
+  subpackages:
+  - bcrypt
+  - blowfish
+- name: golang.org/x/sys
+  version: 7a56174f0086b32866ebd746a794417edbc678a1
+  subpackages:
+  - unix
+devImports: []

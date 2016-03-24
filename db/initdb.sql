@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 9.5.0
--- Dumped by pg_dump version 9.5.0
+-- Dumped from database version 9.5.1
+-- Dumped by pg_dump version 9.5.1
 
--- Started on 2016-01-20 16:30:11 CET
+-- Started on 2016-03-23 14:30:36 CET
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -16,7 +16,7 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- TOC entry 198 (class 3079 OID 12395)
+-- TOC entry 1 (class 3079 OID 12395)
 -- Name: plpgsql; Type: EXTENSION; Schema: -; Owner: -
 --
 
@@ -24,8 +24,8 @@ CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 
 
 --
--- TOC entry 2269 (class 0 OID 0)
--- Dependencies: 198
+-- TOC entry 2268 (class 0 OID 0)
+-- Dependencies: 1
 -- Name: EXTENSION plpgsql; Type: COMMENT; Schema: -; Owner: -
 --
 
@@ -142,7 +142,7 @@ select count(*) from do_update_y;$$;
 
 
 --
--- TOC entry 213 (class 1255 OID 16402)
+-- TOC entry 212 (class 1255 OID 16402)
 -- Name: do_remove_old_values(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -193,7 +193,7 @@ SET default_tablespace = '';
 SET default_with_oids = false;
 
 --
--- TOC entry 180 (class 1259 OID 16544)
+-- TOC entry 181 (class 1259 OID 16544)
 -- Name: devices; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -207,7 +207,7 @@ CREATE TABLE devices (
 
 
 --
--- TOC entry 181 (class 1259 OID 16550)
+-- TOC entry 182 (class 1259 OID 16550)
 -- Name: groups; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -217,7 +217,7 @@ CREATE TABLE groups (
 
 
 --
--- TOC entry 182 (class 1259 OID 16556)
+-- TOC entry 183 (class 1259 OID 16556)
 -- Name: measure_aggregated_days; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -231,7 +231,7 @@ CREATE TABLE measure_aggregated_days (
 
 
 --
--- TOC entry 183 (class 1259 OID 16559)
+-- TOC entry 184 (class 1259 OID 16559)
 -- Name: measure_aggregated_hours; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -245,7 +245,7 @@ CREATE TABLE measure_aggregated_hours (
 
 
 --
--- TOC entry 184 (class 1259 OID 16562)
+-- TOC entry 185 (class 1259 OID 16562)
 -- Name: measure_aggregated_minutes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -259,7 +259,7 @@ CREATE TABLE measure_aggregated_minutes (
 
 
 --
--- TOC entry 185 (class 1259 OID 16565)
+-- TOC entry 186 (class 1259 OID 16565)
 -- Name: measure_aggregated_months; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -273,7 +273,7 @@ CREATE TABLE measure_aggregated_months (
 
 
 --
--- TOC entry 186 (class 1259 OID 16568)
+-- TOC entry 187 (class 1259 OID 16568)
 -- Name: measure_aggregated_seconds; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -287,7 +287,7 @@ CREATE TABLE measure_aggregated_seconds (
 
 
 --
--- TOC entry 187 (class 1259 OID 16571)
+-- TOC entry 188 (class 1259 OID 16571)
 -- Name: measure_aggregated_weeks; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -301,7 +301,7 @@ CREATE TABLE measure_aggregated_weeks (
 
 
 --
--- TOC entry 188 (class 1259 OID 16574)
+-- TOC entry 189 (class 1259 OID 16574)
 -- Name: measure_aggregated_years; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -315,7 +315,7 @@ CREATE TABLE measure_aggregated_years (
 
 
 --
--- TOC entry 189 (class 1259 OID 16577)
+-- TOC entry 190 (class 1259 OID 16577)
 -- Name: measure_raw; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -327,7 +327,7 @@ CREATE UNLOGGED TABLE measure_raw (
 
 
 --
--- TOC entry 190 (class 1259 OID 16580)
+-- TOC entry 191 (class 1259 OID 16580)
 -- Name: sensor_groups; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -338,7 +338,7 @@ CREATE TABLE sensor_groups (
 
 
 --
--- TOC entry 191 (class 1259 OID 16586)
+-- TOC entry 192 (class 1259 OID 16586)
 -- Name: sensors; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -350,12 +350,13 @@ CREATE TABLE sensors (
     port integer NOT NULL,
     unit character varying NOT NULL,
     sensor_seq bigint NOT NULL,
-    is_virtual boolean DEFAULT false NOT NULL
+    is_virtual boolean DEFAULT false NOT NULL,
+    factor double precision DEFAULT 1.0 NOT NULL
 );
 
 
 --
--- TOC entry 192 (class 1259 OID 16593)
+-- TOC entry 193 (class 1259 OID 16593)
 -- Name: sensors_sensor_seq_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -368,8 +369,8 @@ CREATE SEQUENCE sensors_sensor_seq_seq
 
 
 --
--- TOC entry 2270 (class 0 OID 0)
--- Dependencies: 192
+-- TOC entry 2269 (class 0 OID 0)
+-- Dependencies: 193
 -- Name: sensors_sensor_seq_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
@@ -377,7 +378,7 @@ ALTER SEQUENCE sensors_sensor_seq_seq OWNED BY sensors.sensor_seq;
 
 
 --
--- TOC entry 193 (class 1259 OID 16595)
+-- TOC entry 194 (class 1259 OID 16595)
 -- Name: user_groups; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -389,7 +390,7 @@ CREATE TABLE user_groups (
 
 
 --
--- TOC entry 194 (class 1259 OID 16602)
+-- TOC entry 195 (class 1259 OID 16602)
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -402,7 +403,7 @@ CREATE TABLE users (
 
 
 --
--- TOC entry 197 (class 1259 OID 16723)
+-- TOC entry 198 (class 1259 OID 16723)
 -- Name: virtual_sensor_sensors; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -414,7 +415,7 @@ CREATE TABLE virtual_sensor_sensors (
 
 
 --
--- TOC entry 196 (class 1259 OID 16695)
+-- TOC entry 197 (class 1259 OID 16695)
 -- Name: virtual_sensors; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -426,7 +427,7 @@ CREATE TABLE virtual_sensors (
 
 
 --
--- TOC entry 195 (class 1259 OID 16693)
+-- TOC entry 196 (class 1259 OID 16693)
 -- Name: virtual_sensors_vsensor_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -439,8 +440,8 @@ CREATE SEQUENCE virtual_sensors_vsensor_id_seq
 
 
 --
--- TOC entry 2271 (class 0 OID 0)
--- Dependencies: 195
+-- TOC entry 2270 (class 0 OID 0)
+-- Dependencies: 196
 -- Name: virtual_sensors_vsensor_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
@@ -448,7 +449,7 @@ ALTER SEQUENCE virtual_sensors_vsensor_id_seq OWNED BY virtual_sensors.vsensor_i
 
 
 --
--- TOC entry 2093 (class 2604 OID 16406)
+-- TOC entry 2092 (class 2604 OID 16406)
 -- Name: sensor_seq; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -581,12 +582,12 @@ ALTER TABLE ONLY users
 
 
 --
--- TOC entry 2130 (class 2606 OID 16416)
+-- TOC entry 2130 (class 2606 OID 19209)
 -- Name: virtual_sensor_sensors_pk; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY virtual_sensor_sensors
-    ADD CONSTRAINT virtual_sensor_sensors_pk PRIMARY KEY (sensor_seq, vsensor_id);
+    ADD CONSTRAINT virtual_sensor_sensors_pk PRIMARY KEY (sensor_seq, vsensor_id, symbol);
 
 
 --
@@ -777,20 +778,9 @@ ALTER TABLE ONLY virtual_sensor_sensors
     ADD CONSTRAINT virtual_sensor_fk FOREIGN KEY (vsensor_id) REFERENCES virtual_sensors(vsensor_id) ON UPDATE RESTRICT ON DELETE CASCADE;
 
 
---
--- TOC entry 2268 (class 0 OID 0)
--- Dependencies: 6
--- Name: public; Type: ACL; Schema: -; Owner: -
---
-
-REVOKE ALL ON SCHEMA public FROM PUBLIC;
-REVOKE ALL ON SCHEMA public FROM postgres;
-GRANT ALL ON SCHEMA public TO postgres;
-GRANT ALL ON SCHEMA public TO PUBLIC;
-
-
--- Completed on 2016-01-20 16:30:11 CET
+-- Completed on 2016-03-23 14:30:36 CET
 
 --
 -- PostgreSQL database dump complete
 --
+
