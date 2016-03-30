@@ -1,16 +1,38 @@
 interface DeviceProps {
     name : string;
-    lan : any;
-    wifi : any;
+    lan : {
+        enabled : boolean;
+        protocol : string;
+        ip : string;
+        netmask : string;
+        gateway : string;
+        nameserver : string;
+    };
+    wifi : {
+        enabled : boolean;
+        protocol : string;
+        essid : string;
+        enc : string;
+        psk : string;
+        ip : string;
+        netmask : string;
+        gateway : string;
+        nameserer : string;
+    };
 }
 
 interface Device extends DeviceProps {
-    sensors : Sensor[];
+    sensors : {[sensorID : string] : Sensor};
 }
 
-interface Sensor {
-    name : string;
-    confUrl : string;
+interface SensorProps {
+    name : string,
+    unit : string,
+    factor : number,
+    port : number
+}
+
+interface Sensor extends SensorProps{
     devId : string;
     sensId : string;
 }
@@ -18,12 +40,6 @@ interface Sensor {
 interface DeviceListScope extends ng.IScope {
     showSpinner : boolean;
     encodeURIComponent : (uriComponent : string) => string;
-
-    deviceEditorSave : () => void;
-    deviceEditorDismiss : () => void;
-    editedDeviceURL : string;
-    editedDeviceProps : DeviceProps;
-    editedDeviceId : string;
 
     errorSavingSettings : string;
     errorLoadingSettings : string;
@@ -57,55 +73,165 @@ function sensorConfigUrl(deviceID : string, sensorID : string) : string {
     return '/api/user/v1/sensor/' + encodeURIComponent(deviceID) + '/' + encodeURIComponent(sensorID) + '/props';
 }
 
+
+
+interface DeviceEditorScope {
+    showSpinner : boolean;
+    deviceProps : DeviceProps;
+
+    errorLoadingSettings : string;
+    errorSavingSettings : string;
+
+    ok : () => void;
+    cancel : () => void;
+}
+
+
+class DeviceEditorController {
+
+    private url : string;
+
+    constructor(private $scope : DeviceEditorScope,
+				private $uibModalInstance : angular.ui.bootstrap.IModalServiceInstance,
+                private $http : ng.IHttpService,
+                private deviceID : string) {
+
+        this.url = deviceConfigUrl(deviceID);
+
+        $scope.showSpinner = true;
+        $http.get(this.url)
+            .success((data : DeviceProps, status, headers, config) => {
+                $scope.showSpinner = false;
+                $scope.errorLoadingSettings = null;
+                $scope.errorSavingSettings = null;
+
+                $scope.deviceProps = data;
+            })
+            .error((data, status, headers, config) => {
+                $scope.showSpinner = false;
+                $scope.errorLoadingSettings = data;
+            });
+
+
+        $scope.ok = () => this._saveConfig();
+        $scope.cancel = () => this._close();
+    }
+
+    private _saveConfig() : void {
+        this.$http.post(this.url, this.$scope.deviceProps)
+            .success((data, status, headers, config) => {
+                this.$scope.errorSavingSettings = null;
+                this.$uibModalInstance.close(this.$scope.deviceProps);
+            })
+            .error((data, status, headers, config) => {
+                this.$scope.errorSavingSettings = data;
+            });
+    }
+
+    private _close() : void {
+        this.$uibModalInstance.dismiss('cancel');
+    }
+}
+
+const DeviceEditorControllerFactory = ["$scope", "$uibModalInstance", "$http", "deviceID",
+                                        ($scope, $uibModalInstance, $http, deviceID) =>
+                                            new DeviceEditorController($scope, $uibModalInstance, $http, deviceID)];
+
+
+
+
+
+interface sensorEditorScope {
+    showSpinner : boolean;
+    sensorProps : SensorProps;
+
+    errorLoadingSettings : string;
+    errorSavingSettings : string;
+
+    ok : () => void;
+    cancel : () => void;
+}
+
+class SensorEditorController {
+    private url : string;
+
+    constructor(private $scope : sensorEditorScope,
+				private $uibModalInstance : angular.ui.bootstrap.IModalServiceInstance,
+                private $http : ng.IHttpService,
+                private deviceID : string,
+                private sensorID : string) {
+
+        this.url = sensorConfigUrl(deviceID, sensorID);
+
+        $scope.showSpinner = true;
+        $http.get(this.url)
+            .success((data : SensorProps, status, headers, config) => {
+                $scope.showSpinner = false;
+                $scope.errorLoadingSettings = null;
+                $scope.errorSavingSettings = null;
+
+                $scope.sensorProps = data;
+                console.log(data);
+            })
+            .error((data, status, headers, config) => {
+                $scope.showSpinner = false;
+                $scope.errorLoadingSettings = data;
+            });
+
+
+        $scope.ok = () => this._saveConfig();
+        $scope.cancel = () => this._close();
+    }
+
+    private _saveConfig() : void {
+        this.$http.post(this.url, this.$scope.sensorProps)
+            .success((data, status, headers, config) => {
+                this.$scope.errorSavingSettings = null;
+                this.$uibModalInstance.close(this.$scope.sensorProps);
+            })
+            .error((data, status, headers, config) => {
+                this.$scope.errorSavingSettings = data;
+            });
+    }
+
+    private _close() : void {
+        this.$uibModalInstance.dismiss('cancel');
+    }
+}
+
+const SensorEditorControllerFactory = ["$scope", "$uibModalInstance", "$http", "deviceID", "sensorID",
+                                        ($scope, $uibModalInstance, $http, deviceID, sensorID) =>
+                                            new SensorEditorController($scope, $uibModalInstance, $http, deviceID, sensorID)];
+
+
 class DeviceListController {
     public element : ng.IAugmentedJQuery;
 
-    constructor(private $scope : DeviceListScope, private $interval : ng.IIntervalService, private $http : ng.IHttpService) {
+    constructor(private $scope : DeviceListScope,
+                private $interval : ng.IIntervalService,
+                private $http : ng.IHttpService,
+                private $uibModal : angular.ui.bootstrap.IModalService) {
+
         $scope.showSpinner = false;
         $scope.encodeURIComponent = encodeURIComponent;
 
-        $scope.deviceEditorSave = () => {
-            $http.post($scope.editedDeviceURL, $scope.editedDeviceProps)
-                .success((data, status, headers, config) => {
-                    $scope.devices[$scope.editedDeviceId].name = $scope.editedDeviceProps.name;
-                    $scope.devices[$scope.editedDeviceId].lan = $scope.editedDeviceProps.lan;
-                    $scope.devices[$scope.editedDeviceId].wifi = $scope.editedDeviceProps.wifi;
-                    $scope.editedDeviceId = undefined;
-                    $scope.errorSavingSettings = null;
-                    $("#deviceEditDialog").modal('hide');
-                })
-                .error((data, status, headers, config) => {
-                    $scope.errorSavingSettings = data;
-                });
-        };
 
-        $scope.deviceEditorDismiss = () => {
-            $("#deviceEditDialog").modal('hide');
-        }
 
         $scope.editDevice = (deviceID) => {
-            var url = deviceConfigUrl(deviceID);
+            var modalInstance = this.$uibModal.open({
+                controller: DeviceEditorControllerFactory,
+                size: "lg",
+                templateUrl: "/html/device-edit-dialog.html",
+                resolve: {
+                        deviceID: () => deviceID,
+                }
+            });
 
-            $scope.showSpinner = true;
-            $http.get(url)
-                .success((data : DeviceProps, status, headers, config) => {
-                    $scope.showSpinner = false;
-                    $scope.errorLoadingSettings = null;
-                    $scope.errorSavingSettings = null;
-
-                    $scope.editedDeviceId = deviceID;
-                    $scope.editedDeviceURL = url;
-                    $scope.editedDeviceProps = {
-                        name: $scope.devices[deviceID].name,
-                        lan: data.lan || {},
-                        wifi: data.wifi || {}
-                    };
-                    $("#deviceEditDialog").modal('show');
-                })
-                .error((data, status, headers, config) => {
-                    $scope.showSpinner = false;
-                    $scope.errorLoadingSettings = data;
-                });
+            modalInstance.result.then((props : DeviceProps) : void => {
+                $scope.devices[deviceID].name = props.name;
+                $scope.devices[deviceID].lan = props.lan;
+                $scope.devices[deviceID].wifi = props.wifi
+            });
         };
 
         $scope.remove = (deviceID) => {
@@ -126,16 +252,19 @@ class DeviceListController {
         };
 
         $scope.editSensor = (deviceID, sensorID) => {
-            var url = sensorConfigUrl(deviceID, sensorID);
+            var modalInstance = this.$uibModal.open({
+                controller: SensorEditorControllerFactory,
+                size: "lg",
+                templateUrl: "/html/sensor-edit-dialog.html",
+                resolve: {
+                        deviceID: () => deviceID,
+                        sensorID: () => sensorID
+                }
+            });
 
-            $scope.errorSavingSensor = null;
-            $scope.editedSensor = {
-                name: $scope.devices[deviceID].sensors[sensorID].name,
-                confUrl: url,
-                devId: deviceID,
-                sensId: sensorID,
-            };
-            $("#sensorEditDialog").modal('show');
+            modalInstance.result.then((props : SensorProps) : void => {
+                $scope.devices[deviceID].sensors[sensorID].name = props.name;
+            });
         };
 
         $scope.saveSensor = () => {
@@ -144,7 +273,7 @@ class DeviceListController {
             };
 
             $scope.showSpinner = true;
-            $http.post($scope.editedSensor.confUrl, props)
+            $http.post(sensorConfigUrl($scope.editedSensor.devId, $scope.editedSensor.sensId), props)
                 .success(function(data, status, headers, config) {
                     $scope.showSpinner = false;
                     $scope.devices[$scope.editedSensor.devId].sensors[$scope.editedSensor.sensId].name = props.name;
@@ -177,7 +306,7 @@ class DeviceListDirective implements ng.IDirective {
             devices: "="
         };
 
-	public controller = ['$scope', '$interval', '$http', DeviceListController];
+	public controller = ['$scope', '$interval', '$http', '$uibModal', DeviceListController];
 
     // Implementing this as a method will not work as the this binding will break somewhere in angulars guts.
 	public link:Function  = ($scope : DeviceListScope,

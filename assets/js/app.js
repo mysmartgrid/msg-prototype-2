@@ -87,51 +87,116 @@ function deviceRemoveUrl(deviceID) {
 function sensorConfigUrl(deviceID, sensorID) {
     return '/api/user/v1/sensor/' + encodeURIComponent(deviceID) + '/' + encodeURIComponent(sensorID) + '/props';
 }
+var DeviceEditorController = (function () {
+    function DeviceEditorController($scope, $uibModalInstance, $http, deviceID) {
+        var _this = this;
+        this.$scope = $scope;
+        this.$uibModalInstance = $uibModalInstance;
+        this.$http = $http;
+        this.deviceID = deviceID;
+        this.url = deviceConfigUrl(deviceID);
+        $scope.showSpinner = true;
+        $http.get(this.url)
+            .success(function (data, status, headers, config) {
+            $scope.showSpinner = false;
+            $scope.errorLoadingSettings = null;
+            $scope.errorSavingSettings = null;
+            $scope.deviceProps = data;
+        })
+            .error(function (data, status, headers, config) {
+            $scope.showSpinner = false;
+            $scope.errorLoadingSettings = data;
+        });
+        $scope.ok = function () { return _this._saveConfig(); };
+        $scope.cancel = function () { return _this._close(); };
+    }
+    DeviceEditorController.prototype._saveConfig = function () {
+        var _this = this;
+        this.$http.post(this.url, this.$scope.deviceProps)
+            .success(function (data, status, headers, config) {
+            _this.$scope.errorSavingSettings = null;
+            _this.$uibModalInstance.close(_this.$scope.deviceProps);
+        })
+            .error(function (data, status, headers, config) {
+            _this.$scope.errorSavingSettings = data;
+        });
+    };
+    DeviceEditorController.prototype._close = function () {
+        this.$uibModalInstance.dismiss('cancel');
+    };
+    return DeviceEditorController;
+}());
+var DeviceEditorControllerFactory = ["$scope", "$uibModalInstance", "$http", "deviceID",
+    function ($scope, $uibModalInstance, $http, deviceID) {
+        return new DeviceEditorController($scope, $uibModalInstance, $http, deviceID);
+    }];
+var SensorEditorController = (function () {
+    function SensorEditorController($scope, $uibModalInstance, $http, deviceID, sensorID) {
+        var _this = this;
+        this.$scope = $scope;
+        this.$uibModalInstance = $uibModalInstance;
+        this.$http = $http;
+        this.deviceID = deviceID;
+        this.sensorID = sensorID;
+        this.url = sensorConfigUrl(deviceID, sensorID);
+        $scope.showSpinner = true;
+        $http.get(this.url)
+            .success(function (data, status, headers, config) {
+            $scope.showSpinner = false;
+            $scope.errorLoadingSettings = null;
+            $scope.errorSavingSettings = null;
+            $scope.sensorProps = data;
+            console.log(data);
+        })
+            .error(function (data, status, headers, config) {
+            $scope.showSpinner = false;
+            $scope.errorLoadingSettings = data;
+        });
+        $scope.ok = function () { return _this._saveConfig(); };
+        $scope.cancel = function () { return _this._close(); };
+    }
+    SensorEditorController.prototype._saveConfig = function () {
+        var _this = this;
+        this.$http.post(this.url, this.$scope.sensorProps)
+            .success(function (data, status, headers, config) {
+            _this.$scope.errorSavingSettings = null;
+            _this.$uibModalInstance.close(_this.$scope.sensorProps);
+        })
+            .error(function (data, status, headers, config) {
+            _this.$scope.errorSavingSettings = data;
+        });
+    };
+    SensorEditorController.prototype._close = function () {
+        this.$uibModalInstance.dismiss('cancel');
+    };
+    return SensorEditorController;
+}());
+var SensorEditorControllerFactory = ["$scope", "$uibModalInstance", "$http", "deviceID", "sensorID",
+    function ($scope, $uibModalInstance, $http, deviceID, sensorID) {
+        return new SensorEditorController($scope, $uibModalInstance, $http, deviceID, sensorID);
+    }];
 var DeviceListController = (function () {
-    function DeviceListController($scope, $interval, $http) {
+    function DeviceListController($scope, $interval, $http, $uibModal) {
         var _this = this;
         this.$scope = $scope;
         this.$interval = $interval;
         this.$http = $http;
+        this.$uibModal = $uibModal;
         $scope.showSpinner = false;
         $scope.encodeURIComponent = encodeURIComponent;
-        $scope.deviceEditorSave = function () {
-            $http.post($scope.editedDeviceURL, $scope.editedDeviceProps)
-                .success(function (data, status, headers, config) {
-                $scope.devices[$scope.editedDeviceId].name = $scope.editedDeviceProps.name;
-                $scope.devices[$scope.editedDeviceId].lan = $scope.editedDeviceProps.lan;
-                $scope.devices[$scope.editedDeviceId].wifi = $scope.editedDeviceProps.wifi;
-                $scope.editedDeviceId = undefined;
-                $scope.errorSavingSettings = null;
-                $("#deviceEditDialog").modal('hide');
-            })
-                .error(function (data, status, headers, config) {
-                $scope.errorSavingSettings = data;
-            });
-        };
-        $scope.deviceEditorDismiss = function () {
-            $("#deviceEditDialog").modal('hide');
-        };
         $scope.editDevice = function (deviceID) {
-            var url = deviceConfigUrl(deviceID);
-            $scope.showSpinner = true;
-            $http.get(url)
-                .success(function (data, status, headers, config) {
-                $scope.showSpinner = false;
-                $scope.errorLoadingSettings = null;
-                $scope.errorSavingSettings = null;
-                $scope.editedDeviceId = deviceID;
-                $scope.editedDeviceURL = url;
-                $scope.editedDeviceProps = {
-                    name: $scope.devices[deviceID].name,
-                    lan: data.lan || {},
-                    wifi: data.wifi || {}
-                };
-                $("#deviceEditDialog").modal('show');
-            })
-                .error(function (data, status, headers, config) {
-                $scope.showSpinner = false;
-                $scope.errorLoadingSettings = data;
+            var modalInstance = _this.$uibModal.open({
+                controller: DeviceEditorControllerFactory,
+                size: "lg",
+                templateUrl: "/html/device-edit-dialog.html",
+                resolve: {
+                    deviceID: function () { return deviceID; },
+                }
+            });
+            modalInstance.result.then(function (props) {
+                $scope.devices[deviceID].name = props.name;
+                $scope.devices[deviceID].lan = props.lan;
+                $scope.devices[deviceID].wifi = props.wifi;
             });
         };
         $scope.remove = function (deviceID) {
@@ -149,22 +214,25 @@ var DeviceListController = (function () {
             });
         };
         $scope.editSensor = function (deviceID, sensorID) {
-            var url = sensorConfigUrl(deviceID, sensorID);
-            $scope.errorSavingSensor = null;
-            $scope.editedSensor = {
-                name: $scope.devices[deviceID].sensors[sensorID].name,
-                confUrl: url,
-                devId: deviceID,
-                sensId: sensorID,
-            };
-            $("#sensorEditDialog").modal('show');
+            var modalInstance = _this.$uibModal.open({
+                controller: SensorEditorControllerFactory,
+                size: "lg",
+                templateUrl: "/html/sensor-edit-dialog.html",
+                resolve: {
+                    deviceID: function () { return deviceID; },
+                    sensorID: function () { return sensorID; }
+                }
+            });
+            modalInstance.result.then(function (props) {
+                $scope.devices[deviceID].sensors[sensorID].name = props.name;
+            });
         };
         $scope.saveSensor = function () {
             var props = {
                 name: $scope.editedSensor.name
             };
             $scope.showSpinner = true;
-            $http.post($scope.editedSensor.confUrl, props)
+            $http.post(sensorConfigUrl($scope.editedSensor.devId, $scope.editedSensor.sensId), props)
                 .success(function (data, status, headers, config) {
                 $scope.showSpinner = false;
                 $scope.devices[$scope.editedSensor.devId].sensors[$scope.editedSensor.sensId].name = props.name;
@@ -194,7 +262,7 @@ var DeviceListDirective = (function () {
         this.scope = {
             devices: "="
         };
-        this.controller = ['$scope', '$interval', '$http', DeviceListController];
+        this.controller = ['$scope', '$interval', '$http', '$uibModal', DeviceListController];
         this.link = function ($scope, element, attrs, deviceList) {
             deviceList.element = element;
         };

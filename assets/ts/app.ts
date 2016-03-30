@@ -23,17 +23,6 @@ angular.module("msgp", ['ui.bootstrap'])
 .directive("timeRangeSpinner", TimeRangeSpinnerFactory())
 .directive("dateTimePicker", DateTimePickerFactory())
 .directive("sensorGraph", SensorGraphFactory())
-.directive("deviceEditor", [function() {
-	return {
-		restrict: "A",
-		templateUrl: "/html/device-editor.html",
-		scope: {
-			device: "="
-		},
-		link: function(scope, element, attrs) {
-		}
-	};
-}])
 .directive("deviceList", DeviceListFactory())
 .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", function(wsclient, wsurl, $http, $timeout : ng.ITimeoutService, $uibModal) {
 	wsclient.connect(wsurl);

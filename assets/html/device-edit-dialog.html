@@ -1,0 +1,112 @@
+<div class="modal-header">
+    <button type="button" class="close" ng-click="cancel()"><span>&times;</span></button>
+    <h4 class="modal-title">Edit device</h4>
+</div>
+<div class="modal-body">
+    <div class="ng-hide alert alert-danger" ng-show="errorSavingSettings">
+        Error saving settings: %%errorSavingSettings%%
+    </div>
+    <div class="ng-hide alert alert-danger" ng-show="errorLoadingSettings">
+        Error loading settings: %%errorLoadingSettings%%
+    </div>
+    <div class="ng-hide modal-spinner-overlay" ng-show="showSpinner">
+
+    </div>
+    <div>
+    	<div>
+    		<div class="form-group">
+    			<label for="deviceEditorName">Name</label>
+    			<input type="text" id="deviceEditorName" data-ng-model="deviceProps.name" class="form-control" />
+    		</div>
+    		<div>
+    			<label>
+    				<input type="checkbox" data-ng-model="deviceProps.lan.enabled" />
+    				LAN enabled
+    			</label>
+    		</div>
+    		<table class="ng-hide" data-ng-show="deviceProps.lan.enabled">
+    			<tr>
+    				<td>Protocol</td>
+    				<td>
+    					<select data-ng-model="deviceProps.lan.protocol">
+    						<option value="dhcp">DHCP</option>
+    						<option value="static">Static</option>
+    					</select>
+    				</td>
+    			</tr>
+    			<tr class="ng-hide" data-ng-show="deviceProps.lan.protocol == &quot;static&quot;">
+    				<td>IP</td>
+    				<td><input type="text" data-ng-model="deviceProps.lan.ip"/></td>
+    			</tr>
+    			<tr class="ng-hide" data-ng-show="deviceProps.lan.protocol == &quot;static&quot;">
+    				<td>Netmask</td>
+    				<td><input type="text" data-ng-model="deviceProps.lan.netmask"/></td>
+    			</tr>
+    			<tr class="ng-hide" data-ng-show="deviceProps.lan.protocol == &quot;static&quot;">
+    				<td>Gateway</td>
+    				<td><input type="text" data-ng-model="deviceProps.lan.gateway"/></td>
+    			</tr>
+    			<tr class="ng-hide" data-ng-show="deviceProps.lan.protocol == &quot;static&quot;">
+    				<td>Nameserver</td>
+    				<td><input type="text" data-ng-model="deviceProps.lan.nameserver"/></td>
+    			</tr>
+    		</table>
+    	</div>
+    	<div>
+    		<label>
+    			<input type="checkbox" data-ng-model="deviceProps.wifi.enabled" />
+    			Wifi enabled
+    		</label>
+    		<table class="ng-hide" data-ng-show="deviceProps.wifi.enabled">
+    			<tr>
+    				<td>SSID</td>
+    				<td><input type="text" data-ng-model="deviceProps.wifi.essid" /></td>
+    			</tr>
+    			<tr>
+    				<td>Encryption</td>
+    				<td>
+    					<select data-ng-model="deviceProps.wifi.enc">
+    						<option value="open">None</option>
+    						<option value="wpa">WPA-PSK</option>
+    						<option value="wpa2">WPA2-PSK</option>
+    					</select>
+    				</td>
+    			</tr>
+    			<tr class="ng-hide" data-ng-show="(deviceProps.wifi.enc || &quot;open&quot;) != &quot;open&quot;">
+    				<td>Password</td>
+    				<td><input type="text" data-ng-model="deviceProps.wifi.psk" /></td>
+    			</tr>
+    			<tr>
+    				<td>Protocol</td>
+    				<td>
+    					<select data-ng-model="deviceProps.wifi.protocol">
+    						<option value="dhcp">DHCP</option>
+    						<option value="static">Static</option>
+    					</select>
+    				</td>
+    			</tr>
+    			<tr class="ng-hide" data-ng-show="deviceProps.wifi.protocol == &quot;static&quot;">
+    				<td>IP</td>
+    				<td><input type="text" data-ng-model="deviceProps.wifi.ip"/></td>
+    			</tr>
+    			<tr class="ng-hide" data-ng-show="deviceProps.wifi.protocol == &quot;static&quot;">
+    				<td>Netmask</td>
+    				<td><input type="text" data-ng-model="deviceProps.wifi.netmask"/></td>
+    			</tr>
+    			<tr class="ng-hide" data-ng-show="deviceProps.wifi.protocol == &quot;static&quot;">
+    				<td>Gateway</td>
+    				<td><input type="text" data-ng-model="deviceProps.wifi.gateway"/></td>
+    			</tr>
+    			<tr class="ng-hide" data-ng-show="deviceProps.wifi.protocol == &quot;static&quot;">
+    				<td>Nameserver</td>
+    				<td><input type="text" data-ng-model="deviceProps.wifi.nameserver"/></td>
+    			</tr>
+    		</table>
+    	</div>
+    </div>
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-default" ng-click="cancel()">Close</button>
+    <button type="button" class="btn btn-primary" ng-click="ok()">Save changes</button>
+</div>
+</div>
