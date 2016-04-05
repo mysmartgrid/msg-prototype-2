@@ -7,11 +7,12 @@ var timerangespinner_1 = require('./directives/ui-elements/timerangespinner');
 var datetimepicker_1 = require('./directives/ui-elements/datetimepicker');
 var sensorgraph_1 = require('./directives/sensorgraph');
 var devicelist_1 = require('./directives/devicelist');
+var deviceeditors_1 = require('./controllers/deviceeditors');
 angular.module("msgp", ['ui.bootstrap'])
-    .config(function ($interpolateProvider) {
-    $interpolateProvider.startSymbol("%%");
-    $interpolateProvider.endSymbol("%%");
-})
+    .config(["$interpolateProvider", function ($interpolateProvider) {
+        $interpolateProvider.startSymbol("%%");
+        $interpolateProvider.endSymbol("%%");
+    }])
     .factory("WSUserClient", ["$rootScope", function ($rootScope) {
         if (!window["WebSocket"])
             throw "websocket support required";
@@ -43,29 +44,24 @@ angular.module("msgp", ['ui.bootstrap'])
             }
         });
     }])
-    .controller("DeviceListController", ["$scope", "$http", "devices", function ($scope, $http, devices) {
-        $scope.devices = devices;
-        $scope.addDeviceId = "";
+    .controller("DeviceListController", ["$scope", "$uibModal", "$http", function ($scope, $uibModal, $http) {
+        $http.get('/api/user/v1/devices').success(function (data, status, headers, config) {
+            $scope.devices = data;
+        });
         $scope.openAddDeviceModal = function () {
-            $scope.addDeviceId = "";
-            $('#addDeviceDialog').modal();
-        };
-        $scope.addDevice = function (e) {
-            var url = $(e.target).attr("data-add-device-prefix");
-            $scope.errorAddingDevice = null;
-            $http.post(url + encodeURIComponent($scope.addDeviceId))
-                .success(function (data, status, headers, config) {
-                $scope.devices[$scope.addDeviceId] = data;
-                $scope.addDeviceId = null;
-                $("#addDeviceDialog").modal('hide');
-            })
-                .error(function (data, status, headers, config) {
-                $scope.errorAddingDevice = data;
+            var modalInstance = $uibModal.open({
+                controller: deviceeditors_1.DeviceAddControllerFactory,
+                size: "lg",
+                templateUrl: "/html/add-device-dialog.html",
+            });
+            modalInstance.result.then(function (data) {
+                $scope.devices[data.deviceID] = data.data;
             });
         };
     }]);
+console.log('MSGP loaded');
 
-},{"./directives/devicelist":3,"./directives/sensorgraph":4,"./directives/ui-elements/datetimepicker":5,"./directives/ui-elements/numberspinner":6,"./directives/ui-elements/timerangespinner":7,"./lib/msg2socket":10,"./lib/updatedispatcher":12}],2:[function(require,module,exports){
+},{"./controllers/deviceeditors":2,"./directives/devicelist":3,"./directives/sensorgraph":4,"./directives/ui-elements/datetimepicker":5,"./directives/ui-elements/numberspinner":6,"./directives/ui-elements/timerangespinner":7,"./lib/msg2socket":10,"./lib/updatedispatcher":12}],2:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -162,6 +158,35 @@ var SensorEditorController = (function (_super) {
 exports.SensorEditorControllerFactory = ["$scope", "$uibModalInstance", "$http", "deviceID", "sensorID",
     function ($scope, $uibModalInstance, $http, deviceID, sensorID) {
         return new SensorEditorController($scope, $uibModalInstance, $http, deviceID, sensorID);
+    }];
+var DeviceAddUrl = "/api/user/v1/device/";
+var DeviceAddController = (function () {
+    function DeviceAddController($scope, $uibModalInstance, $http) {
+        var _this = this;
+        this.$scope = $scope;
+        this.$uibModalInstance = $uibModalInstance;
+        this.$http = $http;
+        $scope.ok = function () { return _this._addDevice(); };
+        $scope.cancel = function () { return _this._close(); };
+    }
+    DeviceAddController.prototype._addDevice = function () {
+        var _this = this;
+        this.$http.post(DeviceAddUrl + encodeURIComponent(this.$scope.deviceId), null)
+            .success(function (data, status, headers, config) {
+            _this.$uibModalInstance.close({ deviceID: _this.$scope.deviceId, data: data });
+        })
+            .error(function (data, status, headers, config) {
+            _this.$scope.errorAddingDevice = data;
+        });
+    };
+    DeviceAddController.prototype._close = function () {
+        this.$uibModalInstance.dismiss('cancel');
+    };
+    return DeviceAddController;
+}());
+exports.DeviceAddControllerFactory = ["$scope", "$uibModalInstance", "$http",
+    function ($scope, $uibModalInstance, $http) {
+        return new DeviceAddController($scope, $uibModalInstance, $http);
     }];
 
 },{}],3:[function(require,module,exports){
@@ -346,7 +371,6 @@ var SensorGraphController = (function (_super) {
     };
     SensorGraphController.prototype._applyConfig = function (config) {
         var differences = Utils.differentProperties(this._config, config);
-        console.log(differences);
         if (differences !== undefined && Utils.difference(differences, ["sensors", "unit"]).length === 0) {
             var addedSensors = Utils.difference(config.sensors, this._config.sensors, common_1.sensorEqual);
             var removedSensors = Utils.difference(this._config.sensors, config.sensors, common_1.sensorEqual);

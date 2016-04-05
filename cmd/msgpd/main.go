@@ -267,6 +267,12 @@ func staticTemplate(name string) func(http.ResponseWriter, *http.Request) {
 	})
 }
 
+func doRedirect(target string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target, http.StatusSeeOther)
+	}
+}
+
 func wsHandlerUser(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 
@@ -520,42 +526,6 @@ func loggedInSwitch(in, out func(http.ResponseWriter, *http.Request)) func(http.
 	}
 }
 
-func userDevices(w http.ResponseWriter, r *http.Request) {
-	session := getSession(w, r)
-	db.View(func(tx msgpdb.Tx) error {
-		if _, ok := session.Values["user"].(string); !ok {
-			removeSessionAndNotifyUser(w, r, session)
-			return nil
-		}
-
-		u := tx.User(session.Values["user"].(string))
-		if u == nil {
-			removeSessionAndNotifyUser(w, r, session)
-			return nil
-		}
-
-		devs := make(map[string]interface{})
-		for id, dev := range u.Devices() {
-			sensors := make(map[string]interface{})
-			for id, sens := range dev.Sensors() {
-				sensors[id] = map[string]interface{}{
-					"id":   id,
-					"name": sens.Name(),
-					"port": sens.Port(),
-					"unit": sens.Unit(),
-				}
-			}
-			devs[id] = map[string]interface{}{
-				"name":    dev.Name(),
-				"sensors": sensors,
-			}
-		}
-
-		templates.ExecuteTemplate(w, "user-devices", devs)
-		return nil
-	})
-}
-
 type apiError struct {
 	Code int
 	Msg  string
@@ -596,6 +566,7 @@ func apiSessionUser(tx msgpdb.Tx, s *sessions.Session) msgpdb.User {
 	return user
 }
 
+
 func apiDevice(tx regdev.Tx, devID string) regdev.RegisteredDevice {
 	dev := tx.Device(devID)
 	if dev == nil {
@@ -610,6 +581,35 @@ func apiUserDevice(user msgpdb.User, devID string) msgpdb.Device {
 		apiAbort(404, "no such device")
 	}
 	return dev
+}
+
+func apiUserDevicesGet(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+	db.View(func(tx msgpdb.Tx) error {
+		user := apiSessionUser(tx, session)
+
+		devs := make(map[string]interface{})
+		for id, dev := range user.Devices() {
+			sensors := make(map[string]interface{})
+			for id, sens := range dev.Sensors() {
+				sensors[id] = map[string]interface{}{
+					"id":   id,
+					"name": sens.Name(),
+					"port": sens.Port(),
+					"unit": sens.Unit(),
+				}
+			}
+			devs[id] = map[string]interface{}{
+				"name":    dev.Name(),
+				"sensors": sensors,
+			}
+		}
+
+		data, err := json.Marshal(devs)
+		apiAbortIf(500, err)
+		w.Write(data)
+		return nil
+	})
 }
 
 func apiUserDevicesAdd(w http.ResponseWriter, r *http.Request) {
@@ -783,7 +783,8 @@ func main() {
 		router.HandleFunc("/user/logout", doLogout).Methods("GET")
 		router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
 		router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
-		router.HandleFunc("/user/devices", defaultHeaders(userDevices)).Methods("GET")
+		router.HandleFunc("/user/devices", loggedInSwitch(staticTemplate("user-devices"), doRedirect("/"))).Methods("GET")
+		router.HandleFunc("/api/user/v1/devices", apiBlock(apiUserDevicesGet)).Methods("GET")
 		router.HandleFunc("/api/user/v1/device/{device}", apiBlock(apiUserDevicesAdd)).Methods("POST")
 		router.HandleFunc("/api/user/v1/device/{device}", apiBlock(apiUserDevicesRemove)).Methods("DELETE")
 		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(apiUserDeviceConfigGet)).Methods("GET")

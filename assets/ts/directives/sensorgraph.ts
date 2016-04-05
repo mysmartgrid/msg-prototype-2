@@ -148,9 +148,6 @@ export class SensorGraphController extends Widget.WidtgetController {
 
 	protected _applyConfig(config : SensorGraphConfig) {
 		var differences = Utils.differentProperties(this._config, config);
-
-		console.log(differences);
-
 		// Only sensors or unit changed so no need to redo everything
 		if(differences !== undefined && Utils.difference(differences, ["sensors", "unit"]).length === 0) {
 

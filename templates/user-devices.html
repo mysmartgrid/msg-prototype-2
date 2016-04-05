@@ -1,40 +1,12 @@
 {{define "user-devices"}}
 {{template "head" "user-devices:logged-in"}}
 <div class="container" data-ng-app="msgp">
-	<script>
-		angular.module("msgp").value("devices", {{.}});
-	</script>
 	<div class="row" data-ng-controller="DeviceListController">
 		<p class="ng-hide" data-ng-show="equals(devices, {})">
 			You don't have any devices in your account.
 		</p>
 		<div data-device-list="" class="ng-hide" data-ng-show="!equals(devices, {})"
 			data-devices="devices">
-		</div>
-
-		<div class="modal fade" id="addDeviceDialog" tabindex="-1" role="dialog">
-			<div class="modal-dialog" role="document">
-				<div class="modal-content">
-					<div class="modal-header">
-						<button type="button" class="close" data-dismiss="modal">&times;<span></span></button>
-						<h4 class="modal-title">Add device</h4>
-					</div>
-					<div class="modal-body">
-						<div class="ng-hide alert alert-danger" data-ng-show="errorAddingDevice">Error: %%errorAddingDevice%%</div>
-						<div class="form-group">
-							<label for="deviceIdField">Id</label>
-							<input type="text" id="deviceIdField" data-ng-model="addDeviceId" class="form-control" />
-						</div>
-					</div>
-					<div class="modal-footer">
-						<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-						<button type="button" class="btn btn-primary" data-ng-click="addDevice($event)"
-							data-add-device-prefix="/api/user/v1/device/">
-							Add device
-						</button>
-					</div>
-				</div>
-			</div>
 		</div>
 
 		<button type="button" class="btn btn-primary" data-ng-click="openAddDeviceModal()">

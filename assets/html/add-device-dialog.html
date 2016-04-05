@@ -1,0 +1,18 @@
+
+<div class="modal-header">
+    <button type="button" class="close" ng-click="cancel()">&times;<span></span></button>
+    <h4 class="modal-title">Add device</h4>
+</div>
+<div class="modal-body">
+    <div class="ng-hide alert alert-danger" ng-show="errorAddingDevice">Error: %%errorAddingDevice%%</div>
+    <div class="form-group">
+        <label for="deviceIdField">Id</label>
+        <input type="text" id="deviceIdField" ng-model="deviceId" class="form-control" />
+    </div>
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-default" ng-click="cancel()">Close</button>
+    <button type="button" class="btn btn-primary" ng-click="ok()">
+        Add device
+    </button>
+</div>

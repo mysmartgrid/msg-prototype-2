@@ -157,3 +157,48 @@ class SensorEditorController  extends EditorController{
 export const SensorEditorControllerFactory = ["$scope", "$uibModalInstance", "$http", "deviceID", "sensorID",
                                         ($scope, $uibModalInstance, $http, deviceID, sensorID) =>
                                             new SensorEditorController($scope, $uibModalInstance, $http, deviceID, sensorID)];
+
+
+
+
+
+
+
+const DeviceAddUrl = "/api/user/v1/device/";
+
+interface DeviceAddScope {
+    errorAddingDevice : string;
+    deviceId : string;
+
+    ok : () => void;
+    cancel : () => void;
+}
+
+class DeviceAddController {
+
+    constructor(protected $scope : DeviceAddScope,
+				protected $uibModalInstance : angular.ui.bootstrap.IModalServiceInstance,
+                protected $http : ng.IHttpService) {
+
+                    $scope.ok = () => this._addDevice();
+                    $scope.cancel = () => this._close();
+                }
+
+    private _addDevice() : void {
+        this.$http.post(DeviceAddUrl + encodeURIComponent(this.$scope.deviceId), null)
+			.success((data, status, headers, config) => {
+                this.$uibModalInstance.close({deviceID: this.$scope.deviceId, data: data});
+			})
+			.error((data, status, headers, config) => {
+				this.$scope.errorAddingDevice = data;
+			});
+    }
+
+    private _close() : void {
+        this.$uibModalInstance.dismiss('cancel');
+    }
+}
+
+export const DeviceAddControllerFactory = ["$scope", "$uibModalInstance", "$http",
+                                        ($scope, $uibModalInstance, $http) =>
+                                            new DeviceAddController($scope, $uibModalInstance, $http)];

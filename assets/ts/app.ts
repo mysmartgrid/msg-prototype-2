@@ -7,14 +7,15 @@ import DateTimePickerFactory from './directives/ui-elements/datetimepicker';
 import SensorGraphFactory from './directives/sensorgraph';
 
 import DeviceListFactory from './directives/devicelist';
+import {DeviceAddControllerFactory} from './controllers/deviceeditors';
 
 
 angular.module("msgp", ['ui.bootstrap'])
-.config(function($interpolateProvider) {
+.config(["$interpolateProvider", ($interpolateProvider : ng.IInterpolateProvider) => {
 	$interpolateProvider.startSymbol("%%");
 	$interpolateProvider.endSymbol("%%");
-})
-.factory("WSUserClient", ["$rootScope", function($rootScope : angular.IRootScopeService) {
+}])
+.factory("WSUserClient", ["$rootScope", ($rootScope : angular.IRootScopeService) => {
 	if (!window["WebSocket"])
 		throw "websocket support required";
 	return new Msg2Socket.Socket($rootScope);
@@ -49,27 +50,22 @@ angular.module("msgp", ['ui.bootstrap'])
 		}
 	});
 }])
-.controller("DeviceListController", ["$scope", "$http", "devices", function($scope, $http, devices) {
-	$scope.devices = devices;
-	$scope.addDeviceId = "";
+.controller("DeviceListController", ["$scope", "$uibModal", "$http", ($scope, $uibModal, $http) => {
+	$http.get('/api/user/v1/devices').success((data, status, headers, config) => {
+		$scope.devices = data;
+	});
 
 	$scope.openAddDeviceModal = () : void => {
-		$scope.addDeviceId = "";
-		$('#addDeviceDialog').modal();
+		var modalInstance = $uibModal.open({
+			controller: DeviceAddControllerFactory,
+			size: "lg",
+			templateUrl: "/html/add-device-dialog.html",
+		});
+
+		modalInstance.result.then((data) => {
+			$scope.devices[data.deviceID] = data.data;
+		});
 	}
-
-	$scope.addDevice = function(e) {
-		var url = $(e.target).attr("data-add-device-prefix");
-		$scope.errorAddingDevice = null;
-
-		$http.post(url + encodeURIComponent($scope.addDeviceId))
-			.success(function(data, status, headers, config) {
-				$scope.devices[$scope.addDeviceId] = data;
-				$scope.addDeviceId = null;
-				$("#addDeviceDialog").modal('hide');
-			})
-			.error(function(data, status, headers, config) {
-				$scope.errorAddingDevice = data;
-			});
-	};
 }]);
+
+console.log('MSGP loaded');
