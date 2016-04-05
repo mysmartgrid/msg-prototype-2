@@ -3,10 +3,20 @@
     <h4 class="modal-title">Edit sensor</h4>
 </div>
 <div class="modal-body">
-    <div class="ng-hide alert alert-danger" ng-show="errorSavingSensor">Error: %%errorSavingSensor%%</div>
-    <div class="form-group">
-        <label for="sensorNameField">Name</label>
-        <input type="text" id="sensorNameField" ng-model="sensorProps.name" class="form-control" />
+    <div class="ng-hide alert alert-danger" ng-show="errorSavingSettings">
+        Error saving settings: %%errorSavingSettings%%
+    </div>
+    <div class="ng-hide alert alert-danger" ng-show="errorLoadingSettings">
+        Error loading settings: %%errorLoadingSettings%%
+    </div>
+    <!-- TODO: fix spinner-->
+    <div class="ng-hide modal-spinner-overlay" ng-show="showSpinner"></div>
+
+    <div>
+        <div class="form-group">
+            <label for="sensorNameField">Name</label>
+            <input type="text" id="sensorNameField" ng-model="props.name" class="form-control" />
+        </div>
     </div>
 </div>
 <div class="modal-footer">

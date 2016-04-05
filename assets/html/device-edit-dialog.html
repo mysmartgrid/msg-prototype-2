@@ -9,97 +9,97 @@
     <div class="ng-hide alert alert-danger" ng-show="errorLoadingSettings">
         Error loading settings: %%errorLoadingSettings%%
     </div>
-    <div class="ng-hide modal-spinner-overlay" ng-show="showSpinner">
-
-    </div>
-    <div>
+    <!-- TODO: fix spinner-->
+    <div class="ng-hide modal-spinner-overlay" ng-show="showSpinner"></div>
+    
+    <div ng-hide="showSpinner">
     	<div>
     		<div class="form-group">
     			<label for="deviceEditorName">Name</label>
-    			<input type="text" id="deviceEditorName" data-ng-model="deviceProps.name" class="form-control" />
+    			<input type="text" id="deviceEditorName" data-ng-model="props.name" class="form-control" />
     		</div>
     		<div>
     			<label>
-    				<input type="checkbox" data-ng-model="deviceProps.lan.enabled" />
+    				<input type="checkbox" data-ng-model="props.lan.enabled" />
     				LAN enabled
     			</label>
     		</div>
-    		<table class="ng-hide" data-ng-show="deviceProps.lan.enabled">
+    		<table class="ng-hide" data-ng-show="props.lan.enabled">
     			<tr>
     				<td>Protocol</td>
     				<td>
-    					<select data-ng-model="deviceProps.lan.protocol">
+    					<select data-ng-model="props.lan.protocol">
     						<option value="dhcp">DHCP</option>
     						<option value="static">Static</option>
     					</select>
     				</td>
     			</tr>
-    			<tr class="ng-hide" data-ng-show="deviceProps.lan.protocol == &quot;static&quot;">
+    			<tr class="ng-hide" data-ng-show="props.lan.protocol == &quot;static&quot;">
     				<td>IP</td>
-    				<td><input type="text" data-ng-model="deviceProps.lan.ip"/></td>
+    				<td><input type="text" data-ng-model="props.lan.ip"/></td>
     			</tr>
-    			<tr class="ng-hide" data-ng-show="deviceProps.lan.protocol == &quot;static&quot;">
+    			<tr class="ng-hide" data-ng-show="props.lan.protocol == &quot;static&quot;">
     				<td>Netmask</td>
-    				<td><input type="text" data-ng-model="deviceProps.lan.netmask"/></td>
+    				<td><input type="text" data-ng-model="props.lan.netmask"/></td>
     			</tr>
-    			<tr class="ng-hide" data-ng-show="deviceProps.lan.protocol == &quot;static&quot;">
+    			<tr class="ng-hide" data-ng-show="props.lan.protocol == &quot;static&quot;">
     				<td>Gateway</td>
-    				<td><input type="text" data-ng-model="deviceProps.lan.gateway"/></td>
+    				<td><input type="text" data-ng-model="props.lan.gateway"/></td>
     			</tr>
-    			<tr class="ng-hide" data-ng-show="deviceProps.lan.protocol == &quot;static&quot;">
+    			<tr class="ng-hide" data-ng-show="props.lan.protocol == &quot;static&quot;">
     				<td>Nameserver</td>
-    				<td><input type="text" data-ng-model="deviceProps.lan.nameserver"/></td>
+    				<td><input type="text" data-ng-model="props.lan.nameserver"/></td>
     			</tr>
     		</table>
     	</div>
     	<div>
     		<label>
-    			<input type="checkbox" data-ng-model="deviceProps.wifi.enabled" />
+    			<input type="checkbox" data-ng-model="props.wifi.enabled" />
     			Wifi enabled
     		</label>
-    		<table class="ng-hide" data-ng-show="deviceProps.wifi.enabled">
+    		<table class="ng-hide" data-ng-show="props.wifi.enabled">
     			<tr>
     				<td>SSID</td>
-    				<td><input type="text" data-ng-model="deviceProps.wifi.essid" /></td>
+    				<td><input type="text" data-ng-model="props.wifi.essid" /></td>
     			</tr>
     			<tr>
     				<td>Encryption</td>
     				<td>
-    					<select data-ng-model="deviceProps.wifi.enc">
+    					<select data-ng-model="props.wifi.enc">
     						<option value="open">None</option>
     						<option value="wpa">WPA-PSK</option>
     						<option value="wpa2">WPA2-PSK</option>
     					</select>
     				</td>
     			</tr>
-    			<tr class="ng-hide" data-ng-show="(deviceProps.wifi.enc || &quot;open&quot;) != &quot;open&quot;">
+    			<tr class="ng-hide" data-ng-show="(props.wifi.enc || &quot;open&quot;) != &quot;open&quot;">
     				<td>Password</td>
-    				<td><input type="text" data-ng-model="deviceProps.wifi.psk" /></td>
+    				<td><input type="text" data-ng-model="props.wifi.psk" /></td>
     			</tr>
     			<tr>
     				<td>Protocol</td>
     				<td>
-    					<select data-ng-model="deviceProps.wifi.protocol">
+    					<select data-ng-model="props.wifi.protocol">
     						<option value="dhcp">DHCP</option>
     						<option value="static">Static</option>
     					</select>
     				</td>
     			</tr>
-    			<tr class="ng-hide" data-ng-show="deviceProps.wifi.protocol == &quot;static&quot;">
+    			<tr class="ng-hide" data-ng-show="props.wifi.protocol == &quot;static&quot;">
     				<td>IP</td>
-    				<td><input type="text" data-ng-model="deviceProps.wifi.ip"/></td>
+    				<td><input type="text" data-ng-model="props.wifi.ip"/></td>
     			</tr>
-    			<tr class="ng-hide" data-ng-show="deviceProps.wifi.protocol == &quot;static&quot;">
+    			<tr class="ng-hide" data-ng-show="props.wifi.protocol == &quot;static&quot;">
     				<td>Netmask</td>
-    				<td><input type="text" data-ng-model="deviceProps.wifi.netmask"/></td>
+    				<td><input type="text" data-ng-model="props.wifi.netmask"/></td>
     			</tr>
-    			<tr class="ng-hide" data-ng-show="deviceProps.wifi.protocol == &quot;static&quot;">
+    			<tr class="ng-hide" data-ng-show="props.wifi.protocol == &quot;static&quot;">
     				<td>Gateway</td>
-    				<td><input type="text" data-ng-model="deviceProps.wifi.gateway"/></td>
+    				<td><input type="text" data-ng-model="props.wifi.gateway"/></td>
     			</tr>
-    			<tr class="ng-hide" data-ng-show="deviceProps.wifi.protocol == &quot;static&quot;">
+    			<tr class="ng-hide" data-ng-show="props.wifi.protocol == &quot;static&quot;">
     				<td>Nameserver</td>
-    				<td><input type="text" data-ng-model="deviceProps.wifi.nameserver"/></td>
+    				<td><input type="text" data-ng-model="props.wifi.nameserver"/></td>
     			</tr>
     		</table>
     	</div>

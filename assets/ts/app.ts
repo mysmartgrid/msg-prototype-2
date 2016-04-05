@@ -8,6 +8,7 @@ import SensorGraphFactory from './directives/sensorgraph';
 
 import DeviceListFactory from './directives/devicelist';
 
+
 angular.module("msgp", ['ui.bootstrap'])
 .config(function($interpolateProvider) {
 	$interpolateProvider.startSymbol("%%");

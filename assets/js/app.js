@@ -22,17 +22,6 @@ angular.module("msgp", ['ui.bootstrap'])
     .directive("timeRangeSpinner", timerangespinner_1.default())
     .directive("dateTimePicker", datetimepicker_1.default())
     .directive("sensorGraph", sensorgraph_1.default())
-    .directive("deviceEditor", [function () {
-        return {
-            restrict: "A",
-            templateUrl: "/html/device-editor.html",
-            scope: {
-                device: "="
-            },
-            link: function (scope, element, attrs) {
-            }
-        };
-    }])
     .directive("deviceList", devicelist_1.default())
     .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", function (wsclient, wsurl, $http, $timeout, $uibModal) {
         wsclient.connect(wsurl);
@@ -76,105 +65,111 @@ angular.module("msgp", ['ui.bootstrap'])
         };
     }]);
 
-},{"./directives/devicelist":2,"./directives/sensorgraph":3,"./directives/ui-elements/datetimepicker":4,"./directives/ui-elements/numberspinner":5,"./directives/ui-elements/timerangespinner":6,"./lib/msg2socket":9,"./lib/updatedispatcher":11}],2:[function(require,module,exports){
+},{"./directives/devicelist":3,"./directives/sensorgraph":4,"./directives/ui-elements/datetimepicker":5,"./directives/ui-elements/numberspinner":6,"./directives/ui-elements/timerangespinner":7,"./lib/msg2socket":10,"./lib/updatedispatcher":12}],2:[function(require,module,exports){
 "use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
 function deviceConfigUrl(deviceID) {
     return '/api/user/v1/device/' + encodeURIComponent(deviceID) + '/config';
-}
-function deviceRemoveUrl(deviceID) {
-    return '/api/user/v1/device/' + encodeURIComponent(deviceID);
 }
 function sensorConfigUrl(deviceID, sensorID) {
     return '/api/user/v1/sensor/' + encodeURIComponent(deviceID) + '/' + encodeURIComponent(sensorID) + '/props';
 }
-var DeviceEditorController = (function () {
-    function DeviceEditorController($scope, $uibModalInstance, $http, deviceID) {
+var EditorController = (function () {
+    function EditorController($scope, $uibModalInstance, $http) {
         var _this = this;
+        this.$scope = $scope;
+        this.$uibModalInstance = $uibModalInstance;
+        this.$http = $http;
+        $scope.ok = function () { return _this._saveConfig(); };
+        $scope.cancel = function () { return _this._close(); };
+    }
+    EditorController.prototype._loadConfig = function () {
+        var _this = this;
+        this.$scope.showSpinner = true;
+        this.$http.get(this.url)
+            .success(function (data, status, headers, config) {
+            _this.$scope.showSpinner = false;
+            _this.$scope.errorLoadingSettings = null;
+            _this.$scope.errorSavingSettings = null;
+            _this.$scope.props = data;
+        })
+            .error(function (data, status, headers, config) {
+            _this.$scope.showSpinner = false;
+            if (data !== null) {
+                _this.$scope.errorLoadingSettings = data;
+            }
+            else {
+                _this.$scope.errorLoadingSettings = "Ooops something went terribly wrong.";
+            }
+        });
+    };
+    EditorController.prototype._saveConfig = function () {
+        var _this = this;
+        this.$http.post(this.url, this.$scope.props)
+            .success(function (data, status, headers, config) {
+            _this.$scope.errorSavingSettings = null;
+            _this.$uibModalInstance.close(_this.$scope.props);
+        })
+            .error(function (data, status, headers, config) {
+            if (data !== null) {
+                _this.$scope.errorLoadingSettings = data;
+            }
+            else {
+                _this.$scope.errorLoadingSettings = "Ooops something went terribly wrong.";
+            }
+        });
+    };
+    EditorController.prototype._close = function () {
+        this.$uibModalInstance.dismiss('cancel');
+    };
+    return EditorController;
+}());
+var DeviceEditorController = (function (_super) {
+    __extends(DeviceEditorController, _super);
+    function DeviceEditorController($scope, $uibModalInstance, $http, deviceID) {
+        _super.call(this, $scope, $uibModalInstance, $http);
         this.$scope = $scope;
         this.$uibModalInstance = $uibModalInstance;
         this.$http = $http;
         this.deviceID = deviceID;
         this.url = deviceConfigUrl(deviceID);
-        $scope.showSpinner = true;
-        $http.get(this.url)
-            .success(function (data, status, headers, config) {
-            $scope.showSpinner = false;
-            $scope.errorLoadingSettings = null;
-            $scope.errorSavingSettings = null;
-            $scope.deviceProps = data;
-        })
-            .error(function (data, status, headers, config) {
-            $scope.showSpinner = false;
-            $scope.errorLoadingSettings = data;
-        });
-        $scope.ok = function () { return _this._saveConfig(); };
-        $scope.cancel = function () { return _this._close(); };
+        this._loadConfig();
     }
-    DeviceEditorController.prototype._saveConfig = function () {
-        var _this = this;
-        this.$http.post(this.url, this.$scope.deviceProps)
-            .success(function (data, status, headers, config) {
-            _this.$scope.errorSavingSettings = null;
-            _this.$uibModalInstance.close(_this.$scope.deviceProps);
-        })
-            .error(function (data, status, headers, config) {
-            _this.$scope.errorSavingSettings = data;
-        });
-    };
-    DeviceEditorController.prototype._close = function () {
-        this.$uibModalInstance.dismiss('cancel');
-    };
     return DeviceEditorController;
-}());
-var DeviceEditorControllerFactory = ["$scope", "$uibModalInstance", "$http", "deviceID",
+}(EditorController));
+exports.DeviceEditorControllerFactory = ["$scope", "$uibModalInstance", "$http", "deviceID",
     function ($scope, $uibModalInstance, $http, deviceID) {
         return new DeviceEditorController($scope, $uibModalInstance, $http, deviceID);
     }];
-var SensorEditorController = (function () {
+var SensorEditorController = (function (_super) {
+    __extends(SensorEditorController, _super);
     function SensorEditorController($scope, $uibModalInstance, $http, deviceID, sensorID) {
-        var _this = this;
+        _super.call(this, $scope, $uibModalInstance, $http);
         this.$scope = $scope;
         this.$uibModalInstance = $uibModalInstance;
         this.$http = $http;
         this.deviceID = deviceID;
         this.sensorID = sensorID;
         this.url = sensorConfigUrl(deviceID, sensorID);
-        $scope.showSpinner = true;
-        $http.get(this.url)
-            .success(function (data, status, headers, config) {
-            $scope.showSpinner = false;
-            $scope.errorLoadingSettings = null;
-            $scope.errorSavingSettings = null;
-            $scope.sensorProps = data;
-            console.log(data);
-        })
-            .error(function (data, status, headers, config) {
-            $scope.showSpinner = false;
-            $scope.errorLoadingSettings = data;
-        });
-        $scope.ok = function () { return _this._saveConfig(); };
-        $scope.cancel = function () { return _this._close(); };
+        this._loadConfig();
     }
-    SensorEditorController.prototype._saveConfig = function () {
-        var _this = this;
-        this.$http.post(this.url, this.$scope.sensorProps)
-            .success(function (data, status, headers, config) {
-            _this.$scope.errorSavingSettings = null;
-            _this.$uibModalInstance.close(_this.$scope.sensorProps);
-        })
-            .error(function (data, status, headers, config) {
-            _this.$scope.errorSavingSettings = data;
-        });
-    };
-    SensorEditorController.prototype._close = function () {
-        this.$uibModalInstance.dismiss('cancel');
-    };
     return SensorEditorController;
-}());
-var SensorEditorControllerFactory = ["$scope", "$uibModalInstance", "$http", "deviceID", "sensorID",
+}(EditorController));
+exports.SensorEditorControllerFactory = ["$scope", "$uibModalInstance", "$http", "deviceID", "sensorID",
     function ($scope, $uibModalInstance, $http, deviceID, sensorID) {
         return new SensorEditorController($scope, $uibModalInstance, $http, deviceID, sensorID);
     }];
+
+},{}],3:[function(require,module,exports){
+"use strict";
+var deviceeditors_1 = require('../controllers/deviceeditors');
+function deviceRemoveUrl(deviceID) {
+    return '/api/user/v1/device/' + encodeURIComponent(deviceID);
+}
 var DeviceListController = (function () {
     function DeviceListController($scope, $interval, $http, $uibModal) {
         var _this = this;
@@ -186,7 +181,7 @@ var DeviceListController = (function () {
         $scope.encodeURIComponent = encodeURIComponent;
         $scope.editDevice = function (deviceID) {
             var modalInstance = _this.$uibModal.open({
-                controller: DeviceEditorControllerFactory,
+                controller: deviceeditors_1.DeviceEditorControllerFactory,
                 size: "lg",
                 templateUrl: "/html/device-edit-dialog.html",
                 resolve: {
@@ -215,7 +210,7 @@ var DeviceListController = (function () {
         };
         $scope.editSensor = function (deviceID, sensorID) {
             var modalInstance = _this.$uibModal.open({
-                controller: SensorEditorControllerFactory,
+                controller: deviceeditors_1.SensorEditorControllerFactory,
                 size: "lg",
                 templateUrl: "/html/sensor-edit-dialog.html",
                 resolve: {
@@ -226,26 +221,6 @@ var DeviceListController = (function () {
             modalInstance.result.then(function (props) {
                 $scope.devices[deviceID].sensors[sensorID].name = props.name;
             });
-        };
-        $scope.saveSensor = function () {
-            var props = {
-                name: $scope.editedSensor.name
-            };
-            $scope.showSpinner = true;
-            $http.post(sensorConfigUrl($scope.editedSensor.devId, $scope.editedSensor.sensId), props)
-                .success(function (data, status, headers, config) {
-                $scope.showSpinner = false;
-                $scope.devices[$scope.editedSensor.devId].sensors[$scope.editedSensor.sensId].name = props.name;
-                $scope.editedSensor = null;
-                $("#sensorEditDialog").modal('hide');
-            })
-                .error(function (data, status, headers, config) {
-                $scope.showSpinner = false;
-                $scope.errorSavingSensor = data;
-            });
-        };
-        $scope.dismissSensor = function () {
-            $("#sensorEditDialog").modal('hide');
         };
     }
     DeviceListController.prototype.flash = function (element) {
@@ -275,7 +250,7 @@ function DeviceListFactory() {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = DeviceListFactory;
 
-},{}],3:[function(require,module,exports){
+},{"../controllers/deviceeditors":2}],4:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -483,7 +458,7 @@ function SensorGraphFactory() {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = SensorGraphFactory;
 
-},{"../lib/common":8,"../lib/sensorvaluestore":10,"../lib/utils":12,"./widget":7}],4:[function(require,module,exports){
+},{"../lib/common":9,"../lib/sensorvaluestore":11,"../lib/utils":13,"./widget":8}],5:[function(require,module,exports){
 "use strict";
 var DateTimePickerController = (function () {
     function DateTimePickerController($scope) {
@@ -560,7 +535,7 @@ var DateTimePickerDirective = (function () {
     return DateTimePickerDirective;
 }());
 
-},{}],5:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 "use strict";
 var NumberSpinnerController = (function () {
     function NumberSpinnerController($scope) {
@@ -648,7 +623,7 @@ var NumberSpinnerDirective = (function () {
     return NumberSpinnerDirective;
 }());
 
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 "use strict";
 var TimeUnits = ["years", "days", "hours", "minutes"];
 var UnitsToMillisecs = {
@@ -764,7 +739,7 @@ var TimeRangeSpinnerDirective = (function () {
     return TimeRangeSpinnerDirective;
 }());
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 var Utils = require('../lib/utils');
 var common_1 = require('../lib/common');
@@ -835,7 +810,7 @@ var WidgetSettingsController = (function () {
 }());
 exports.WidgetSettingsController = WidgetSettingsController;
 
-},{"../lib/common":8,"../lib/utils":12}],8:[function(require,module,exports){
+},{"../lib/common":9,"../lib/utils":13}],9:[function(require,module,exports){
 "use strict";
 ;
 ;
@@ -870,7 +845,7 @@ function sensorEqual(a, b) {
 }
 exports.sensorEqual = sensorEqual;
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 var ApiVersion = "v5.user.msg";
 var Socket = (function () {
@@ -1015,7 +990,7 @@ var Socket = (function () {
 exports.Socket = Socket;
 ;
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 "use strict";
 var Utils = require('./utils');
 var ColorScheme = ['#00A8F0', '#C0D800', '#CB4B4B', '#4DA74D', '#9440ED'];
@@ -1164,7 +1139,7 @@ var SensorValueStore = (function () {
 }());
 exports.SensorValueStore = SensorValueStore;
 
-},{"./utils":12}],11:[function(require,module,exports){
+},{"./utils":13}],12:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -1581,7 +1556,7 @@ var DummySubscriber = (function () {
 }());
 exports.DummySubscriber = DummySubscriber;
 
-},{"./common":8,"./utils":12}],12:[function(require,module,exports){
+},{"./common":9,"./utils":13}],13:[function(require,module,exports){
 "use strict";
 function contains(haystack, needle) {
     var i = haystack.indexOf(needle);
