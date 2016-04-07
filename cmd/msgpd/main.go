@@ -566,7 +566,6 @@ func apiSessionUser(tx msgpdb.Tx, s *sessions.Session) msgpdb.User {
 	return user
 }
 
-
 func apiDevice(tx regdev.Tx, devID string) regdev.RegisteredDevice {
 	dev := tx.Device(devID)
 	if dev == nil {

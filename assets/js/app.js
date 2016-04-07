@@ -8,7 +8,7 @@ var datetimepicker_1 = require('./directives/ui-elements/datetimepicker');
 var sensorgraph_1 = require('./directives/sensorgraph');
 var devicelist_1 = require('./directives/devicelist');
 var deviceeditors_1 = require('./controllers/deviceeditors');
-angular.module("msgp", ['ui.bootstrap'])
+angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
     .config(["$interpolateProvider", function ($interpolateProvider) {
         $interpolateProvider.startSymbol("%%");
         $interpolateProvider.endSymbol("%%");

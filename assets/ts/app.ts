@@ -10,7 +10,7 @@ import DeviceListFactory from './directives/devicelist';
 import {DeviceAddControllerFactory} from './controllers/deviceeditors';
 
 
-angular.module("msgp", ['ui.bootstrap'])
+angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
 .config(["$interpolateProvider", ($interpolateProvider : ng.IInterpolateProvider) => {
 	$interpolateProvider.startSymbol("%%");
 	$interpolateProvider.endSymbol("%%");

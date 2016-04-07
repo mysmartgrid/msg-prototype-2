@@ -9,10 +9,7 @@
     <div class="ng-hide alert alert-danger" ng-show="errorLoadingSettings">
         Error loading settings: %%errorLoadingSettings%%
     </div>
-    <!-- TODO: fix spinner-->
-    <div class="ng-hide modal-spinner-overlay" ng-show="showSpinner"></div>
-    
-    <div ng-hide="showSpinner">
+    <treasure-overlay-spinner active="showSpinner">
     	<div>
     		<div class="form-group">
     			<label for="deviceEditorName">Name</label>
@@ -103,7 +100,7 @@
     			</tr>
     		</table>
     	</div>
-    </div>
+    </treasure-overlay-spinner>
 </div>
 <div class="modal-footer">
     <button type="button" class="btn btn-default" ng-click="cancel()">Close</button>
