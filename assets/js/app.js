@@ -1,7 +1,8 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 "use strict";
-var Msg2Socket = require('./lib/msg2socket');
-var UpdateDispatcher = require('./lib/updatedispatcher');
+var msg2socket_1 = require('./lib/msg2socket');
+var servertime_1 = require('./lib/servertime');
+var updatedispatcher_1 = require('./lib/updatedispatcher');
 var numberspinner_1 = require('./directives/ui-elements/numberspinner');
 var timerangespinner_1 = require('./directives/ui-elements/timerangespinner');
 var datetimepicker_1 = require('./directives/ui-elements/datetimepicker');
@@ -13,18 +14,16 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
         $interpolateProvider.startSymbol("%%");
         $interpolateProvider.endSymbol("%%");
     }])
-    .factory("WSUserClient", ["$rootScope", function ($rootScope) {
-        if (!window["WebSocket"])
-            throw "websocket support required";
-        return new Msg2Socket.Socket($rootScope);
-    }])
-    .factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
+    .factory("WSUserClient", msg2socket_1.Msg2SocketFactory)
+    .factory("UpdateDispatcher", updatedispatcher_1.UpdateDispatcherFactory)
+    .factory("ServerTime", servertime_1.ServerTimeFactory)
     .directive("numberSpinner", numberspinner_1.default())
     .directive("timeRangeSpinner", timerangespinner_1.default())
     .directive("dateTimePicker", datetimepicker_1.default())
     .directive("sensorGraph", sensorgraph_1.default())
     .directive("deviceList", devicelist_1.default())
-    .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", function (wsclient, wsurl, $http, $timeout, $uibModal) {
+    .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", "ServerTime",
+    function (wsclient, wsurl, $http, $timeout, $uibModal, ServerTime) {
         wsclient.connect(wsurl);
         var modalInstance = null;
         wsclient.onClose(function () {
@@ -61,7 +60,7 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
     }]);
 console.log('MSGP loaded');
 
-},{"./controllers/deviceeditors":2,"./directives/devicelist":3,"./directives/sensorgraph":4,"./directives/ui-elements/datetimepicker":5,"./directives/ui-elements/numberspinner":6,"./directives/ui-elements/timerangespinner":7,"./lib/msg2socket":10,"./lib/updatedispatcher":12}],2:[function(require,module,exports){
+},{"./controllers/deviceeditors":2,"./directives/devicelist":3,"./directives/sensorgraph":4,"./directives/ui-elements/datetimepicker":5,"./directives/ui-elements/numberspinner":6,"./directives/ui-elements/timerangespinner":7,"./lib/msg2socket":10,"./lib/servertime":12,"./lib/updatedispatcher":13}],2:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -482,7 +481,7 @@ function SensorGraphFactory() {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = SensorGraphFactory;
 
-},{"../lib/common":9,"../lib/sensorvaluestore":11,"../lib/utils":13,"./widget":8}],5:[function(require,module,exports){
+},{"../lib/common":9,"../lib/sensorvaluestore":11,"../lib/utils":14,"./widget":8}],5:[function(require,module,exports){
 "use strict";
 var DateTimePickerController = (function () {
     function DateTimePickerController($scope) {
@@ -834,7 +833,7 @@ var WidgetSettingsController = (function () {
 }());
 exports.WidgetSettingsController = WidgetSettingsController;
 
-},{"../lib/common":9,"../lib/utils":13}],9:[function(require,module,exports){
+},{"../lib/common":9,"../lib/utils":14}],9:[function(require,module,exports){
 "use strict";
 ;
 ;
@@ -880,6 +879,7 @@ var Socket = (function () {
         this._errorHandlers = [];
         this._updateHandlers = [];
         this._metadataHandlers = [];
+        this._serverTimeHandlers = [];
     }
     ;
     Object.defineProperty(Socket.prototype, "isOpen", {
@@ -935,14 +935,22 @@ var Socket = (function () {
     Socket.prototype._emitMetadata = function (data) {
         this._callHandlers(this._metadataHandlers, data);
     };
+    Socket.prototype.onServerTime = function (handler) {
+        this._serverTimeHandlers.push(handler);
+    };
+    Socket.prototype._emitServerTime = function (data) {
+        this._callHandlers(this._serverTimeHandlers, data);
+    };
     Socket.prototype._onMessage = function (msg) {
         var data = JSON.parse(msg.data);
         switch (data.cmd) {
             case "update":
                 this._emitUpdate(data.args);
+                this._emitServerTime(data.now);
                 break;
             case "metadata":
                 this._emitMetadata(data.args);
+                this._emitServerTime(data.now);
                 break;
             default:
                 console.error("bad packet from server", data);
@@ -1013,6 +1021,11 @@ var Socket = (function () {
 }());
 exports.Socket = Socket;
 ;
+exports.Msg2SocketFactory = ["$rootScope", function ($rootScope) {
+        if (!window["WebSocket"])
+            throw "websocket support required";
+        return new Socket($rootScope);
+    }];
 
 },{}],11:[function(require,module,exports){
 "use strict";
@@ -1163,7 +1176,42 @@ var SensorValueStore = (function () {
 }());
 exports.SensorValueStore = SensorValueStore;
 
-},{"./utils":13}],12:[function(require,module,exports){
+},{"./utils":14}],12:[function(require,module,exports){
+"use strict";
+var utils_1 = require('./utils');
+var OffsetCount = 25;
+var ServerTime = (function () {
+    function ServerTime(_socket) {
+        var _this = this;
+        this._socket = _socket;
+        console.log("New ServerTime");
+        this._averageOffset = 0;
+        this._offsets = new Array(OffsetCount);
+        this._offsets.fill(0);
+        _socket.onServerTime(function (servertime) { return _this._updateOffsets(servertime); });
+    }
+    ServerTime.prototype._updateOffsets = function (servertime) {
+        this._offsets.shift();
+        this._offsets.push(utils_1.now() - servertime);
+        this._averageOffset = 0;
+        for (var _i = 0, _a = this._offsets; _i < _a.length; _i++) {
+            var offset = _a[_i];
+            this._averageOffset += offset / OffsetCount;
+        }
+        console.log("Timeoffset:", this._averageOffset);
+    };
+    ServerTime.prototype.getOffset = function () {
+        return this._averageOffset;
+    };
+    ServerTime.prototype.now = function () {
+        return utils_1.now() - this._averageOffset;
+    };
+    return ServerTime;
+}());
+exports.ServerTime = ServerTime;
+exports.ServerTimeFactory = ["WSUserClient", function (socket) { return new ServerTime(socket); }];
+
+},{"./utils":14}],13:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -1580,7 +1628,7 @@ var DummySubscriber = (function () {
 }());
 exports.DummySubscriber = DummySubscriber;
 
-},{"./common":9,"./utils":13}],13:[function(require,module,exports){
+},{"./common":9,"./utils":14}],14:[function(require,module,exports){
 "use strict";
 function contains(haystack, needle) {
     var i = haystack.indexOf(needle);
@@ -1614,7 +1662,11 @@ function updateProperties(target, source) {
 }
 exports.updateProperties = updateProperties;
 function now() {
-    return (new Date()).getTime();
+    var offset = 0;
+    if (window["debugTimeOffset"] !== undefined) {
+        offset = window["debugTimeOffset"] * 1000;
+    }
+    return (new Date()).getTime() + offset;
 }
 exports.now = now;
 function deepCopyJSON(src) {

@@ -33,8 +33,14 @@ export function updateProperties<U>(target : U, source: U) : boolean {
     return wasUpdated;
 }
 
+
+
 export function now() : number {
-    return (new Date()).getTime();
+    var offset = 0;
+    if(window["debugTimeOffset"] !== undefined) {
+        offset = window["debugTimeOffset"]  * 1000;
+    }
+    return (new Date()).getTime() + offset;
 }
 
 

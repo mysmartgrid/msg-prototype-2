@@ -25,6 +25,14 @@ export interface UpdateHandler {
 	(update : UpdateData) : void;
 }
 
+export interface MetadataHandler {
+	(metadata : MetadataUpdate) : void;
+}
+
+export interface ServerTimeHandler {
+	(serverTime : number) : void;
+}
+
 /*
  * Messages
  */
@@ -42,10 +50,6 @@ export interface DeviceMetadataUpdate {
 	name : string;
 	sensors : SensorMap<SensorMetadata>;
 	deletedSensors : SensorMap<string>;
-}
-
-export interface MetadataHandler {
-	(metadata : MetadataUpdate) : void;
 }
 
 export interface UserCommand {
@@ -69,12 +73,14 @@ export interface GetValuesArgs {
 }
 
 export class Socket {
+
 	constructor(private $rootScope : angular.IRootScopeService) {
 		this._openHandlers = [];
 		this._closeHandlers = [];
 		this._errorHandlers = [];
 		this._updateHandlers = [];
 		this._metadataHandlers = [];
+		this._serverTimeHandlers = [];
 	};
 
 	private _socket : WebSocket;
@@ -150,16 +156,28 @@ export class Socket {
 		this._callHandlers(this._metadataHandlers, data);
 	}
 
+	private _serverTimeHandlers : ServerTimeHandler[];
+
+	public onServerTime(handler : ServerTimeHandler) {
+		this._serverTimeHandlers.push(handler);
+	}
+
+	private _emitServerTime(data : number) : void {
+		this._callHandlers(this._serverTimeHandlers, data);
+	}
+
 	private _onMessage(msg : MessageEvent) : void {
 		var data = JSON.parse(msg.data);
 
         switch (data.cmd) {
         case "update":
             this._emitUpdate(data.args);
+			this._emitServerTime(data.now);
             break;
 
         case "metadata":
             this._emitMetadata(data.args);
+			this._emitServerTime(data.now);
             break;
 
         default:
@@ -237,3 +255,9 @@ export class Socket {
     	this._sendUserCommand(cmd);
 	};
 };
+
+export const Msg2SocketFactory =  ["$rootScope", ($rootScope : angular.IRootScopeService) => {
+										if (!window["WebSocket"])
+											throw "websocket support required";
+										return new Socket($rootScope);
+									}];

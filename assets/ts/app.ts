@@ -1,5 +1,6 @@
-import * as Msg2Socket from './lib/msg2socket';
-import * as UpdateDispatcher from './lib/updatedispatcher';
+import  {Msg2SocketFactory} from './lib/msg2socket';
+import {ServerTimeFactory} from './lib/servertime';
+import {UpdateDispatcherFactory} from './lib/updatedispatcher';
 
 import NumberSpinnerFactory from './directives/ui-elements/numberspinner';
 import TimeRangeSpinnerFactory from './directives/ui-elements/timerangespinner';
@@ -15,40 +16,38 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
 	$interpolateProvider.startSymbol("%%");
 	$interpolateProvider.endSymbol("%%");
 }])
-.factory("WSUserClient", ["$rootScope", ($rootScope : angular.IRootScopeService) => {
-	if (!window["WebSocket"])
-		throw "websocket support required";
-	return new Msg2Socket.Socket($rootScope);
-}])
-.factory("UpdateDispatcher", UpdateDispatcher.UpdateDispatcherFactory)
+.factory("WSUserClient", Msg2SocketFactory)
+.factory("UpdateDispatcher", UpdateDispatcherFactory)
+.factory("ServerTime", ServerTimeFactory)
 .directive("numberSpinner", NumberSpinnerFactory())
 .directive("timeRangeSpinner", TimeRangeSpinnerFactory())
 .directive("dateTimePicker", DateTimePickerFactory())
 .directive("sensorGraph", SensorGraphFactory())
 .directive("deviceList", DeviceListFactory())
-.controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", function(wsclient, wsurl, $http, $timeout : ng.ITimeoutService, $uibModal) {
-	wsclient.connect(wsurl);
+.controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", "ServerTime",
+	(wsclient, wsurl, $http, $timeout : ng.ITimeoutService, $uibModal, ServerTime) => {
+		wsclient.connect(wsurl);
 
-	var modalInstance = null;
+		var modalInstance = null;
 
-	wsclient.onClose(() : void => {
-		if(modalInstance === null) {
-			modalInstance = $uibModal.open({
-				size: "lg",
-				keyboard: false,
-				backdrop : 'static',
-				templateUrl: 'connection-lost.html',
-			});
-		}
+		wsclient.onClose(() : void => {
+			if(modalInstance === null) {
+				modalInstance = $uibModal.open({
+					size: "lg",
+					keyboard: false,
+					backdrop : 'static',
+					templateUrl: 'connection-lost.html',
+				});
+			}
 
-		$timeout(() : void => wsclient.connect(wsurl), 1000);
-	});
+			$timeout(() : void => wsclient.connect(wsurl), 1000);
+		});
 
-	wsclient.onOpen(() : void => {
-		if(modalInstance !== null) {
-			modalInstance.close();
-		}
-	});
+		wsclient.onOpen(() : void => {
+			if(modalInstance !== null) {
+				modalInstance.close();
+			}
+		});
 }])
 .controller("DeviceListController", ["$scope", "$uibModal", "$http", ($scope, $uibModal, $http) => {
 	$http.get('/api/user/v1/devices').success((data, status, headers, config) => {
@@ -66,6 +65,7 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
 			$scope.devices[data.deviceID] = data.data;
 		});
 	}
-}]);
+}])
+
 
 console.log('MSGP loaded');

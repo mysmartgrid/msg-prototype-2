@@ -29,6 +29,7 @@
         "lib/common.ts",
         "lib/msg2socket.ts",
         "lib/sensorvaluestore.ts",
+        "lib/servertime.ts",
         "lib/updatedispatcher.ts",
         "lib/utils.ts"
     ],
