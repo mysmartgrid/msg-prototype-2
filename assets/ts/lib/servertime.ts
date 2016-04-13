@@ -12,15 +12,16 @@ export class ServerTime {
     constructor(private _socket : Socket) {
         console.log("New ServerTime");
         this._averageOffset = 0;
-        this._offsets = new Array<number>(OffsetCount);
-        this._offsets.fill(0);
+        this._offsets = [];
 
         _socket.onServerTime((servertime) => this._updateOffsets(servertime));
     }
 
 
     private _updateOffsets(servertime : number) {
-        this._offsets.shift();
+        if(this._offsets.length >= OffsetCount) {
+            this._offsets.shift();
+        }
         this._offsets.push(now() - servertime);
 
         this._averageOffset = 0;
