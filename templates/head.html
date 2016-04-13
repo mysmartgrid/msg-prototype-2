@@ -52,7 +52,7 @@
 			}
 		</style>
 	</head>
-	<body>
+	<body data-ng-app="msgp">
 
 		<nav class="navbar navbar-inverse navbar-static-top">
 			<div class="container-fluid">
@@ -76,6 +76,11 @@
 						<li {{activeIfAt "register" .}}><a href="/user/register">Register</a></li>
 						{{end}}
 					</ul>
+					{{if sessionFlag "logged-in" .}}
+					<ul data-ng-controller="NavbarServerTime" class="nav navbar-nav navbar-right">
+						<li><p class="navbar-text">Server time: %%time | date : 'short' %%</p></li>
+					</ul>
+					{{end}}
 				</div>
 			</div>
 		</nav>

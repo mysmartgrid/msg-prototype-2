@@ -57,6 +57,13 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
                 $scope.devices[data.deviceID] = data.data;
             });
         };
+    }])
+    .controller("NavbarServerTime", ["ServerTime", "$scope", "$interval", function (serverTime, $scope, $interval) {
+        function displayTime() {
+            $scope.time = serverTime.now();
+        }
+        $interval(displayTime, 1000);
+        displayTime();
     }]);
 console.log('MSGP loaded');
 
@@ -1193,12 +1200,13 @@ var ServerTime = (function () {
         this._socket = _socket;
         console.log("New ServerTime");
         this._averageOffset = 0;
-        this._offsets = new Array(OffsetCount);
-        this._offsets.fill(0);
+        this._offsets = [];
         _socket.onServerTime(function (servertime) { return _this._updateOffsets(servertime); });
     }
     ServerTime.prototype._updateOffsets = function (servertime) {
-        this._offsets.shift();
+        if (this._offsets.length >= OffsetCount) {
+            this._offsets.shift();
+        }
         this._offsets.push(utils_1.now() - servertime);
         this._averageOffset = 0;
         for (var _i = 0, _a = this._offsets; _i < _a.length; _i++) {

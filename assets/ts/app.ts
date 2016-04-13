@@ -1,5 +1,5 @@
 import  {Msg2SocketFactory} from './lib/msg2socket';
-import {ServerTimeFactory} from './lib/servertime';
+import {ServerTimeFactory, ServerTime} from './lib/servertime';
 import {UpdateDispatcherFactory} from './lib/updatedispatcher';
 
 import NumberSpinnerFactory from './directives/ui-elements/numberspinner';
@@ -66,6 +66,14 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
 		});
 	}
 }])
+.controller("NavbarServerTime", ["ServerTime", "$scope", "$interval", (serverTime : ServerTime, $scope : any, $interval : ng.IIntervalService) => {
+	function displayTime() {
+		$scope.time = serverTime.now();
+	}
+
+	$interval(displayTime, 1000);
+	displayTime();
+}]);
 
 
 console.log('MSGP loaded');
