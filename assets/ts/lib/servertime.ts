@@ -3,7 +3,7 @@ import {ServerTimeHandler, Socket} from './msg2socket';
 
 
 
-const OffsetCount = 25;
+const OffsetCount = 10;
 
 export class ServerTime {
     private _offsets : number[];

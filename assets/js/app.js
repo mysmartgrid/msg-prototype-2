@@ -22,8 +22,8 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
     .directive("dateTimePicker", datetimepicker_1.default())
     .directive("sensorGraph", sensorgraph_1.default())
     .directive("deviceList", devicelist_1.default())
-    .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", "ServerTime",
-    function (wsclient, wsurl, $http, $timeout, $uibModal, ServerTime) {
+    .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal",
+    function (wsclient, wsurl, $http, $timeout, $uibModal) {
         wsclient.connect(wsurl);
         var modalInstance = null;
         wsclient.onClose(function () {
@@ -313,7 +313,7 @@ var SensorGraphSettingsController = (function (_super) {
 }(Widget.WidgetSettingsController));
 var SensorGraphController = (function (_super) {
     __extends(SensorGraphController, _super);
-    function SensorGraphController($interval, $timeout, $scope, $uibModal, _dispatcher) {
+    function SensorGraphController($interval, $timeout, $scope, $uibModal, _dispatcher, _serverTime) {
         var _this = this;
         _super.call(this, $scope, _dispatcher, $uibModal);
         this.$interval = $interval;
@@ -321,6 +321,7 @@ var SensorGraphController = (function (_super) {
         this.$scope = $scope;
         this.$uibModal = $uibModal;
         this._dispatcher = _dispatcher;
+        this._serverTime = _serverTime;
         this._store = new Store.SensorValueStore();
         this._store.setSlidingWindowMode(true);
         this._store.setEnd(0);
@@ -348,8 +349,8 @@ var SensorGraphController = (function (_super) {
             resolution: common_1.SupportedResolutions[0],
             sensors: [],
             mode: 'realtime',
-            intervalStart: Utils.now() - 24 * 60 * 1000,
-            intervalEnd: Utils.now(),
+            intervalStart: this._serverTime.now() - 24 * 60 * 1000,
+            intervalEnd: this._serverTime.now(),
             windowStart: 5 * 60 * 1000,
             windowEnd: 0
         });
@@ -369,6 +370,7 @@ var SensorGraphController = (function (_super) {
         }
     };
     SensorGraphController.prototype._applyConfig = function (config) {
+        var _this = this;
         var differences = Utils.differentProperties(this._config, config);
         if (differences !== undefined && Utils.difference(differences, ["sensors", "unit"]).length === 0) {
             var addedSensors = Utils.difference(config.sensors, this._config.sensors, common_1.sensorEqual);
@@ -410,6 +412,7 @@ var SensorGraphController = (function (_super) {
             }
             console.log("Redo all");
             this._store.setTimeout(common_1.ResoltuionToMillisecs[config.resolution] * 60);
+            this._store.setTimeProvider(function () { return _this._serverTime.now(); });
         }
         this._config = config;
         this.$scope.sensorColors = this._store.getColors();
@@ -419,7 +422,7 @@ var SensorGraphController = (function (_super) {
     SensorGraphController.prototype._redrawGraph = function () {
         var _this = this;
         this.$timeout.cancel(this._timeout);
-        var time = Utils.now();
+        var time = this._serverTime.now();
         var graphOptions = {
             xaxis: {
                 mode: 'time',
@@ -468,7 +471,7 @@ var SensorGraphDirective = (function () {
         this.restrict = "A";
         this.templateUrl = "/html/sensor-graph.html";
         this.scope = {};
-        this.controller = ["$interval", "$timeout", "$scope", "$uibModal", "UpdateDispatcher", SensorGraphController];
+        this.controller = ["$interval", "$timeout", "$scope", "$uibModal", "UpdateDispatcher", "ServerTime", SensorGraphController];
         this.link = function ($scope, element, attrs, sensorGraph) {
             sensorGraph.graphNode = element;
         };
@@ -1035,6 +1038,7 @@ var SensorValueStore = (function () {
     function SensorValueStore() {
         this._series = [];
         this._sensorMap = {};
+        this._now = Utils.now;
         this._timeout = 2.5 * 60 * 1000;
         this._start = 5 * 60 * 1000;
         this._end = 0;
@@ -1053,6 +1057,9 @@ var SensorValueStore = (function () {
         }
         return -1;
     };
+    SensorValueStore.prototype.setTimeProvider = function (now) {
+        this._now = now;
+    };
     SensorValueStore.prototype.setStart = function (start) {
         this._start = start;
     };
@@ -1069,8 +1076,8 @@ var SensorValueStore = (function () {
         var oldest = this._start;
         var newest = this._end;
         if (this._slidingWindow) {
-            oldest = Utils.now() - this._start;
-            newest = Utils.now() - this._end;
+            oldest = this._now() - this._start;
+            newest = this._now() - this._end;
         }
         this._series.forEach(function (series) {
             series.data = series.data.filter(function (point) {
@@ -1179,7 +1186,7 @@ exports.SensorValueStore = SensorValueStore;
 },{"./utils":14}],12:[function(require,module,exports){
 "use strict";
 var utils_1 = require('./utils');
-var OffsetCount = 25;
+var OffsetCount = 10;
 var ServerTime = (function () {
     function ServerTime(_socket) {
         var _this = this;
@@ -1302,14 +1309,15 @@ var RealtimeSubscription = (function (_super) {
     return RealtimeSubscription;
 }(Subscription));
 var RealtimeResoulution = 'raw';
-exports.UpdateDispatcherFactory = ["WSUserClient", "$interval",
-    function (wsClient, $interval) {
-        return new UpdateDispatcher(wsClient, $interval);
+exports.UpdateDispatcherFactory = ["WSUserClient", "ServerTime", "$interval",
+    function (wsClient, serverTime, $interval) {
+        return new UpdateDispatcher(wsClient, serverTime, $interval);
     }];
 var UpdateDispatcher = (function () {
-    function UpdateDispatcher(_wsClient, $interval) {
+    function UpdateDispatcher(_wsClient, _serverTime, $interval) {
         var _this = this;
         this._wsClient = _wsClient;
+        this._serverTime = _serverTime;
         this.$interval = $interval;
         this._devices = {};
         this._subscribers = {};
@@ -1384,7 +1392,7 @@ var UpdateDispatcher = (function () {
             this._subscribers[deviceID][sensorID][resolution] = [];
         }
         this._subscribers[deviceID][sensorID][resolution].push(subscription);
-        var now = Utils.now();
+        var now = this._serverTime.now();
         var sensorsList = {};
         sensorsList[deviceID] = [sensorID];
         this._wsClient.requestValues(subscription.getStart(now), subscription.getEnd(now), resolution, sensorsList);
@@ -1517,7 +1525,7 @@ var UpdateDispatcher = (function () {
     UpdateDispatcher.prototype._pollHistoryData = function () {
         var requests;
         requests = {};
-        var now = Utils.now();
+        var now = this._serverTime.now();
         common_1.forEachSensor(this._subscribers, function (deviceID, sensorID, map) {
             for (var resolution in map) {
                 if (resolution !== RealtimeResoulution) {
@@ -1587,7 +1595,7 @@ var UpdateDispatcher = (function () {
         }
     };
     UpdateDispatcher.prototype._emitValueUpdate = function (deviceID, sensorID, resolution, timestamp, value) {
-        var now = Utils.now();
+        var now = this._serverTime.now();
         var notified = new Set();
         if (this._subscribers[deviceID] !== undefined
             && this._subscribers[deviceID][sensorID] !== undefined

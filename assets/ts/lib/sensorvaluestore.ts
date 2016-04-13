@@ -21,9 +21,13 @@ export class SensorValueStore {
 
 	private _colorIndex : number;
 
+	private _now : {() : number};
+
 	constructor() {
 		this._series = [];
 		this._sensorMap = {};
+
+		this._now = Utils.now;
 
 		this._timeout = 2.5 * 60 * 1000;
 		this._start = 5 * 60 * 1000;
@@ -48,6 +52,10 @@ export class SensorValueStore {
 		return -1;
 	}
 
+	public setTimeProvider(now : {() : number}) {
+		this._now = now;
+	}
+
 	public setStart(start : number) : void {
 		this._start = start;
 	}
@@ -69,8 +77,8 @@ export class SensorValueStore {
 		var newest = this._end;
 
 		if(this._slidingWindow) {
-			oldest = Utils.now() - this._start;
-			newest = Utils.now() - this._end;
+			oldest = this._now() - this._start;
+			newest = this._now() - this._end;
 		}
 
 		this._series.forEach((series : TimeSeries) : void => {

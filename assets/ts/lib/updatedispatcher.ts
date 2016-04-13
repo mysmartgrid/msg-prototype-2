@@ -1,4 +1,5 @@
 import * as Msg2Socket from './msg2socket';
+import {ServerTime} from './servertime';
 import * as Utils from './utils';
 
 import {DeviceSensorMap, DeviceMap, SensorMap, DeviceMetadata,
@@ -129,9 +130,9 @@ interface ResolutionSubscriberMap {
 const RealtimeResoulution = 'raw';
 
 // Angular factory function with injected dependencies
-export const UpdateDispatcherFactory = ["WSUserClient", "$interval",
-                                        (wsClient : Msg2Socket.Socket, $interval : ng.IIntervalService) =>
-                                            new UpdateDispatcher(wsClient, $interval)];
+export const UpdateDispatcherFactory = ["WSUserClient", "ServerTime", "$interval",
+                                        (wsClient : Msg2Socket.Socket, serverTime : ServerTime, $interval : ng.IIntervalService) =>
+                                            new UpdateDispatcher(wsClient, serverTime, $interval)];
 
 /**
  * Update dispatcher class
@@ -210,7 +211,7 @@ export class UpdateDispatcher {
      * Requests initial metadata as soon as the socket is connected
      * Sets up an $interval instance for polling historical data using _pollHistoryData
      */
-    constructor(private _wsClient : Msg2Socket.Socket, private $interval : ng.IIntervalService) {
+    constructor(private _wsClient : Msg2Socket.Socket, private _serverTime, private $interval : ng.IIntervalService) {
         this._devices = {};
         this._subscribers = {};
         this._InitialCallbacks = new Array<() => void>();
@@ -321,7 +322,7 @@ export class UpdateDispatcher {
         this._subscribers[deviceID][sensorID][resolution].push(subscription);
 
         // Request history
-        var now = Utils.now();
+        var now = this._serverTime.now();
 
         var sensorsList : Msg2Socket.DeviceSensorList = {};
         sensorsList[deviceID] = [sensorID];
@@ -528,7 +529,7 @@ export class UpdateDispatcher {
 
         var requests : {[resolution : string] : {start :number, end: number, sensors: {[deviceID : string] : Set<string>}}};
         requests = {};
-        var now = Utils.now();
+        var now = this._serverTime.now();
 
         // Gather start, end and sensors for each resolution
         forEachSensor<ResolutionSubscriberMap>(this._subscribers, (deviceID, sensorID, map) => {
@@ -623,7 +624,7 @@ export class UpdateDispatcher {
      * Also maintains a set of already notified subscribers to avoid notifying a subscriber twices in case of overlapping subscriptons.
      */
     private _emitValueUpdate(deviceID : string, sensorID : string, resolution : string, timestamp : number, value : number) : void {
-        var now = Utils.now();
+        var now = this._serverTime.now();
         var notified = new Set<Subscriber>();
 
         // Make sure we have subscribsers for this sensor

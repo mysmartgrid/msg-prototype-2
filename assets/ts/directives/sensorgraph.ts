@@ -1,4 +1,5 @@
 import * as Utils from '../lib/utils';
+import {ServerTime} from '../lib/servertime';
 import * as UpdateDispatcher from '../lib/updatedispatcher';
 import * as Store from '../lib/sensorvaluestore';
 
@@ -79,7 +80,8 @@ export class SensorGraphController extends Widget.WidtgetController {
 				private $timeout: ng.ITimeoutService,
 				protected $scope : SensorGraphScope,
 				protected $uibModal : angular.ui.bootstrap.IModalService,
-				protected _dispatcher : UpdateDispatcher.UpdateDispatcher) {
+				protected _dispatcher : UpdateDispatcher.UpdateDispatcher,
+				protected _serverTime : ServerTime) {
 
 		super($scope, _dispatcher, $uibModal);
 
@@ -110,8 +112,8 @@ export class SensorGraphController extends Widget.WidtgetController {
 			resolution : SupportedResolutions[0],
 			sensors : [],
 			mode: 'realtime',
-			intervalStart : Utils.now() - 24 * 60 * 1000,
-			intervalEnd : Utils.now(),
+			intervalStart : this._serverTime.now() - 24 * 60 * 1000,
+			intervalEnd : this._serverTime.now(),
 			windowStart : 5 * 60 * 1000,
 			windowEnd : 0
 		});
@@ -196,6 +198,7 @@ export class SensorGraphController extends Widget.WidtgetController {
 			console.log("Redo all");
 
 			this._store.setTimeout(ResoltuionToMillisecs[config.resolution] * 60);
+			this._store.setTimeProvider(() => this._serverTime.now());
 		}
 
 
@@ -209,7 +212,7 @@ export class SensorGraphController extends Widget.WidtgetController {
 	private _redrawGraph() {
 		this.$timeout.cancel(this._timeout);
 
-		var time = Utils.now();
+		var time = this._serverTime.now();
 
 		var graphOptions : any = {
 			xaxis: {
@@ -264,7 +267,7 @@ class SensorGraphDirective implements ng.IDirective {
 	public templateUrl : string = "/html/sensor-graph.html"
 	public scope = {}
 
-	public controller = ["$interval", "$timeout", "$scope", "$uibModal", "UpdateDispatcher", SensorGraphController];
+	public controller = ["$interval", "$timeout", "$scope", "$uibModal", "UpdateDispatcher", "ServerTime", SensorGraphController];
 
 	// Link function is special ... see http://blog.aaronholmes.net/writing-angularjs-directives-as-typescript-classes/#comment-2206875553
 	public link:Function  = ($scope : SensorGraphScope,

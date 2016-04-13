@@ -24,8 +24,8 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
 .directive("dateTimePicker", DateTimePickerFactory())
 .directive("sensorGraph", SensorGraphFactory())
 .directive("deviceList", DeviceListFactory())
-.controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal", "ServerTime",
-	(wsclient, wsurl, $http, $timeout : ng.ITimeoutService, $uibModal, ServerTime) => {
+.controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal",
+	(wsclient, wsurl, $http, $timeout : ng.ITimeoutService, $uibModal) => {
 		wsclient.connect(wsurl);
 
 		var modalInstance = null;
