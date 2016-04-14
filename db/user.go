@@ -43,7 +43,7 @@ func (u *user) AddDevice(id string, key []byte, isVirtual bool) (Device, error) 
 		return nil, err
 	}
 
-	result := &device{u, id, isVirtual}
+	result := &device{u.tx, u, id, isVirtual}
 	return result, nil
 }
 
@@ -60,7 +60,7 @@ func (u *user) Device(id string) Device {
 		return nil
 	}
 
-	result := &device{u, id, isVirtual}
+	result := &device{u.tx, u, id, isVirtual}
 
 	return result
 }
@@ -81,7 +81,7 @@ func (u *user) Devices() map[string]Device {
 			return nil
 		}
 
-		result[id] = &device{u, id, isVirtual}
+		result[id] = &device{u.tx, u, id, isVirtual}
 	}
 	err = rows.Err()
 	if err != nil {
@@ -106,7 +106,7 @@ func (u *user) VirtualDevices() map[string]Device {
 			return nil
 		}
 
-		result[id] = &device{u, id, true}
+		result[id] = &device{u.tx, u, id, true}
 	}
 	err = rows.Err()
 	if err != nil {
