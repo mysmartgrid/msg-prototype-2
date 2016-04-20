@@ -139,8 +139,9 @@ type Group interface {
 	// Returns an error if the sensor is not associated with the current group.
 	RemoveSensor(dbid uint64) error
 
-	// GetSensors returns an array of dbids of all sensors associated with the current group.
-	GetSensors() []uint64
+	// GetSensors returns an array of all sensors associated with the current group.
+	// Sensors in the have device initialized to nil
+	GetSensors() []Sensor
 
 	// Returns the id that identifies the current group in the database.
 	ID() string

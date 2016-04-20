@@ -70,6 +70,7 @@
 						<li {{activeIfAt "home" .}}><a href="/">Home</a></li>
 						{{if sessionFlag "logged-in" .}}
 						<li {{activeIfAt "user-devices" .}}><a href="/user/devices">Devices</a></li>
+						<li {{activeIfAt "groups" .}}><a href="/groups">Groups</a></li>
 						<li><a href="/user/logout">Logout</a></li>
 						{{else}}
 						<li {{activeIfAt "login" .}}><a href="/user/login">Login</a></li>

@@ -769,6 +769,44 @@ func apiUserDeviceSensorPropsSet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func apiUserGroupsGet(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+	db.View(func(tx msgpdb.Tx) error {
+		user := apiSessionUser(tx, session)
+
+		groups := make(map[string]interface{})
+		for id, group := range user.Groups() {
+
+			members := make(map[string]interface{})
+			for userID, member := range group.GetUsers() {
+				members[userID] = member.IsGroupAdmin(id)
+			}
+
+			var sensors []interface{}
+			for _, sensor := range group.GetSensors() {
+				sensorSpecifier := map[string]interface{}{
+					"deviceId":   sensor.Device().ID(),
+					"sensorId":   sensor.ID(),
+					"sensorName": sensor.Name(),
+					"deviceName": sensor.Device().Name(),
+					"owner":      sensor.Device().User().ID(),
+				}
+				sensors = append(sensors, sensorSpecifier)
+			}
+
+			groups[id] = map[string]interface{}{
+				"members": members,
+				"sensors": sensors,
+			}
+		}
+
+		data, err := json.Marshal(groups)
+		apiAbortIf(500, err)
+		w.Write(data)
+		return nil
+	})
+}
+
 func main() {
 	if config.Benchmark.DoBenchmark {
 		db.RunBenchmark(config.Benchmark.UserCount, config.Benchmark.DeviceCount, config.Benchmark.SensorCount, config.Benchmark.Duration*time.Minute)
@@ -783,6 +821,7 @@ func main() {
 		router.HandleFunc("/user/register", staticTemplate("register")).Methods("GET")
 		router.HandleFunc("/user/register", defaultHeaders(userRegister)).Methods("POST")
 		router.HandleFunc("/user/devices", loggedInSwitch(staticTemplate("user-devices"), doRedirect("/"))).Methods("GET")
+		router.HandleFunc("/groups", loggedInSwitch(staticTemplate("groups"), doRedirect("/"))).Methods("GET")
 		router.HandleFunc("/api/user/v1/devices", apiBlock(apiUserDevicesGet)).Methods("GET")
 		router.HandleFunc("/api/user/v1/device/{device}", apiBlock(apiUserDevicesAdd)).Methods("POST")
 		router.HandleFunc("/api/user/v1/device/{device}", apiBlock(apiUserDevicesRemove)).Methods("DELETE")
@@ -790,6 +829,7 @@ func main() {
 		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(apiUserDeviceConfigSet)).Methods("POST")
 		router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(apiUserDeviceSensorPropsGet)).Methods("GET")
 		router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(apiUserDeviceSensorPropsSet)).Methods("POST")
+		router.HandleFunc("/api/groups/v1", apiBlock(apiUserGroupsGet)).Methods("GET")
 
 		router.HandleFunc("/admin", defaultHeaders(adminHandler))
 

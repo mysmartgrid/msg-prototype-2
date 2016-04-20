@@ -1,4 +1,4 @@
-import  {Msg2SocketFactory} from './lib/msg2socket';
+import {Msg2SocketFactory} from './lib/msg2socket';
 import {ServerTimeFactory, ServerTime} from './lib/servertime';
 import {UpdateDispatcherFactory} from './lib/updatedispatcher';
 

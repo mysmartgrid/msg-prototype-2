@@ -85,22 +85,27 @@ func (g *group) RemoveSensor(dbid uint64) error {
 	return err
 }
 
-func (g *group) GetSensors() []uint64 {
-	rows, err := g.tx.Query(`SELECT sensor_seq FROM sensor_groups WHERE group_id = $1`, g.id)
+func (g *group) GetSensors() []Sensor {
+	rows, err := g.tx.Query(`SELECT sensors.sensor_seq, sensor_id, factor, is_virtual FROM sensor_groups INNER JOIN sensors ON sensor_groups.sensor_seq = sensors.sensor_seq WHERE group_id = $1`, g.id)
 	if err != nil {
 		return nil
 	}
 
-	var result []uint64
+	var result []Sensor
+
 	defer rows.Close()
 	for rows.Next() {
-		var id uint64
-		err = rows.Scan(&id)
+		var seq uint64
+		var id string
+		var factor float64
+		var isVirtual bool
+
+		err = rows.Scan(&seq, &id, &factor, &isVirtual)
 		if err != nil {
 			return nil
 		}
-
-		result = append(result, id)
+		sensor := &sensor{g.tx, nil, id, seq, factor, isVirtual}
+		result = append(result, sensor)
 	}
 	err = rows.Err()
 	if err != nil {

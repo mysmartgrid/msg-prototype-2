@@ -27,6 +27,20 @@ func (s *sensor) Name() string {
 }
 
 func (s *sensor) Device() Device {
+	if s.device != nil {
+		return s.device
+	}
+
+	var deviceID string
+	var isVirtual bool
+
+	err := s.tx.QueryRow(`SELECT devices.device_id, devices.is_virtual FROM sensors INNER JOIN devices ON devices.device_id = sensors.device_id WHERE sensor_seq = $1`, s.DbID()).Scan(&deviceID, &isVirtual)
+	if err != nil {
+		return nil
+	}
+
+	s.device = &device{s.tx, nil, deviceID, isVirtual}
+
 	return s.device
 }
 
