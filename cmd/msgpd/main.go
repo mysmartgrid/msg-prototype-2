@@ -531,7 +531,12 @@ func loggedInSwitch(in, out func(http.ResponseWriter, *http.Request)) func(http.
 func userDevices(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	db.View(func(tx msgpdb.Tx) error {
-		u := tx.User(session.Values["user"].(string)) //FIXME do string cast after nil check
+		if _, ok := session.Values["user"].(string); !ok {
+			removeSessionAndNotifyUser(w, r, session)
+			return nil
+		}
+
+		u := tx.User(session.Values["user"].(string))
 		if u == nil {
 			removeSessionAndNotifyUser(w, r, session)
 			return nil
@@ -707,6 +712,33 @@ func apiUserDeviceConfigSet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func apiUserDeviceSensorPropsGet(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+	devID := mux.Vars(r)["device"]
+	sensID := mux.Vars(r)["sensor"]
+	db.View(func(utx msgpdb.Tx) error {
+		user := apiSessionUser(utx, session)
+		dev := apiUserDevice(user, devID)
+
+		sens := dev.Sensor(sensID)
+		if sens == nil {
+			apiAbort(404, "no such sensor")
+		}
+
+		conf := map[string]interface{}{
+			"name":   sens.Name(),
+			"unit":   sens.Unit(),
+			"port":   sens.Port(),
+			"factor": sens.Factor(),
+		}
+
+		data, err := json.Marshal(conf)
+		apiAbortIf(500, err)
+		w.Write(data)
+		return nil
+	})
+}
+
 func apiUserDeviceSensorPropsSet(w http.ResponseWriter, r *http.Request) {
 	session := getSession(w, r)
 	devID := mux.Vars(r)["device"]
@@ -765,6 +797,7 @@ func main() {
 		router.HandleFunc("/api/user/v1/device/{device}", apiBlock(apiUserDevicesRemove)).Methods("DELETE")
 		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(apiUserDeviceConfigGet)).Methods("GET")
 		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(apiUserDeviceConfigSet)).Methods("POST")
+		router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(apiUserDeviceSensorPropsGet)).Methods("GET")
 		router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(apiUserDeviceSensorPropsSet)).Methods("POST")
 
 		// old api
