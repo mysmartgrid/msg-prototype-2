@@ -16,6 +16,7 @@ import (
 	"github.com/mysmartgrid/msg-prototype-2/hub"
 	"github.com/mysmartgrid/msg-prototype-2/regdev"
 	"github.com/mysmartgrid/msg-prototype-2/oldapi"
+	"github.com/mysmartgrid/msg-prototype-2/oldapidb"
 	"github.com/mysmartgrid/msg2api"
 	"html/template"
 	"io/ioutil"
@@ -78,6 +79,7 @@ var proxyConf struct {
 var oldAPIPostClient *http.Client
 var db msgpdb.Db
 var devdb regdev.Db
+var oapidb oldapidb.Db
 var h = hub.New()
 
 var apiCtx msgp.WsAPIContext
@@ -204,6 +206,11 @@ func init() {
 	devdb, err = regdev.Open(config.DbDir + "/devices.db")
 	if err != nil {
 		log.Fatal("error opening device db: ", err)
+	}
+
+	oapidb, err = oldapidb.Open(config.DbDir + "/sensors.db")
+	if err != nil {
+		log.Fatal("error opening sensor db: ", err)
 	}
 
 	apiCtx = msgp.WsAPIContext{Db: db, Hub: h}
@@ -745,7 +752,7 @@ func main() {
 	} else {
 		router := mux.NewRouter()
 		server := regdev.DeviceServer{Db: devdb}
-		apiserver := oldapi.OldApiServer{Db: devdb, Udb: db}
+		apiserver := oldapi.OldApiServer{Db: devdb, Udb: db, Sdb: oapidb}
 
 		router.HandleFunc("/", loggedInSwitch(wsTemplate("index_user"), staticTemplate("index_nouser"))).Methods("GET")
 		router.HandleFunc("/user/login", staticTemplate("user-login")).Methods("GET")

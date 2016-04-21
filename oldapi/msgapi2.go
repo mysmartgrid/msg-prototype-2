@@ -421,6 +421,7 @@ func (sp *SensorPost) UnmarshalJSON(raw []byte) error {
 			Enable:      data.Config.Enable,
 			Type:        data.Config.Type,
 		}
+		if(sc.Unit == "") { sc.Unit="W" }
 		*sp = SensorPost{Config: sc}
 	}
 	if ( data.Measurements != nil ) {

@@ -18,13 +18,34 @@ import (
         "time"
 	"github.com/mysmartgrid/msg-prototype-2/regdev"
 	"github.com/mysmartgrid/msg-prototype-2/db"
+	"github.com/mysmartgrid/msg-prototype-2/oldapidb"
 )
 
 type OldApiServer struct {
 	Db regdev.Db
 	Udb db.Db
+	Sdb oldapidb.Db
 }
 
+/*
+  Queries implemented:
+POST /device/<device_id>    Device Registration            implemented
+DELETE /device/<device_id>  Device Removal                 not yet
+POST /device/<device_id>    Device Heartbeat               implemented/without remoteSupport
+GET  /device/<device_id>    Device Query                   not yet
+
+GET  /firmware/<device_id>  Firmware Upgrade File Download not yet
+
+POST /event/<event_id>      Device Event Notification      partial
+
+POST /sensor/<sensor_id>    Sensor Configuration             implemented
+GET  /sensor/<sensor_id>    Sensor Configuration Query       not yet
+POST /sensor/<sensor_id>    Sensor Measurements Registration implemented
+DELETE /sensor/<sensor_id>  Sensor Removal                   not yet
+GET  /sensor/<sensor_id>?<attrib> Sensor Measurements Query  not yet
+
+
+*/
 var (
 	InvalidAuth     = errors.New("invalid authorisation")
 )
@@ -210,7 +231,7 @@ func (s *OldApiServer) Device_Post(w http.ResponseWriter, r *http.Request) {
 				}
 				log.Print("	Insert device into database - success")
 				resp := DeviceRegistrationResponse{
-					Upgrade:  1,
+					Upgrade:  0,
 					Time:     time.Now(),
 				}
 				log.Print("	Insert device into database - success2")
@@ -297,16 +318,24 @@ func (s *OldApiServer) Sensor_Post(w http.ResponseWriter, r *http.Request) {
 	if (sc.Config.Device != "") {
 		device = sc.Config.Device		
 	} else {
+		// these are measurements values
 		s.Udb.View(func(tx db.Tx) error {
 			//i := 0
 			sensor := tx.Sensor(sensorId)
 			if sensor != nil {
 				log.Print(" got the sensorreturn...")
+				// get timestamp an value
+
+				//
 				l := len(sc.Measurements)
-				for i:=0; i<l; i++ {
-					s.Udb.AddReading(sensor, sc.Measurements[i].Timestamp,sc.Measurements[i].Value)
-					log.Print("    Value: ", sc.Measurements[i].Value)
+				for i:=1; i<l; i++ {
+					deltaV := sc.Measurements[i].Value - sc.Measurements[i-1].Value
+					deltaT := sc.Measurements[i].Timestamp.Unix() - sc.Measurements[i-1].Timestamp.Unix()
+					value := ( 3600 * deltaV) / (float64)(deltaT)
+					s.Udb.AddReading(sensor, sc.Measurements[i].Timestamp,value)
+					log.Printf("    Timestamp: %d  Value: %f, %f ", sc.Measurements[i].Timestamp.Unix(), sc.Measurements[i].Value, value)
 				}
+				
 				log.Print("  added successfully the readings: ", sensor.Name())
 			} else {
 				log.Print("  sensor was not found...: ", sensorId)
@@ -345,8 +374,12 @@ func (s *OldApiServer) Sensor_Post(w http.ResponseWriter, r *http.Request) {
 						http.Error(w, httpErrorNotFound.Error(), httpErrorNotFoundNo)
 						return nil
 					}
-					udev := user.Device(dev.Id())
-					udev.AddSensor(sensorId, sc.Config.Unit, sc.Config.Port)
+					udev := user.Device(dev.ID())
+					s, err := udev.AddSensor(sensorId, sc.Config.Unit, sc.Config.Port, 1.0)
+					if err != nil  && s==nil{
+						log.Print("    Failed to add sensor!", err.Error())
+						http.Error(w, httpErrorInternalServerError.Error(), httpErrorInternalServerErrorNo)
+						}
 				} else {
 					log.Print("    Search for User '", username, "'  - not found")
 					http.Error(w, httpErrorNotFound.Error(), httpErrorNotFoundNo)
