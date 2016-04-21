@@ -4,7 +4,6 @@ import (
 	"github.com/mysmartgrid/msg2api"
 	"time"
 )
-	Sensor(id string) Sensor
 
 // Db defines the interface to a database containing users, device, sensors and their measurment data.
 type Db interface {
@@ -59,6 +58,8 @@ type Tx interface {
 
 	// Groups gets all groups from the database and retrurns a map associating group ids with their representing structs.
 	Groups() map[string]Group
+
+	Sensor(id string) Sensor
 }
 
 // User provides a set of operations on users as represented in the database.
