@@ -1,4 +1,4 @@
-import {DeviceProps, SensorProps, DeviceEditorControllerFactory, SensorEditorControllerFactory} from '../controllers/deviceeditors';
+import {DeviceAddControllerFactory, DeviceProps, SensorProps, DeviceEditorControllerFactory, SensorEditorControllerFactory} from '../controllers/deviceeditors';
 
 
 interface Device extends DeviceProps {
@@ -14,6 +14,8 @@ interface Sensor extends SensorProps{
 interface DeviceListScope extends ng.IScope {
     showSpinner : boolean;
     encodeURIComponent : (uriComponent : string) => string;
+
+    addDevice : () => void;
 
     errorSavingSettings : string;
     errorLoadingSettings : string;
@@ -49,6 +51,21 @@ class DeviceListController {
         $scope.showSpinner = false;
         $scope.encodeURIComponent = encodeURIComponent;
 
+        $http.get('/api/user/v1/devices').success((data : {[deviceID : string] : Device}, status, headers, config) => {
+    		$scope.devices = data;
+    	});
+
+        $scope.addDevice = () : void => {
+            var modalInstance = $uibModal.open({
+                controller: DeviceAddControllerFactory,
+                size: "lg",
+                templateUrl: "/html/add-device-dialog.html",
+            });
+
+            modalInstance.result.then((data) => {
+                $scope.devices[data.deviceID] = data.data;
+            });
+        }
 
 
         $scope.editDevice = (deviceID) => {

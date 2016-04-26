@@ -223,7 +223,8 @@ export class SensorGraphController extends Widget.WidtgetController {
 				minorTickFreq: 1
 			},
 			yaxis: {
-				min: 0,
+				min: this._store.getMin(),
+				max: this._store.getMax(),
 			},
 			HtmlText: false,
 			preventDefault : false,

@@ -295,3 +295,61 @@ QUnit.test("Remove past timeout, reinsert in future", function(assert : QUnitAss
 
 	assert.deepEqual(store.getData()[0].data, result2, "Timeout should have shifted.");
 });
+
+QUnit.test("Test min and max", function(assert : QUnitAssert) : void {
+	var store = new Store.SensorValueStore();
+
+	store.addSensor("ADevice", "ASensor1");
+
+	var timestamp = 100 * 1000;
+
+	store.setStart(timestamp);
+	store.setEnd(timestamp + 200);
+	store.setSlidingWindowMode(false);
+
+	assert.equal(store.getMin(), 0, "Min should start at 0.");
+	assert.equal(store.getMax(), 0, "Max should start at 0.");
+
+	store.addValue("ADevice", "ASensor1", timestamp, 10);
+	assert.equal(store.getMin(), 0, "Min should be at 0.");
+	assert.equal(store.getMax(), 10, "Max should be at 10.");
+
+	store.addValue("ADevice", "ASensor1", timestamp + 10, -10);
+	assert.equal(store.getMin(), -10, "Min should be at -10.");
+	assert.equal(store.getMax(), 10, "Max should be at 10.");
+
+	store.addValue("ADevice", "ASensor1", timestamp + 300, -1000);
+	assert.equal(store.getMin(), -1000, "Min should be at -1000.");
+	assert.equal(store.getMax(), 10, "Max should be at 10.");
+
+	store.clampData();
+	assert.equal(store.getMin(), -10, "Min should be at -10.");
+	assert.equal(store.getMax(), 10, "Max should be at 10.");
+});
+
+QUnit.test("Test min and max with timeout null", function(assert : QUnitAssert) : void {
+	var store = new Store.SensorValueStore();
+
+	store.addSensor("ADevice", "ASensor1");
+
+	var timestamp = 100 * 1000;
+
+	store.setStart(timestamp);
+	store.setEnd(timestamp + 200);
+	store.setSlidingWindowMode(false);
+	store.setTimeout(50);
+
+	store.addValue("ADevice", "ASensor1", timestamp, 10);
+
+	store.addValue("ADevice", "ASensor1", timestamp + 100, -10);
+
+	store.clampData();
+	var result = [[timestamp, 10],
+					[timestamp + 99, null],
+					[timestamp + 100, -10]];
+
+	assert.deepEqual(store.getData()[0].data, result, "Store should contain 2 values and a null entry.");
+
+	assert.equal(store.getMin(), -10, "Min should be at -10.");
+	assert.equal(store.getMax(), 10, "Max should be at 10.");
+});

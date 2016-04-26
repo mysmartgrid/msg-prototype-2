@@ -8,7 +8,6 @@ var timerangespinner_1 = require('./directives/ui-elements/timerangespinner');
 var datetimepicker_1 = require('./directives/ui-elements/datetimepicker');
 var sensorgraph_1 = require('./directives/sensorgraph');
 var devicelist_1 = require('./directives/devicelist');
-var deviceeditors_1 = require('./controllers/deviceeditors');
 angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
     .config(["$interpolateProvider", function ($interpolateProvider) {
         $interpolateProvider.startSymbol("%%");
@@ -43,21 +42,6 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
             }
         });
     }])
-    .controller("DeviceListController", ["$scope", "$uibModal", "$http", function ($scope, $uibModal, $http) {
-        $http.get('/api/user/v1/devices').success(function (data, status, headers, config) {
-            $scope.devices = data;
-        });
-        $scope.openAddDeviceModal = function () {
-            var modalInstance = $uibModal.open({
-                controller: deviceeditors_1.DeviceAddControllerFactory,
-                size: "lg",
-                templateUrl: "/html/add-device-dialog.html",
-            });
-            modalInstance.result.then(function (data) {
-                $scope.devices[data.deviceID] = data.data;
-            });
-        };
-    }])
     .controller("NavbarServerTime", ["ServerTime", "$scope", "$interval", function (serverTime, $scope, $interval) {
         function displayTime() {
             $scope.time = serverTime.now();
@@ -67,7 +51,7 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
     }]);
 console.log('MSGP loaded');
 
-},{"./controllers/deviceeditors":2,"./directives/devicelist":3,"./directives/sensorgraph":4,"./directives/ui-elements/datetimepicker":5,"./directives/ui-elements/numberspinner":6,"./directives/ui-elements/timerangespinner":7,"./lib/msg2socket":10,"./lib/servertime":12,"./lib/updatedispatcher":13}],2:[function(require,module,exports){
+},{"./directives/devicelist":3,"./directives/sensorgraph":4,"./directives/ui-elements/datetimepicker":5,"./directives/ui-elements/numberspinner":6,"./directives/ui-elements/timerangespinner":7,"./lib/msg2socket":10,"./lib/servertime":12,"./lib/updatedispatcher":13}],2:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -210,6 +194,19 @@ var DeviceListController = (function () {
         this.$uibModal = $uibModal;
         $scope.showSpinner = false;
         $scope.encodeURIComponent = encodeURIComponent;
+        $http.get('/api/user/v1/devices').success(function (data, status, headers, config) {
+            $scope.devices = data;
+        });
+        $scope.addDevice = function () {
+            var modalInstance = $uibModal.open({
+                controller: deviceeditors_1.DeviceAddControllerFactory,
+                size: "lg",
+                templateUrl: "/html/add-device-dialog.html",
+            });
+            modalInstance.result.then(function (data) {
+                $scope.devices[data.deviceID] = data.data;
+            });
+        };
         $scope.editDevice = function (deviceID) {
             var modalInstance = _this.$uibModal.open({
                 controller: deviceeditors_1.DeviceEditorControllerFactory,

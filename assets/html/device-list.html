@@ -1,4 +1,8 @@
-<div class="device-list">
+<p class="ng-hide" data-ng-show="equals(devices, {})">
+	You don't have any devices in your account.
+</p>
+
+<div class="device-list" data-ng-hide="equals(devices, {})">
 	<div class="ng-hide alert alert-danger" ng-show="error">%%error%%</div>
 	<div class="ng-hide alert alert-danger" ng-show="errorLoadingSettings">Error loading settings: %%error%%</div>
 	<div class="ng-hide alert alert-success device-deleted">
@@ -61,3 +65,6 @@
 		</tbody>
 	</table>
 </div>
+<button type="button" class="btn btn-primary" data-ng-click="addDevice()">
+	Add device
+</button>
