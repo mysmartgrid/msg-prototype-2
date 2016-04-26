@@ -439,7 +439,8 @@ var SensorGraphController = (function (_super) {
                 minorTickFreq: 1
             },
             yaxis: {
-                min: 0,
+                min: this._store.getMin(),
+                max: this._store.getMax(),
             },
             HtmlText: false,
             preventDefault: false,
@@ -1053,6 +1054,8 @@ var SensorValueStore = (function () {
         this._start = 5 * 60 * 1000;
         this._end = 0;
         this._slidingWindow = true;
+        this._min = 0;
+        this._max = 0;
         this._colorIndex = 0;
     }
     ;
@@ -1082,16 +1085,31 @@ var SensorValueStore = (function () {
     SensorValueStore.prototype.setTimeout = function (timeout) {
         this._timeout = timeout;
     };
+    SensorValueStore.prototype.getMin = function () {
+        return this._min;
+    };
+    SensorValueStore.prototype.getMax = function () {
+        return this._max;
+    };
     SensorValueStore.prototype.clampData = function () {
+        var _this = this;
         var oldest = this._start;
         var newest = this._end;
         if (this._slidingWindow) {
             oldest = this._now() - this._start;
             newest = this._now() - this._end;
         }
+        this._min = 0;
+        this._max = 0;
         this._series.forEach(function (series) {
             series.data = series.data.filter(function (point) {
                 return point[0] >= oldest && point[0] <= newest;
+            });
+            series.data.forEach(function (point) {
+                if (point[1] !== null) {
+                    _this._min = Math.min(_this._min, point[1]);
+                    _this._max = Math.max(_this._max, point[1]);
+                }
             });
             if (series.data.length > 0) {
                 if (series.data[0][1] === null) {
@@ -1150,6 +1168,8 @@ var SensorValueStore = (function () {
         if (seriesIndex === -1) {
             throw new Error("No such sensor");
         }
+        this._min = Math.min(this._min, value, 0);
+        this._max = Math.max(this._max, value, 0);
         var data = this._series[seriesIndex].data;
         var pos = this._findInsertionPos(data, timestamp);
         if (data.length > 0 && pos === 0 && data[0][0] === timestamp) {

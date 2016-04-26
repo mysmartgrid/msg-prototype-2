@@ -18,6 +18,8 @@ export class SensorValueStore {
 
 	private _timeout : number;
 
+	private _min : number;
+	private _max : number;
 
 	private _colorIndex : number;
 
@@ -33,6 +35,9 @@ export class SensorValueStore {
 		this._start = 5 * 60 * 1000;
 		this._end = 0;
 		this._slidingWindow = true;
+
+		this._min = 0;
+		this._max = 0;
 
 		this._colorIndex = 0;
 	};
@@ -72,6 +77,15 @@ export class SensorValueStore {
 		this._timeout = timeout;
 	}
 
+	public getMin() : number {
+		return this._min;
+	}
+
+	public getMax() : number {
+		return this._max;
+	}
+
+
 	public clampData() : void {
 		var oldest = this._start;
 		var newest = this._end;
@@ -81,9 +95,21 @@ export class SensorValueStore {
 			newest = this._now() - this._end;
 		}
 
+		// Reset min and max
+		this._min = 0;
+		this._max = 0;
+
 		this._series.forEach((series : TimeSeries) : void => {
-			series.data = series.data.filter((point : [number, number]) : boolean => {
+			series.data = series.data.filter((point) => {
 				return point[0] >= oldest && point[0] <= newest;
+			});
+
+			//Find new min and max
+			series.data.forEach((point) => {
+				if(point[1] !== null) {
+					this._min = Math.min(this._min, point[1]);
+					this._max = Math.max(this._max, point[1]);
+				}
 			});
 
 			//Series should not start or end with null after clamping
@@ -160,6 +186,10 @@ export class SensorValueStore {
 		if(seriesIndex === -1) {
 			throw new Error("No such sensor");
 		}
+
+		// Update min and max
+		this._min = Math.min(this._min, value, 0);
+		this._max = Math.max(this._max, value, 0);
 
 		// Find position for inserting
 		var data = this._series[seriesIndex].data;
