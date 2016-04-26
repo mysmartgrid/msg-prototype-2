@@ -1201,7 +1201,6 @@ var ServerTime = (function () {
     function ServerTime(_socket) {
         var _this = this;
         this._socket = _socket;
-        console.log("New ServerTime");
         this._averageOffset = 0;
         this._offsets = [];
         _socket.onServerTime(function (servertime) { return _this._updateOffsets(servertime); });
@@ -1216,7 +1215,6 @@ var ServerTime = (function () {
             var offset = _a[_i];
             this._averageOffset += offset / OffsetCount;
         }
-        console.log("Timeoffset:", this._averageOffset);
     };
     ServerTime.prototype.getOffset = function () {
         return this._averageOffset;

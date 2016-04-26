@@ -95,6 +95,9 @@ type User interface {
 	// Groups returns a map of group ids to Group objects for all groups the current users belongs to.
 	Groups() map[string]Group
 
+	// Group returns the Group object for the given groupID if the current user is a member of the group in the database, returns nils otherwise.
+	Group(groupID string) Group
+
 	// IsGroupAdmin returns true if the current user is listed as an admin for the given group in the database, return false otherwise.
 	IsGroupAdmin(groupID string) bool
 
@@ -131,13 +134,13 @@ type Group interface {
 	// GetAdmins returns a map from user ids to User structs, containing all user listed as admins of the current group.
 	GetAdmins() map[string]User
 
-	// AddSensor associates the sensor with the given dbid to the current group.
+	// AddSensor associates the sensor with the given deviceID and sensorID to the current group.
 	// Returns an error if the sensors is already associated.
-	AddSensor(dbid uint64) error
+	AddSensor(deviceID string, sensorID string) error
 
-	// RemoveSensor disassociates the sensor with the given dbid from the current group.
+	// RemoveSensor disassociates the sensor with the given deviceID and sensorID from the current group.
 	// Returns an error if the sensor is not associated with the current group.
-	RemoveSensor(dbid uint64) error
+	RemoveSensor(deviceID string, sensorID string) error
 
 	// GetSensors returns an array of all sensors associated with the current group.
 	// Sensors in the have device initialized to nil

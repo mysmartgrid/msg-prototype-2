@@ -55,6 +55,7 @@ func (u *user) RemoveDevice(id string) error {
 func (u *user) Device(id string) Device {
 	var deviceID string
 	var isVirtual bool
+
 	err := u.tx.QueryRow(`SELECT device_id, is_virtual FROM devices WHERE user_id = $1 and device_id = $2`, u.id, id).Scan(&deviceID, &isVirtual)
 	if err != nil {
 		return nil
@@ -114,6 +115,15 @@ func (u *user) VirtualDevices() map[string]Device {
 	}
 
 	return result
+}
+
+func (u *user) Group(groupID string) Group {
+	err := u.tx.QueryRow(`SELECT group_id FROM user_groups WHERE user_id = $1 AND group_id = $2`, u.id, groupID).Scan(&groupID)
+	if err != nil {
+		return nil
+	}
+
+	return &group{u.tx, groupID}
 }
 
 func (u *user) Groups() map[string]Group {

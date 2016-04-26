@@ -10,7 +10,6 @@ export class ServerTime {
     private _averageOffset : number;
 
     constructor(private _socket : Socket) {
-        console.log("New ServerTime");
         this._averageOffset = 0;
         this._offsets = [];
 
@@ -28,8 +27,6 @@ export class ServerTime {
         for(var offset of this._offsets) {
             this._averageOffset += offset / OffsetCount;
         }
-
-        console.log("Timeoffset:", this._averageOffset);
     }
 
 

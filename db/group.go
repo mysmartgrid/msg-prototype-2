@@ -75,18 +75,21 @@ func (g *group) GetAdmins() map[string]User {
 	return result
 }
 
-func (g *group) AddSensor(dbid uint64) error {
-	_, err := g.tx.Exec(`INSERT INTO sensor_groups(sensor_seq, group_id) VALUES ($1,$2)`, dbid, g.id)
+func (g *group) AddSensor(deviceID string, sensorID string) error {
+	_, err := g.tx.Exec(`INSERT INTO sensor_groups(sensor_seq, group_id) `+
+		`SELECT sensor_seq, $1 FROM sensors WHERE device_id = $2 AND sensor_id = $3`, g.id, deviceID, sensorID)
 	return err
 }
 
-func (g *group) RemoveSensor(dbid uint64) error {
-	_, err := g.tx.Exec(`DELETE FROM sensor_groups WHERE sensor_seq = $1 AND group_id = $2`, dbid, g.id)
+func (g *group) RemoveSensor(deviceID string, sensorID string) error {
+	_, err := g.tx.Exec(`DELETE FROM sensor_groups WHERE group_id = $1 AND sensor_seq IN `+
+		`(SELECT sensor_seq FROM sensors WHERE device_id = $2 AND sensor_id = $3)`, g.id, deviceID, sensorID)
 	return err
 }
 
 func (g *group) GetSensors() []Sensor {
-	rows, err := g.tx.Query(`SELECT sensors.sensor_seq, sensor_id, factor, is_virtual FROM sensor_groups INNER JOIN sensors ON sensor_groups.sensor_seq = sensors.sensor_seq WHERE group_id = $1`, g.id)
+	rows, err := g.tx.Query(`SELECT sensors.sensor_seq, sensor_id, factor, is_virtual `+
+		`FROM sensor_groups INNER JOIN sensors ON sensor_groups.sensor_seq = sensors.sensor_seq WHERE group_id = $1`, g.id)
 	if err != nil {
 		return nil
 	}

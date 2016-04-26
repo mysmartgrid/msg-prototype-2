@@ -807,6 +807,78 @@ func apiUserGroupsGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+/*
+	Adds sensor to the group iff.
+		- the user is a member of the group
+		- the sensor/device belongs to the user
+		- the sensor, device and group exists (checked by Group.addSensor)
+*/
+func apiUserGroupSensorAdd(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+	groupID := mux.Vars(r)["group"]
+	db.Update(func(tx msgpdb.Tx) error {
+		user := apiSessionUser(tx, session)
+
+		var addRequest struct {
+			DeviceID string `json:"deviceId"`
+			SensorID string `json:"sensorId"`
+		}
+
+		data, err := ioutil.ReadAll(r.Body)
+		apiAbortIf(500, err)
+		apiAbortIf(400, json.Unmarshal(data, &addRequest))
+
+		// Fail if the user is not a member of the group
+		group := user.Group(groupID)
+		if group == nil {
+			apiAbort(403, "User is not a member of the group")
+		}
+
+		// Fail if the device (and hence the sensor) does not exist or belongs to different user
+		device := user.Device(addRequest.DeviceID)
+		if device == nil {
+			apiAbort(403, "Device does not belong to user")
+		}
+
+		// Fail if device or sensor does not exist
+		apiAbortIf(500, group.AddSensor(addRequest.DeviceID, addRequest.SensorID))
+
+		return nil
+	})
+}
+
+/*
+	Removes a sensor from the group iff.
+		- the user is a member of the group
+		- the sensor/device belongs to the user or the user is a group admin
+		- the sensor, device and group exist and the sensor is associated with the group (checked by Group.removeSensor)
+*/
+func apiUserGroupSensorRemove(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+
+	groupID := mux.Vars(r)["group"]
+	deviceID := mux.Vars(r)["device"]
+	sensorID := mux.Vars(r)["sensor"]
+
+	db.Update(func(tx msgpdb.Tx) error {
+		user := apiSessionUser(tx, session)
+
+		group := user.Group(groupID)
+		if group == nil {
+			apiAbort(403, "User is not a member of the group")
+		}
+
+		device := user.Device(deviceID)
+		if device == nil && !user.IsGroupAdmin(groupID) {
+			apiAbort(403, "Device does not belong to user")
+		}
+
+		apiAbortIf(500, group.RemoveSensor(deviceID, sensorID))
+
+		return nil
+	})
+}
+
 func main() {
 	if config.Benchmark.DoBenchmark {
 		db.RunBenchmark(config.Benchmark.UserCount, config.Benchmark.DeviceCount, config.Benchmark.SensorCount, config.Benchmark.Duration*time.Minute)
@@ -829,7 +901,9 @@ func main() {
 		router.HandleFunc("/api/user/v1/device/{device}/config", apiBlock(apiUserDeviceConfigSet)).Methods("POST")
 		router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(apiUserDeviceSensorPropsGet)).Methods("GET")
 		router.HandleFunc("/api/user/v1/sensor/{device}/{sensor}/props", apiBlock(apiUserDeviceSensorPropsSet)).Methods("POST")
-		router.HandleFunc("/api/groups/v1", apiBlock(apiUserGroupsGet)).Methods("GET")
+		router.HandleFunc("/api/user/v1/groups", apiBlock(apiUserGroupsGet)).Methods("GET")
+		router.HandleFunc("/api/user/v1/group/{group}/sensor/add", apiBlock(apiUserGroupSensorAdd)).Methods("POST")
+		router.HandleFunc("/api/user/v1/group/{group}/sensor/{device}/{sensor}", apiBlock(apiUserGroupSensorRemove)).Methods("DELETE")
 
 		router.HandleFunc("/admin", defaultHeaders(adminHandler))
 
