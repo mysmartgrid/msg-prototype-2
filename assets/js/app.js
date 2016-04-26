@@ -8,7 +8,6 @@ var timerangespinner_1 = require('./directives/ui-elements/timerangespinner');
 var datetimepicker_1 = require('./directives/ui-elements/datetimepicker');
 var sensorgraph_1 = require('./directives/sensorgraph');
 var devicelist_1 = require('./directives/devicelist');
-var deviceeditors_1 = require('./controllers/deviceeditors');
 angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
     .config(["$interpolateProvider", function ($interpolateProvider) {
         $interpolateProvider.startSymbol("%%");
@@ -43,21 +42,6 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
             }
         });
     }])
-    .controller("DeviceListController", ["$scope", "$uibModal", "$http", function ($scope, $uibModal, $http) {
-        $http.get('/api/user/v1/devices').success(function (data, status, headers, config) {
-            $scope.devices = data;
-        });
-        $scope.openAddDeviceModal = function () {
-            var modalInstance = $uibModal.open({
-                controller: deviceeditors_1.DeviceAddControllerFactory,
-                size: "lg",
-                templateUrl: "/html/add-device-dialog.html",
-            });
-            modalInstance.result.then(function (data) {
-                $scope.devices[data.deviceID] = data.data;
-            });
-        };
-    }])
     .controller("NavbarServerTime", ["ServerTime", "$scope", "$interval", function (serverTime, $scope, $interval) {
         function displayTime() {
             $scope.time = serverTime.now();
@@ -67,7 +51,7 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
     }]);
 console.log('MSGP loaded');
 
-},{"./controllers/deviceeditors":2,"./directives/devicelist":3,"./directives/sensorgraph":4,"./directives/ui-elements/datetimepicker":5,"./directives/ui-elements/numberspinner":6,"./directives/ui-elements/timerangespinner":7,"./lib/msg2socket":10,"./lib/servertime":12,"./lib/updatedispatcher":13}],2:[function(require,module,exports){
+},{"./directives/devicelist":3,"./directives/sensorgraph":4,"./directives/ui-elements/datetimepicker":5,"./directives/ui-elements/numberspinner":6,"./directives/ui-elements/timerangespinner":7,"./lib/msg2socket":10,"./lib/servertime":12,"./lib/updatedispatcher":13}],2:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -210,6 +194,19 @@ var DeviceListController = (function () {
         this.$uibModal = $uibModal;
         $scope.showSpinner = false;
         $scope.encodeURIComponent = encodeURIComponent;
+        $http.get('/api/user/v1/devices').success(function (data, status, headers, config) {
+            $scope.devices = data;
+        });
+        $scope.addDevice = function () {
+            var modalInstance = $uibModal.open({
+                controller: deviceeditors_1.DeviceAddControllerFactory,
+                size: "lg",
+                templateUrl: "/html/add-device-dialog.html",
+            });
+            modalInstance.result.then(function (data) {
+                $scope.devices[data.deviceID] = data.data;
+            });
+        };
         $scope.editDevice = function (deviceID) {
             var modalInstance = _this.$uibModal.open({
                 controller: deviceeditors_1.DeviceEditorControllerFactory,
@@ -439,8 +436,7 @@ var SensorGraphController = (function (_super) {
                 minorTickFreq: 1
             },
             yaxis: {
-                min: this._store.getMin(),
-                max: this._store.getMax(),
+                min: 0,
             },
             HtmlText: false,
             preventDefault: false,
@@ -1054,8 +1050,6 @@ var SensorValueStore = (function () {
         this._start = 5 * 60 * 1000;
         this._end = 0;
         this._slidingWindow = true;
-        this._min = 0;
-        this._max = 0;
         this._colorIndex = 0;
     }
     ;
@@ -1085,31 +1079,16 @@ var SensorValueStore = (function () {
     SensorValueStore.prototype.setTimeout = function (timeout) {
         this._timeout = timeout;
     };
-    SensorValueStore.prototype.getMin = function () {
-        return this._min;
-    };
-    SensorValueStore.prototype.getMax = function () {
-        return this._max;
-    };
     SensorValueStore.prototype.clampData = function () {
-        var _this = this;
         var oldest = this._start;
         var newest = this._end;
         if (this._slidingWindow) {
             oldest = this._now() - this._start;
             newest = this._now() - this._end;
         }
-        this._min = 0;
-        this._max = 0;
         this._series.forEach(function (series) {
             series.data = series.data.filter(function (point) {
                 return point[0] >= oldest && point[0] <= newest;
-            });
-            series.data.forEach(function (point) {
-                if (point[1] !== null) {
-                    _this._min = Math.min(_this._min, point[1]);
-                    _this._max = Math.max(_this._max, point[1]);
-                }
             });
             if (series.data.length > 0) {
                 if (series.data[0][1] === null) {
@@ -1168,8 +1147,6 @@ var SensorValueStore = (function () {
         if (seriesIndex === -1) {
             throw new Error("No such sensor");
         }
-        this._min = Math.min(this._min, value, 0);
-        this._max = Math.max(this._max, value, 0);
         var data = this._series[seriesIndex].data;
         var pos = this._findInsertionPos(data, timestamp);
         if (data.length > 0 && pos === 0 && data[0][0] === timestamp) {
@@ -1221,7 +1198,6 @@ var ServerTime = (function () {
     function ServerTime(_socket) {
         var _this = this;
         this._socket = _socket;
-        console.log("New ServerTime");
         this._averageOffset = 0;
         this._offsets = [];
         _socket.onServerTime(function (servertime) { return _this._updateOffsets(servertime); });
@@ -1236,7 +1212,6 @@ var ServerTime = (function () {
             var offset = _a[_i];
             this._averageOffset += offset / OffsetCount;
         }
-        console.log("Timeoffset:", this._averageOffset);
     };
     ServerTime.prototype.getOffset = function () {
         return this._averageOffset;

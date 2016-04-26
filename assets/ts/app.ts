@@ -49,23 +49,6 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
 			}
 		});
 }])
-.controller("DeviceListController", ["$scope", "$uibModal", "$http", ($scope, $uibModal, $http) => {
-	$http.get('/api/user/v1/devices').success((data, status, headers, config) => {
-		$scope.devices = data;
-	});
-
-	$scope.openAddDeviceModal = () : void => {
-		var modalInstance = $uibModal.open({
-			controller: DeviceAddControllerFactory,
-			size: "lg",
-			templateUrl: "/html/add-device-dialog.html",
-		});
-
-		modalInstance.result.then((data) => {
-			$scope.devices[data.deviceID] = data.data;
-		});
-	}
-}])
 .controller("NavbarServerTime", ["ServerTime", "$scope", "$interval", (serverTime : ServerTime, $scope : any, $interval : ng.IIntervalService) => {
 	function displayTime() {
 		$scope.time = serverTime.now();
