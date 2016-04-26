@@ -438,6 +438,9 @@ var SensorGraphController = (function (_super) {
                 noTicks: 15,
                 minorTickFreq: 1
             },
+            yaxis: {
+                min: 0,
+            },
             HtmlText: false,
             preventDefault: false,
             title: 'Messwerte',

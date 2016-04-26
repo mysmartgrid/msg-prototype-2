@@ -222,6 +222,9 @@ export class SensorGraphController extends Widget.WidtgetController {
 				noTicks: 15,
 				minorTickFreq: 1
 			},
+			yaxis: {
+				min: 0,
+			},
 			HtmlText: false,
 			preventDefault : false,
 			title: 'Messwerte',
