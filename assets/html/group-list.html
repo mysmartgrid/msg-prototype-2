@@ -1,0 +1,94 @@
+<div>
+<h1>Your groups</h1>
+<div class="alert alert-danger" ng-show="error">Error: %%error%%</div>
+<div class="alert alert-success" ng-show="message">%%message%%</div>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th></th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr ng-repeat-start="(name, group) in groups">
+            <td>%%name%%</td>
+            <td>
+                <a class="btn btn-warning btn-sm">
+            		<span class="glyphicon glyphicon-log-out" />
+            	</a>
+            </td>
+            <td>
+                <a class="btn btn-danger btn-sm" ng-show="group.members[user]">
+                    <span class="glyphicon glyphicon-remove" />
+                </a>
+            </td>
+        </tr>
+        <tr ng-repeat-end="">
+            <td colspan="3" style="padding-left: 5%">
+                <h3>Members</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Groupadmin</th>
+                            <th></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr ng-repeat="(username, isAdmin) in group.members">
+                            <td>%% username %%</td>
+                            <td>
+                                <span class="glyphicon glyphicon-unchecked" ng-hide="isAdmin"/>
+                                <span class="glyphicon glyphicon-check" ng-show="isAdmin"/>
+                            </td>
+                            <td>
+                                <a class="btn btn-primary btn-sm" ng-show="group.members[user]">
+                                    <span class="glyphicon glyphicon-unchecked" ng-show="isAdmin"/>
+                                    <span class="glyphicon glyphicon-check" ng-hide="isAdmin"/>
+                                </a>
+                            </td>
+                            <td>
+                                <a class="btn btn-danger btn-sm" ng-show="group.members[user]">
+                                    <span class="glyphicon glyphicon-log-out" />
+                                </a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Sensors</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Device</th>
+                            <th>Sensor</th>
+                            <th>Owner</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr ng-repeat="sensor in group.sensors">
+                            <td>%% sensor.deviceName %%</td>
+                            <td>%% sensor.sensorName %%</td>
+                            <td>%% sensor.owner %%</td>
+                            <td>
+                                <a class="btn btn-danger btn-sm"
+                                    ng-show="group.members[user] || sensor.owner == user"
+                                    ng-click="removeSensor(name, sensor.deviceId, sensor.sensorId)">
+                                    <span class="glyphicon glyphicon-remove" />
+                                </a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <a class="btn btn-primary btn-sm" ng-click="addSensorToGroup(name)">
+                    <span class="glyphicon glyphicon-plus"/>
+                    Add Sensor
+                </a>
+            </td>
+        </tr>
+    </tbody>
+</table>
+</div>

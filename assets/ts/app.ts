@@ -8,7 +8,7 @@ import DateTimePickerFactory from './directives/ui-elements/datetimepicker';
 import SensorGraphFactory from './directives/sensorgraph';
 
 import DeviceListFactory from './directives/devicelist';
-import {DeviceAddControllerFactory} from './controllers/deviceeditors';
+import GroupListFactory from './directives/grouplist';
 
 
 angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
@@ -24,6 +24,7 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
 .directive("dateTimePicker", DateTimePickerFactory())
 .directive("sensorGraph", SensorGraphFactory())
 .directive("deviceList", DeviceListFactory())
+.directive("groupList", GroupListFactory())
 .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal",
 	(wsclient, wsurl, $http, $timeout : ng.ITimeoutService, $uibModal) => {
 		wsclient.connect(wsurl);

@@ -1,4 +1,8 @@
-import {DeviceAddControllerFactory, DeviceProps, SensorProps, DeviceEditorControllerFactory, SensorEditorControllerFactory} from '../controllers/deviceeditors';
+import {DeviceAddControllerFactory,
+        DeviceProps,
+        SensorProps,
+        DeviceEditorControllerFactory,
+        SensorEditorControllerFactory} from '../controllers/deviceeditors';
 
 
 interface Device extends DeviceProps {
@@ -11,6 +15,11 @@ interface Sensor extends SensorProps{
     sensId : string;
 }
 
+// TODO: Move to own file
+export interface DeviceList {
+    [deviceID : string] : Device;
+}
+
 interface DeviceListScope extends ng.IScope {
     showSpinner : boolean;
     encodeURIComponent : (uriComponent : string) => string;
@@ -21,7 +30,7 @@ interface DeviceListScope extends ng.IScope {
     errorLoadingSettings : string;
     errorSavingSensor : string;
 
-    devices : {[deviceID : string] : Device};
+    devices : DeviceList;
 
     editDevice : (deviceID : string) => void;
     remove : (deviceID : string) => void;

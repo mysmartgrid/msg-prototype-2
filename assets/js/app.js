@@ -8,6 +8,7 @@ var timerangespinner_1 = require('./directives/ui-elements/timerangespinner');
 var datetimepicker_1 = require('./directives/ui-elements/datetimepicker');
 var sensorgraph_1 = require('./directives/sensorgraph');
 var devicelist_1 = require('./directives/devicelist');
+var grouplist_1 = require('./directives/grouplist');
 angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
     .config(["$interpolateProvider", function ($interpolateProvider) {
         $interpolateProvider.startSymbol("%%");
@@ -21,6 +22,7 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
     .directive("dateTimePicker", datetimepicker_1.default())
     .directive("sensorGraph", sensorgraph_1.default())
     .directive("deviceList", devicelist_1.default())
+    .directive("groupList", grouplist_1.default())
     .controller("GraphPage", ["WSUserClient", "wsurl", "$http", "$timeout", "$uibModal",
     function (wsclient, wsurl, $http, $timeout, $uibModal) {
         wsclient.connect(wsurl);
@@ -51,7 +53,74 @@ angular.module("msgp", ['ui.bootstrap', 'treasure-overlay-spinner'])
     }]);
 console.log('MSGP loaded');
 
-},{"./directives/devicelist":3,"./directives/sensorgraph":4,"./directives/ui-elements/datetimepicker":5,"./directives/ui-elements/numberspinner":6,"./directives/ui-elements/timerangespinner":7,"./lib/msg2socket":10,"./lib/servertime":12,"./lib/updatedispatcher":13}],2:[function(require,module,exports){
+},{"./directives/devicelist":4,"./directives/grouplist":5,"./directives/sensorgraph":6,"./directives/ui-elements/datetimepicker":7,"./directives/ui-elements/numberspinner":8,"./directives/ui-elements/timerangespinner":9,"./lib/msg2socket":12,"./lib/servertime":14,"./lib/updatedispatcher":15}],2:[function(require,module,exports){
+"use strict";
+function deviceListUrl() {
+    return '/api/user/v1/devices';
+}
+function addSensorToGroupUrl(group) {
+    return '/api/user/v1/group/' + group + '/sensor/add';
+}
+var AddSensorToGroupController = (function () {
+    function AddSensorToGroupController($scope, $uibModalInstance, $http, _group) {
+        var _this = this;
+        this.$scope = $scope;
+        this.$uibModalInstance = $uibModalInstance;
+        this.$http = $http;
+        this._group = _group;
+        this._loadDevices();
+        $scope.group = _group;
+        $scope.ok = function () { return _this._addSensor(); };
+        $scope.cancel = function () { return _this._close(); };
+    }
+    AddSensorToGroupController.prototype._loadDevices = function () {
+        var _this = this;
+        this.$scope.showSpinner = true;
+        this.$http.get(deviceListUrl())
+            .success(function (data, status, headers, config) {
+            _this.$scope.showSpinner = false;
+            _this.$scope.errorAddingSensor = null;
+            _this.$scope.devices = data;
+        })
+            .error(function (data, status, headers, config) {
+            _this.$scope.showSpinner = false;
+            if (data !== null) {
+                _this.$scope.errorAddingSensor = data;
+            }
+            else {
+                _this.$scope.errorAddingSensor = "Ooops something went terribly wrong.";
+            }
+        });
+    };
+    AddSensorToGroupController.prototype._addSensor = function () {
+        var _this = this;
+        this.$http.post(addSensorToGroupUrl(this._group), {
+            deviceId: this.$scope.deviceId,
+            sensorId: this.$scope.sensorId
+        })
+            .success(function (data, status, headers, config) {
+            _this.$scope.errorAddingSensor = null;
+            _this.$uibModalInstance.close();
+        })
+            .error(function (data, status, headers, config) {
+            if (data !== null) {
+                _this.$scope.errorAddingSensor = data;
+            }
+            else {
+                _this.$scope.errorAddingSensor = "Ooops something went terribly wrong.";
+            }
+        });
+    };
+    AddSensorToGroupController.prototype._close = function () {
+        this.$uibModalInstance.dismiss('cancel');
+    };
+    return AddSensorToGroupController;
+}());
+exports.AddSensorToGroupController = AddSensorToGroupController;
+exports.AddSensorToGroupFactory = ["$scope", "$uibModalInstance", "$http", "group",
+    function ($scope, $uibModalInstance, $http, group) { return new AddSensorToGroupController($scope, $uibModalInstance, $http, group); }];
+
+},{}],3:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -179,7 +248,7 @@ exports.DeviceAddControllerFactory = ["$scope", "$uibModalInstance", "$http",
         return new DeviceAddController($scope, $uibModalInstance, $http);
     }];
 
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 "use strict";
 var deviceeditors_1 = require('../controllers/deviceeditors');
 function deviceRemoveUrl(deviceID) {
@@ -278,7 +347,105 @@ function DeviceListFactory() {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = DeviceListFactory;
 
-},{"../controllers/deviceeditors":2}],4:[function(require,module,exports){
+},{"../controllers/deviceeditors":3}],5:[function(require,module,exports){
+"use strict";
+var addsensortogroup_1 = require('../controllers/addsensortogroup');
+function getGroupsUrl() {
+    return '/api/user/v1/groups';
+}
+function addGroupSensorUrl(groupName) {
+    return '/api/user/v1/group/' + encodeURIComponent(groupName) + '/sensor/add';
+}
+function removeSensorfromGroupUrl(groupName, deviceId, sensorId) {
+    return '/api/user/v1/group/' + encodeURIComponent(groupName) + '/sensor/' + encodeURIComponent(deviceId) + '/' + encodeURIComponent(sensorId);
+}
+var GroupListController = (function () {
+    function GroupListController($scope, $timeout, $http, $uibModal) {
+        var _this = this;
+        this.$scope = $scope;
+        this.$timeout = $timeout;
+        this.$http = $http;
+        this.$uibModal = $uibModal;
+        $scope.message = null;
+        $scope.error = null;
+        this._updateData();
+        $scope.addSensorToGroup = function (group) {
+            var modalInstance = $uibModal.open({
+                controller: addsensortogroup_1.AddSensorToGroupFactory,
+                resolve: {
+                    group: function () { return group; },
+                },
+                size: "lg",
+                templateUrl: "/html/add-sensor-to-group-dialog.html",
+            });
+            modalInstance.result.then(function () {
+                _this._updateData();
+            });
+        };
+        $scope.removeSensor = function (group, deviceId, sensorId) {
+            _this.$http.delete(removeSensorfromGroupUrl(group, deviceId, sensorId))
+                .success(function (data, status, headers, config) {
+                _this._showMessage("Successfully removed sensor.");
+                _this._updateData();
+            })
+                .error(function (data, status, headers, config) {
+                if (data !== null) {
+                    _this.$scope.error = data;
+                }
+                else {
+                    _this.$scope.error = "Ooops something went terribly wrong.";
+                }
+            });
+        };
+    }
+    GroupListController.prototype._showMessage = function (message) {
+        var _this = this;
+        this.$scope.message = message;
+        if (this._timeout !== undefined) {
+            this.$timeout.cancel(this._timeout);
+        }
+        this._timeout = this.$timeout(function () {
+            _this.$scope.message = null;
+            _this._timeout = undefined;
+        }, 2000);
+    };
+    GroupListController.prototype._updateData = function () {
+        var _this = this;
+        this.$http.get(getGroupsUrl()).success(function (data, status, headers, config) {
+            _this.$scope.user = data.user;
+            _this.$scope.groups = data.groups;
+        }).error(function (data, status, headers, config) {
+            if (data !== null) {
+                _this.$scope.error = data;
+            }
+            else {
+                _this.$scope.error = "Ooops something went terribly wrong.";
+            }
+        });
+    };
+    return GroupListController;
+}());
+var GroupListDirective = (function () {
+    function GroupListDirective() {
+        this.require = "groupList";
+        this.restrict = "E";
+        this.templateUrl = "/html/group-list.html";
+        this.scope = {};
+        this.controller = ['$scope', '$timeout', '$http', '$uibModal', GroupListController];
+        this.link = function ($scope, element, attrs, deviceList) {
+            deviceList.element = element;
+            console.log("link");
+        };
+    }
+    return GroupListDirective;
+}());
+function GroupListFactory() {
+    return function () { return new GroupListDirective(); };
+}
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = GroupListFactory;
+
+},{"../controllers/addsensortogroup":2}],6:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -436,7 +603,8 @@ var SensorGraphController = (function (_super) {
                 minorTickFreq: 1
             },
             yaxis: {
-                min: 0,
+                min: this._store.getMin(),
+                max: this._store.getMax(),
             },
             HtmlText: false,
             preventDefault: false,
@@ -491,7 +659,7 @@ function SensorGraphFactory() {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = SensorGraphFactory;
 
-},{"../lib/common":9,"../lib/sensorvaluestore":11,"../lib/utils":14,"./widget":8}],5:[function(require,module,exports){
+},{"../lib/common":11,"../lib/sensorvaluestore":13,"../lib/utils":16,"./widget":10}],7:[function(require,module,exports){
 "use strict";
 var DateTimePickerController = (function () {
     function DateTimePickerController($scope) {
@@ -568,7 +736,7 @@ var DateTimePickerDirective = (function () {
     return DateTimePickerDirective;
 }());
 
-},{}],6:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 "use strict";
 var NumberSpinnerController = (function () {
     function NumberSpinnerController($scope) {
@@ -656,7 +824,7 @@ var NumberSpinnerDirective = (function () {
     return NumberSpinnerDirective;
 }());
 
-},{}],7:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 "use strict";
 var TimeUnits = ["years", "days", "hours", "minutes"];
 var UnitsToMillisecs = {
@@ -772,7 +940,7 @@ var TimeRangeSpinnerDirective = (function () {
     return TimeRangeSpinnerDirective;
 }());
 
-},{}],8:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 "use strict";
 var Utils = require('../lib/utils');
 var common_1 = require('../lib/common');
@@ -843,7 +1011,7 @@ var WidgetSettingsController = (function () {
 }());
 exports.WidgetSettingsController = WidgetSettingsController;
 
-},{"../lib/common":9,"../lib/utils":14}],9:[function(require,module,exports){
+},{"../lib/common":11,"../lib/utils":16}],11:[function(require,module,exports){
 "use strict";
 ;
 ;
@@ -878,7 +1046,7 @@ function sensorEqual(a, b) {
 }
 exports.sensorEqual = sensorEqual;
 
-},{}],10:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 "use strict";
 var ApiVersion = "v5.user.msg";
 var Socket = (function () {
@@ -1037,7 +1205,7 @@ exports.Msg2SocketFactory = ["$rootScope", function ($rootScope) {
         return new Socket($rootScope);
     }];
 
-},{}],11:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 "use strict";
 var Utils = require('./utils');
 var ColorScheme = ['#00A8F0', '#C0D800', '#CB4B4B', '#4DA74D', '#9440ED'];
@@ -1050,6 +1218,8 @@ var SensorValueStore = (function () {
         this._start = 5 * 60 * 1000;
         this._end = 0;
         this._slidingWindow = true;
+        this._min = 0;
+        this._max = 0;
         this._colorIndex = 0;
     }
     ;
@@ -1079,16 +1249,31 @@ var SensorValueStore = (function () {
     SensorValueStore.prototype.setTimeout = function (timeout) {
         this._timeout = timeout;
     };
+    SensorValueStore.prototype.getMin = function () {
+        return this._min;
+    };
+    SensorValueStore.prototype.getMax = function () {
+        return this._max;
+    };
     SensorValueStore.prototype.clampData = function () {
+        var _this = this;
         var oldest = this._start;
         var newest = this._end;
         if (this._slidingWindow) {
             oldest = this._now() - this._start;
             newest = this._now() - this._end;
         }
+        this._min = 0;
+        this._max = 0;
         this._series.forEach(function (series) {
             series.data = series.data.filter(function (point) {
                 return point[0] >= oldest && point[0] <= newest;
+            });
+            series.data.forEach(function (point) {
+                if (point[1] !== null) {
+                    _this._min = Math.min(_this._min, point[1]);
+                    _this._max = Math.max(_this._max, point[1]);
+                }
             });
             if (series.data.length > 0) {
                 if (series.data[0][1] === null) {
@@ -1147,6 +1332,8 @@ var SensorValueStore = (function () {
         if (seriesIndex === -1) {
             throw new Error("No such sensor");
         }
+        this._min = Math.min(this._min, value, 0);
+        this._max = Math.max(this._max, value, 0);
         var data = this._series[seriesIndex].data;
         var pos = this._findInsertionPos(data, timestamp);
         if (data.length > 0 && pos === 0 && data[0][0] === timestamp) {
@@ -1190,7 +1377,7 @@ var SensorValueStore = (function () {
 }());
 exports.SensorValueStore = SensorValueStore;
 
-},{"./utils":14}],12:[function(require,module,exports){
+},{"./utils":16}],14:[function(require,module,exports){
 "use strict";
 var utils_1 = require('./utils');
 var OffsetCount = 10;
@@ -1224,7 +1411,7 @@ var ServerTime = (function () {
 exports.ServerTime = ServerTime;
 exports.ServerTimeFactory = ["WSUserClient", function (socket) { return new ServerTime(socket); }];
 
-},{"./utils":14}],13:[function(require,module,exports){
+},{"./utils":16}],15:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -1642,7 +1829,7 @@ var DummySubscriber = (function () {
 }());
 exports.DummySubscriber = DummySubscriber;
 
-},{"./common":9,"./utils":14}],14:[function(require,module,exports){
+},{"./common":11,"./utils":16}],16:[function(require,module,exports){
 "use strict";
 function contains(haystack, needle) {
     var i = haystack.indexOf(needle);

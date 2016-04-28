@@ -800,7 +800,12 @@ func apiUserGroupsGet(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		data, err := json.Marshal(groups)
+		response := map[string]interface{}{
+			"user":   user.ID(),
+			"groups": groups,
+		}
+
+		data, err := json.Marshal(response)
 		apiAbortIf(500, err)
 		w.Write(data)
 		return nil

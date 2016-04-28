@@ -14,6 +14,7 @@
     },
     "files": [
         "app.ts",
+        "controllers/addsensortogroup.ts",
         "controllers/deviceeditors.ts",
         "definitions/angular-ui-bootstrap.d.ts",
         "definitions/angular.d.ts",
@@ -21,6 +22,7 @@
         "definitions/es6-shim.d.ts",
         "definitions/jquery.d.ts",
         "directives/devicelist.ts",
+        "directives/grouplist.ts",
         "directives/sensorgraph.ts",
         "directives/ui-elements/datetimepicker.ts",
         "directives/ui-elements/numberspinner.ts",
