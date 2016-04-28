@@ -353,11 +353,17 @@ var addsensortogroup_1 = require('../controllers/addsensortogroup');
 function getGroupsUrl() {
     return '/api/user/v1/groups';
 }
-function addGroupSensorUrl(groupName) {
-    return '/api/user/v1/group/' + encodeURIComponent(groupName) + '/sensor/add';
+function removeSensorfromGroupUrl(group, deviceId, sensorId) {
+    return '/api/user/v1/group/' + encodeURIComponent(group) + '/sensor/' + encodeURIComponent(deviceId) + '/' + encodeURIComponent(sensorId);
 }
-function removeSensorfromGroupUrl(groupName, deviceId, sensorId) {
-    return '/api/user/v1/group/' + encodeURIComponent(groupName) + '/sensor/' + encodeURIComponent(deviceId) + '/' + encodeURIComponent(sensorId);
+function removeUserFromGroupUrl(group, user) {
+    return '/api/user/v1/group/' + encodeURIComponent(group) + '/user/' + encodeURIComponent(user);
+}
+function addAdminToGroupUrl(group) {
+    return '/api/user/v1/group/' + encodeURIComponent(group) + '/admin/add';
+}
+function removeAdminFromGroupUrl(group, user) {
+    return '/api/user/v1/group/' + encodeURIComponent(group) + '/admin/' + encodeURIComponent(user);
 }
 var GroupListController = (function () {
     function GroupListController($scope, $timeout, $http, $uibModal) {
@@ -383,21 +389,35 @@ var GroupListController = (function () {
             });
         };
         $scope.removeSensor = function (group, deviceId, sensorId) {
-            _this.$http.delete(removeSensorfromGroupUrl(group, deviceId, sensorId))
-                .success(function (data, status, headers, config) {
-                _this._showMessage("Successfully removed sensor.");
-                _this._updateData();
-            })
-                .error(function (data, status, headers, config) {
-                if (data !== null) {
-                    _this.$scope.error = data;
-                }
-                else {
-                    _this.$scope.error = "Ooops something went terribly wrong.";
-                }
-            });
+            _this._updateOrError(_this.$http.delete(removeSensorfromGroupUrl(group, deviceId, sensorId)), "Successfuly removed sensor.");
+        };
+        $scope.removeUser = function (group, user) {
+            _this._updateOrError(_this.$http.delete(removeUserFromGroupUrl(group, user)), "Successfuly removed sensor.");
+        };
+        $scope.toggleAdmin = function (group, user) {
+            if (_this.$scope.groups[group].members[user]) {
+                _this._updateOrError(_this.$http.delete(removeAdminFromGroupUrl(group, user)), "Successfuly removed admin status.");
+            }
+            else {
+                _this._updateOrError(_this.$http.post(addAdminToGroupUrl(group), { userId: user }), "Successfuly granted admin status.");
+            }
         };
     }
+    GroupListController.prototype._updateOrError = function (promise, successMessage) {
+        var _this = this;
+        promise.success(function (data, status, headers, config) {
+            _this._showMessage(successMessage);
+            _this._updateData();
+        })
+            .error(function (data, status, headers, config) {
+            if (data !== null) {
+                _this.$scope.error = data;
+            }
+            else {
+                _this.$scope.error = "Ooops something went terribly wrong.";
+            }
+        });
+    };
     GroupListController.prototype._showMessage = function (message) {
         var _this = this;
         this.$scope.message = message;

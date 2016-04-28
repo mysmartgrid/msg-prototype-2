@@ -12,9 +12,9 @@
     </thead>
     <tbody>
         <tr ng-repeat-start="(name, group) in groups">
-            <td>%%name%%</td>
+            <td><h2>%%name%%<h2></td>
             <td>
-                <a class="btn btn-warning btn-sm">
+                <a class="btn btn-warning btn-sm" ng-click="removeUser(name, user)">
             		<span class="glyphicon glyphicon-log-out" />
             	</a>
             </td>
@@ -44,13 +44,13 @@
                                 <span class="glyphicon glyphicon-check" ng-show="isAdmin"/>
                             </td>
                             <td>
-                                <a class="btn btn-primary btn-sm" ng-show="group.members[user]">
+                                <a class="btn btn-primary btn-sm" ng-show="group.members[user]" ng-click="toggleAdmin(name, username)">
                                     <span class="glyphicon glyphicon-unchecked" ng-show="isAdmin"/>
                                     <span class="glyphicon glyphicon-check" ng-hide="isAdmin"/>
                                 </a>
                             </td>
                             <td>
-                                <a class="btn btn-danger btn-sm" ng-show="group.members[user]">
+                                <a class="btn btn-danger btn-sm" ng-show="group.members[user]" ng-click="removeUser(name, username)">
                                     <span class="glyphicon glyphicon-log-out" />
                                 </a>
                             </td>
@@ -87,6 +87,8 @@
                     <span class="glyphicon glyphicon-plus"/>
                     Add Sensor
                 </a>
+                <br/>
+                <br/>
             </td>
         </tr>
     </tbody>

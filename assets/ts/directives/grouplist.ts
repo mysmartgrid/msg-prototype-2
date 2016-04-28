@@ -26,6 +26,8 @@ interface GroupListScope extends ng.IScope {
     addSensorToGroup : (group : string) => void;
 
     removeSensor : (group : string, deviceId : string, sensorId : string) => void;
+    removeUser : (group : string, user : string) => void;
+    toggleAdmin : (group : string, user : string) => void;
 
     message : string;
     error : string;
@@ -36,14 +38,21 @@ function getGroupsUrl() : string {
     return '/api/user/v1/groups'
 }
 
-function addGroupSensorUrl(groupName : string) : string {
-    return '/api/user/v1/group/' + encodeURIComponent(groupName) + '/sensor/add';
+function removeSensorfromGroupUrl(group : string, deviceId : string, sensorId : string) : string {
+    return '/api/user/v1/group/' + encodeURIComponent(group) + '/sensor/' + encodeURIComponent(deviceId) + '/' + encodeURIComponent(sensorId);
 }
 
-function removeSensorfromGroupUrl(groupName : string, deviceId : string, sensorId : string) : string {
-    return '/api/user/v1/group/' + encodeURIComponent(groupName) + '/sensor/' + encodeURIComponent(deviceId) + '/' + encodeURIComponent(sensorId);
+function removeUserFromGroupUrl(group : string, user : string) {
+    return '/api/user/v1/group/' + encodeURIComponent(group) + '/user/' + encodeURIComponent(user);
 }
 
+function addAdminToGroupUrl(group : string) {
+    return '/api/user/v1/group/' + encodeURIComponent(group) + '/admin/add';
+}
+
+function removeAdminFromGroupUrl(group : string, user : string) {
+    return '/api/user/v1/group/' + encodeURIComponent(group) + '/admin/' + encodeURIComponent(user);
+}
 
 class GroupListController {
     public element : ng.IAugmentedJQuery;
@@ -79,20 +88,44 @@ class GroupListController {
         }
 
         $scope.removeSensor = (group, deviceId, sensorId) => {
-            this.$http.delete(removeSensorfromGroupUrl(group, deviceId, sensorId))
-            .success((data, status, headers, config) => {
-                this._showMessage("Successfully removed sensor.");
-                this._updateData();
-            })
-            .error((data, status, headers, config) => {
-                if(data !== null) {
-                    this.$scope.error = data;
-                }
-                else {
-                    this.$scope.error = "Ooops something went terribly wrong.";
-                }
-            });
+            this._updateOrError(this.$http.delete(removeSensorfromGroupUrl(group, deviceId, sensorId)),
+                                "Successfuly removed sensor.");
         }
+
+        $scope.removeUser = (group, user) => {
+            this._updateOrError(this.$http.delete(removeUserFromGroupUrl(group, user)),
+                                "Successfuly removed sensor.");
+
+        }
+
+        $scope.toggleAdmin = (group, user) => {
+            if(this.$scope.groups[group].members[user]) {
+                this._updateOrError(this.$http.delete(removeAdminFromGroupUrl(group, user)),
+                                    "Successfuly removed admin status.");
+            }
+            else {
+                this._updateOrError(this.$http.post(addAdminToGroupUrl(group), {userId : user}),
+                                    "Successfuly granted admin status.");
+            }
+
+        }
+
+    }
+
+
+    private _updateOrError(promise : ng.IHttpPromise<any>, successMessage : string) {
+        promise.success((data, status, headers, config) => {
+            this._showMessage(successMessage);
+            this._updateData();
+        })
+        .error((data, status, headers, config) => {
+            if(data !== null) {
+                this.$scope.error = data;
+            }
+            else {
+                this.$scope.error = "Ooops something went terribly wrong.";
+            }
+        });
     }
 
     private _showMessage(message : string) {

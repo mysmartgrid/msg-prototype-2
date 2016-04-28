@@ -884,6 +884,92 @@ func apiUserGroupSensorRemove(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+/*
+	Removes a given User from the group iff.
+		- the request is issued by the user himself
+		- the request is issued by a group admin
+*/
+func apiUserGroupUserRemove(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+
+	groupID := mux.Vars(r)["group"]
+	userID := mux.Vars(r)["user"]
+
+	db.Update(func(tx msgpdb.Tx) error {
+		user := apiSessionUser(tx, session)
+
+		group := user.Group(groupID)
+		if group == nil {
+			apiAbort(403, "User is not a member of the group")
+		}
+
+		if userID != user.ID() && group.IsAdmin(user.ID()) {
+			apiAbort(403, "Insufficent permissions")
+		}
+
+		apiAbortIf(500, group.RemoveUser(userID))
+
+		return nil
+	})
+}
+
+// Adds a user as group admin if the requesting user is a group admin
+func apiUserGroupAdminAdd(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+
+	groupID := mux.Vars(r)["group"]
+
+	db.Update(func(tx msgpdb.Tx) error {
+		user := apiSessionUser(tx, session)
+
+		group := user.Group(groupID)
+		if group == nil {
+			apiAbort(403, "User is not a member of the group")
+		}
+
+		if group.IsAdmin(user.ID()) {
+			apiAbort(403, "Insufficent permissions")
+		}
+
+		var addRequest struct {
+			UserID string `json:"userId"`
+		}
+
+		data, err := ioutil.ReadAll(r.Body)
+		apiAbortIf(500, err)
+		apiAbortIf(400, json.Unmarshal(data, &addRequest))
+
+		apiAbortIf(500, group.SetAdmin(addRequest.UserID))
+
+		return nil
+	})
+}
+
+// Adds a user as group admin if the requesting user is a group admin
+func apiUserGroupAdminRemove(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+
+	groupID := mux.Vars(r)["group"]
+	userID := mux.Vars(r)["user"]
+
+	db.Update(func(tx msgpdb.Tx) error {
+		user := apiSessionUser(tx, session)
+
+		group := user.Group(groupID)
+		if group == nil {
+			apiAbort(403, "User is not a member of the group")
+		}
+
+		if group.IsAdmin(user.ID()) {
+			apiAbort(403, "Insufficent permissions")
+		}
+
+		apiAbortIf(500, group.UnsetAdmin(userID))
+
+		return nil
+	})
+}
+
 func main() {
 	if config.Benchmark.DoBenchmark {
 		db.RunBenchmark(config.Benchmark.UserCount, config.Benchmark.DeviceCount, config.Benchmark.SensorCount, config.Benchmark.Duration*time.Minute)
@@ -909,6 +995,9 @@ func main() {
 		router.HandleFunc("/api/user/v1/groups", apiBlock(apiUserGroupsGet)).Methods("GET")
 		router.HandleFunc("/api/user/v1/group/{group}/sensor/add", apiBlock(apiUserGroupSensorAdd)).Methods("POST")
 		router.HandleFunc("/api/user/v1/group/{group}/sensor/{device}/{sensor}", apiBlock(apiUserGroupSensorRemove)).Methods("DELETE")
+		router.HandleFunc("/api/user/v1/group/{group}/user/{user}", apiBlock(apiUserGroupUserRemove)).Methods("DELETE")
+		router.HandleFunc("/api/user/v1/group/{group}/admin/add", apiBlock(apiUserGroupAdminAdd)).Methods("POST")
+		router.HandleFunc("/api/user/v1/group/{group}/admin/{user}", apiBlock(apiUserGroupAdminRemove)).Methods("DELETE")
 
 		router.HandleFunc("/admin", defaultHeaders(adminHandler))
 
