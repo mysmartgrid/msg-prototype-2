@@ -812,6 +812,45 @@ func apiUserGroupsGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func apiUserGroupAdd(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+	db.Update(func(tx msgpdb.Tx) error {
+		user := apiSessionUser(tx, session)
+
+		var addRequest struct {
+			GroupID string `json:"groupId"`
+		}
+
+		data, err := ioutil.ReadAll(r.Body)
+		apiAbortIf(500, err)
+		apiAbortIf(400, json.Unmarshal(data, &addRequest))
+
+		group, err := tx.AddGroup(addRequest.GroupID)
+		apiAbortIf(500, err)
+
+		apiAbortIf(500, group.AddUser(user.ID()))
+		apiAbortIf(500, group.SetAdmin(user.ID()))
+
+		return nil
+	})
+}
+
+func apiUserGroupRemove(w http.ResponseWriter, r *http.Request) {
+	session := getSession(w, r)
+	groupID := mux.Vars(r)["group"]
+	db.Update(func(tx msgpdb.Tx) error {
+		user := apiSessionUser(tx, session)
+
+		if !user.IsGroupAdmin(groupID) {
+			apiAbort(403, "Insufficent permissions")
+		}
+
+		apiAbortIf(500, tx.RemoveGroup(groupID))
+
+		return nil
+	})
+}
+
 /*
 	Adds sensor to the group iff.
 		- the user is a member of the group
@@ -903,7 +942,7 @@ func apiUserGroupUserRemove(w http.ResponseWriter, r *http.Request) {
 			apiAbort(403, "User is not a member of the group")
 		}
 
-		if userID != user.ID() && group.IsAdmin(user.ID()) {
+		if userID != user.ID() && !user.IsGroupAdmin(groupID) {
 			apiAbort(403, "Insufficent permissions")
 		}
 
@@ -927,7 +966,7 @@ func apiUserGroupAdminAdd(w http.ResponseWriter, r *http.Request) {
 			apiAbort(403, "User is not a member of the group")
 		}
 
-		if group.IsAdmin(user.ID()) {
+		if !user.IsGroupAdmin(groupID) {
 			apiAbort(403, "Insufficent permissions")
 		}
 
@@ -960,7 +999,7 @@ func apiUserGroupAdminRemove(w http.ResponseWriter, r *http.Request) {
 			apiAbort(403, "User is not a member of the group")
 		}
 
-		if group.IsAdmin(user.ID()) {
+		if user.IsGroupAdmin(groupID) {
 			apiAbort(403, "Insufficent permissions")
 		}
 

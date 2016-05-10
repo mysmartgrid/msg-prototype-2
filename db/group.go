@@ -50,17 +50,6 @@ func (g *group) UnsetAdmin(id string) error {
 	return err
 }
 
-func (g *group) IsAdmin(id string) bool {
-	var result bool
-	err := g.tx.QueryRow(`SELECT is_admin FROM user_groups WHERE group_id = $1 AND user_id = $2`, g.id, id).Scan(result)
-
-	if err != nil {
-		return false
-	}
-
-	return result
-}
-
 func (g *group) GetAdmins() map[string]User {
 	rows, err := g.tx.Query(`SELECT user_id FROM user_groups WHERE group_id = $1 AND is_admin = true`, g.id)
 	if err != nil {

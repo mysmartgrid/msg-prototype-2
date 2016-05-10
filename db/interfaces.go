@@ -131,9 +131,6 @@ type Group interface {
 	// Returns an error if the id is not in the list.
 	UnsetAdmin(id string) error
 
-	// Checks if the given user id belongs to a group admin
-	IsAdmin(id string) bool
-
 	// GetAdmins returns a map from user ids to User structs, containing all user listed as admins of the current group.
 	GetAdmins() map[string]User
 
