@@ -3,7 +3,9 @@ package oldapidb
 
 import (
 	"errors"
-	"github.com/boltdb/bolt"
+	"time"
+//	"fmt"
+	"log"
 )
 
 var (
@@ -15,47 +17,56 @@ var (
 	dbRegisteredSensors = []byte("registeredSensors")
 )
 
-type db struct {
-	store *bolt.DB
+type dbdata struct {
+	timestamp int64
+	value     int
 }
 
-// Open opens the BoltDB database containing the device database in
-// the file located at path.
-func Open(path string) (Db, error) {
-	store, err := bolt.Open(path, 0600, nil)
-	if err != nil {
-		return nil, err
-	}
+type db struct {
+	values map[string](dbdata)
+}
 
-	store.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists(dbRegisteredSensors)
-		return nil
-	})
 
+func Open() (Db, error) {
+	m := make(map[string](dbdata))
 	result := &db{
-		store: store,
+		values: m,
 	}
 
 	return result, nil
 }
 
-func (d *db) Close() {
-	d.store.Close()
-}
-
 func (d *db) View(fn func(Tx) error) error {
-	return d.store.View(func(btx *bolt.Tx) error {
-		return fn(&tx{d, btx})
-	})
+	log.Printf("    Get db.view():")
+	
+	return fn(&tx{d})
+	//return nil
 }
 
 func (d *db) Update(fn func(Tx) error) error {
-	return d.store.Update(func(btx *bolt.Tx) error {
-		return fn(&tx{d, btx})
-	})
+	log.Printf("    Get db.update():")
+	return fn(&tx{d})
+        return nil
 }
 
-func (db *db) AddLastValue(sensor Sensor, time time.Time, value float64) error {
-	//        db.bufferInput <- bufferValue{sensor.DbID(), msg2api.Measurement{time, value}}
+func (db *db) AddLastValue(sensorId string, time time.Time, value float64) error {
+	//log.Printf("    db.AddLastValue(): %s", sensorId)
+	//fmt.Println("DB add value-pair")
+	data := dbdata{
+		timestamp: time.Unix(),
+		value: int(value)}
+	db.values[sensorId] = data
         return nil
+}
+
+func (db *db) GetLastValue(sensorId string) (int64, int, error) {
+        data, ok := db.values[sensorId]
+        if ok {
+	        return data.timestamp, data.value, nil
+
+        //} else {
+        //        fmt.Println("key not found")
+        }
+	
+        return 0, 0, ErrIDExists
 }

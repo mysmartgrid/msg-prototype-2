@@ -324,25 +324,46 @@ func (s *OldApiServer) Sensor_Post(w http.ResponseWriter, r *http.Request) {
 			sensor := tx.Sensor(sensorId)
 			if sensor != nil {
 				log.Print(" got the sensorreturn...")
-				// get timestamp an value
+				s.Sdb.View(func(txs oldapidb.Tx) error {
+					// get timestamp an value
+					//log.Printf("    Lasttimestamp: %d  Value: %f", ltime.Unix(), lvalue)
+					log.Printf("    Get lasttimestamp:")
 
-				//
-				l := len(sc.Measurements)
-				for i:=1; i<l; i++ {
-					deltaV := sc.Measurements[i].Value - sc.Measurements[i-1].Value
-					deltaT := sc.Measurements[i].Timestamp.Unix() - sc.Measurements[i-1].Timestamp.Unix()
-					value := ( 3600 * deltaV) / (float64)(deltaT)
-					s.Udb.AddReading(sensor, sc.Measurements[i].Timestamp,value)
-					log.Printf("    Timestamp: %d  Value: %f, %f ", sc.Measurements[i].Timestamp.Unix(), sc.Measurements[i].Value, value)
-				}
-				
-				log.Print("  added successfully the readings: ", sensor.Name())
+					if ltime, lvalue, err := txs.GetLastValue(sensorId);  ltime.Unix()>0 {
+						// inser first diff-value
+						deltaV := sc.Measurements[0].Value - lvalue
+						deltaT := sc.Measurements[0].Timestamp.Unix() - ltime.Unix()
+						value := ( 3600 * deltaV) / (float64)(deltaT)
+						s.Udb.AddReading(sensor, sc.Measurements[0].Timestamp, value)
+						log.Printf("    Timestamp0: %d  Value: %f, %f ", sc.Measurements[0].Timestamp.Unix(), sc.Measurements[0].Value, value)
+					} else {
+						log.Printf("GetLastValue had an error: %s", err.Error())
+					}
+					
+					l := len(sc.Measurements)
+					for i:=1; i<l; i++ {
+						deltaV := sc.Measurements[i].Value - sc.Measurements[i-1].Value
+						deltaT := sc.Measurements[i].Timestamp.Unix() - sc.Measurements[i-1].Timestamp.Unix()
+						value := ( 3600 * deltaV) / (float64)(deltaT)
+						s.Udb.AddReading(sensor, sc.Measurements[i].Timestamp,value)
+						log.Printf("    Timestamp: %d  Value: %f, %f ", sc.Measurements[i].Timestamp.Unix(), sc.Measurements[i].Value, value)
+					}
+					log.Print("  added successfully the readings: ", sensor.Name())
+					return nil
+				})
+				s.Sdb.Update(func(txs oldapidb.Tx) error {
+					l := len(sc.Measurements)
+					txs.AddLastValue(sensorId, sc.Measurements[l-1].Timestamp, sc.Measurements[l-1].Value)
+					return nil
+				})
 			} else {
 				log.Print("  sensor was not found...: ", sensorId)
 				http.Error(w, httpErrorNotFound.Error(), httpErrorNotFoundNo)
 			}
+			log.Print("Done1")
 			return nil
 		})
+		log.Print("Done2")
 		return		
 	}
 

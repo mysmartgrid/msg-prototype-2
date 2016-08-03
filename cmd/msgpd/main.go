@@ -208,7 +208,7 @@ func init() {
 		log.Fatal("error opening device db: ", err)
 	}
 
-	oapidb, err = oldapidb.Open(config.DbDir + "/sensors.db")
+	oapidb, err = oldapidb.Open()
 	if err != nil {
 		log.Fatal("error opening sensor db: ", err)
 	}

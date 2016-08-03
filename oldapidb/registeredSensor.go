@@ -2,11 +2,10 @@ package oldapidb
 
 import (
 //	"errors"
-	"github.com/boltdb/bolt"
+//	"time"
 )
 
 type registeredSensor struct {
-	b  *bolt.Bucket
 	id string
 }
 
@@ -15,9 +14,7 @@ var (
 	registeredSensorTimestamp = []byte("lasttimestamp")
 )
 
-func (r* registeredSensor) init(key []byte) {
-	//r.b.Put(registeredSensorKey, key)
-	r.b.CreateBucket(registeredSensorTimestamp)
+func (r* registeredSensor) init(lasttimestamp []byte, lastvalue []byte) {
 }
 
 func (r *registeredSensor) ID() string {
