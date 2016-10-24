@@ -1,0 +1,9 @@
+ToDo
+====
+
+1. Bei Ausfall des Server, kein Reconnect
+
+2. Konfiguration ist Hardkodiert 
+   (sensorid, deviceid, devicekey)
+
+3. server hat sensorID mehrfach, damit klappt die Anzeige nihct immer.

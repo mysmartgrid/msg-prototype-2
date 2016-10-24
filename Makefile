@@ -1,7 +1,7 @@
 GO15VENDOREXPERIMENT=1
 export GO15VENDOREXPERIMENT
 
-build-all: .build/msgpc .build/msgpd .build/msgpdevd .build/msgdbd
+build-all: .build/msgpc .build/msgpd .build/msgpdevd .build/msgdbd 
 
 install-deps:
 	glide install
@@ -37,3 +37,7 @@ golint-all:
 
 .build/msgdbd:
 	go build ./cmd/msgdbd
+
+.build/msgampc:
+	GOARCH=mips32 go build ./cmd/msgampc
+
