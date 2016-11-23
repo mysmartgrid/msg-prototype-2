@@ -5,17 +5,20 @@ import(
 	"bufio"
 	"regexp"
 	"strconv"
+//	"fmt"
 )
 
 var configData map[string]map[string]map[string]string
 var re1 *regexp.Regexp;
 var re2 *regexp.Regexp;
+var re3 *regexp.Regexp;
 
 func init() {
 	configData = make(map[string]map[string]map[string]string)
 	re1 = regexp.MustCompile("^\\s*([\\w-]*)\\s* \\s*(.*)\\s*")
 	re2 = regexp.MustCompile("^\\s*([\\w-]*)\\s* \\s*([\\w-]*)\\s* '\\s*(.*)\\s*'")
-	//re = regexp.MustCompile("^\\s*([\\w-]*)\\s* \\s*([\\w-]*)\\s* \\s*([\\w-]*)\\s* \\s*(.*)\\s*")
+	re3 = regexp.MustCompile("^\\s*([\\w-]*)\\s* \\s*([\\w-]*)\\s* \\s*(.*)\\s*")
+	//re3 = regexp.MustCompile("^\\s*([\\w-]*)\\s* \\s*([\\w-]*)\\s* \\s*([\\w-]*)\\s* \\s*(.*)\\s*")
 }
 
 func Get(namespace string, setting string, option string) string {
@@ -104,7 +107,13 @@ func importSettingsFromFile(namespace string) error {
 	for scanner.Scan() {
 		line := scanner.Text()
 		parsedLine := re2.FindStringSubmatch(line)
+		if(len(parsedLine) == 0) {
+			parsedLine = re3.FindStringSubmatch(line)
+		}
+		//fmt.Printf("Line: %d - '%s'\n", len(parsedLine), line)
 		if(len(parsedLine) == 4) {
+			//fmt.Printf("==>'%s' - '%s' - '%s'\n",
+			//			parsedLine[1], parsedLine[2], parsedLine[3])
 			if(parsedLine[1] == "config") {
 				section = parsedLine[2] + "." + parsedLine[3]
 				configData[namespace][section] = make(map[string]string)
