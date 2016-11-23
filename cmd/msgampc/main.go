@@ -18,6 +18,7 @@ import (
         uci  "github.com/mysmartgrid/msg-prototype-2/uciconf"
         "io/ioutil"
         "log"
+        "log/syslog"
         "net/http"
         "net/url"
         "strconv"
@@ -89,13 +90,13 @@ type avData struct {
 
 func (av *AmperixValue) UnmarshalJSON(raw []byte) error {
      if debug>1 {
-	fmt.Printf("avPair.UnmarshalJSON()..'%s'\n", raw)
+	log.Printf("avPair.UnmarshalJSON()..'%s'\n", raw)
      }
      var d []int
      if err := json.Unmarshal(raw, &d); err != nil {
              return err
      }
-     //fmt.Printf("==%d, %d === \n", d[0], d[1])
+     //log.Printf("==%d, %d === \n", d[0], d[1])
      *av = AmperixValue{
 		Timestamp : d[0],
 		Value     : d[1],
@@ -109,8 +110,8 @@ func (av *AmperixValues) UnmarshalJSON(raw []byte) error {
 //             return err
      }
      if debug>1 {
-	fmt.Printf("AmperixValues.UnmarshalJSON()..\n")
-	fmt.Printf("--Data:'%s', %d", raw, len(data.Measurements))
+	log.Printf("AmperixValues.UnmarshalJSON()..\n")
+	log.Printf("--Data:'%s', %d", raw, len(data.Measurements))
      }
      n := len(data.Measurements)
      var mx = 0
@@ -122,7 +123,7 @@ func (av *AmperixValues) UnmarshalJSON(raw []byte) error {
      }
 
      if debug>1 {
-          fmt.Printf("AmperixValues.UnmarshalJSON() - Done..\n")
+          log.Printf("AmperixValues.UnmarshalJSON() - Done..\n")
      }
      return nil
 }
@@ -148,14 +149,14 @@ func testConvert(raw []byte) {
      var ap AmperixValues
      err := json.Unmarshal(raw, &ap)
      if err != nil {
-	fmt.Printf("%#v%s\n", err, err.Error())
+	log.Printf("%#v%s\n", err, err.Error())
      }
      if debug>0 {
-          fmt.Printf("===> %d ===\n", len(ap.Measurements))
+          log.Printf("===> %d ===\n", len(ap.Measurements))
      }
      n := len(ap.Measurements)
      for i:=0; i<n; i++ {
-	 fmt.Printf("%02d - %d , %d\n", i, ap.Measurements[i].Timestamp,
+	 log.Printf("%02d - %d , %d\n", i, ap.Measurements[i].Timestamp,
 			  ap.Measurements[i].Value)
      }     
 }
@@ -179,13 +180,13 @@ func (dev *device) readConfig() error {
      }
 
      if debug>0 {
-         fmt.Printf("readConfig done\n")
+         log.Printf("readConfig done\n")
      }
      return nil
 }
 
 func (dev *device) Run() {
-    fmt.Printf("Run...\n")
+    log.Printf("Run...\n")
     c := len(dev.Sensors)
 
     dev.mutex = &sync.Mutex{}
@@ -216,9 +217,9 @@ func (dev *device) HandleSensor(sensorId string) error {
 
      //     defer dev.wg.Done()
 
-     fmt.Printf("Sensor: %s\n", sensorId)
+     log.Printf("Sensor: %s\n", sensorId)
      file, err := os.Open(DIR + sensorId)
-     fmt.Printf("Sensor: %s - done\n", sensorId)
+     log.Printf("Sensor: %s - done\n", sensorId)
      if err != nil {
 	return err
      }
@@ -231,7 +232,7 @@ func (dev *device) HandleSensor(sensorId string) error {
 	 data, err := Readln(r)
 	 if err != nil {
 	    if err.Error() != "EOF" {
-	       fmt.Printf("%#v%s\n", err, err.Error())
+	       log.Printf("%#v%s\n", err, err.Error())
 	    }
    	  } else { 
 	      n := len(data)
@@ -240,18 +241,18 @@ func (dev *device) HandleSensor(sensorId string) error {
 		 copy(raw[0:n], data[:])
 		 p := fmt.Sprintf("{ \"m\" : %s }", raw)
 		 if debug>1 {
-		    fmt.Printf("D:%s - '%s'\n", sensorId, p)
+		    log.Printf("D:%s - '%s'\n", sensorId, p)
 		 }
 		 raw  = []byte(p)
 		 var ap AmperixValues
 		 err = json.Unmarshal(raw, &ap)
    	         if err != nil {
-	          fmt.Printf("%#v%s\n", err, err.Error())
+	          log.Printf("%#v%s\n", err, err.Error())
 		 }
 		 values[sensorId] = ap.convValues()
 		 dev.mutex.Lock()
 		 if debug>0 {
-		    fmt.Printf("== %s => %d ===\n", sensorId, len(ap.Measurements))
+		    log.Printf("== %s => %d ===\n", sensorId, len(ap.Measurements))
                  }
 		 if err := dev.getClient().Update(values); err != nil {
 	            log.Println("Sensor err. (%d)", len(values[sensorId]))
@@ -274,8 +275,10 @@ func (dev *device) getClient() *msgp.DeviceClient {
                 }
 
                 client.RequestRealtimeUpdates = func(sensors []string) {
-                        log.Printf("server requested realtime updates for %v", sensors)
-                        for _, sensor := range sensors {
+			//if debug>1 {
+			log.Printf("server requested realtime updates for %v", sensors)
+                        //}
+			for _, sensor := range sensors {
                                 if s, ok := dev.Sensors[sensor]; ok {
                                         s.LastRealtimeRequest = time.Now()
                                 }
@@ -384,7 +387,7 @@ func (dev *device) heartbeat() (map[string]interface{}, error) {
         }
         defer resp.Body.Close()
 
-	fmt.Println(">>> Heartbeat: %d", resp.StatusCode)
+	log.Println(">>> Heartbeat: %d", resp.StatusCode)
         switch resp.StatusCode {
         case 200:
                 var err error
@@ -430,7 +433,7 @@ func (dev *device) heartbeat() (map[string]interface{}, error) {
                 transform := cipher.NewCFBDecrypter(cinst, iv[:])
                 transform.XORKeyStream(body, body)
 
-		fmt.Printf("Body: %s\n", body)
+		log.Printf("Body: %s\n", body)
                 var content map[string]interface{}
                 if err := json.Unmarshal(body, &content); err != nil {
                         log.Panic(err)
@@ -490,15 +493,20 @@ func hex2bytes(hex string) string {
 }
 
 func initAmperixDevice() *device {
-     devKey := uci.Get("system", "system", "key")
-     devID  := uci.Get("system", "system", "device")
-     log.Printf("ID : '%s'\n", devID);
-     log.Printf("Key: '%s'\n", devKey);
+     devKey    := uci.Get("system", "system", "key")
+     devID     := uci.Get("system", "system", "device")
+     msgAPI    := uci.Get("msgampc", "settings.main", "api")
+     msgRegAPI := uci.Get("msgampc", "settings.main", "regdevapi")
+
+     log.Printf("ID    : '%s'\n", devID);
+     log.Printf("Key   : '%s'\n", devKey);
+     log.Printf("API   : '%s'\n", msgAPI);
+     log.Printf("RegAPI: '%s'\n", msgRegAPI);
         return &device{
                 ID:  devID,
                 Key: []byte(devKey),
-                api: "ws://192.168.9.85:8080/ws/device",
-                regdevAPI: "http://192.168.9.85:8080/api/regdev/v1",
+                api: msgAPI,
+                regdevAPI: msgRegAPI,
         }
 }
 
@@ -508,21 +516,6 @@ func main() {
      
      for i := 1; i < len(os.Args); i++ {
 	cmdName := os.Args[i]
-//	bailIf := func(err error) {
-//		if err != nil {
-//			log.Fatalf("%v: %v", cmdName, err.Error())
-//		}
-//	}
-//	next := func(name ...string) {
-//		i++
-//		if i >= len(os.Args) {
-//			if len(name) > 0 {
-//				log.Fatalf("argument %v to %v missing", name[0], cmdName)
-//			} else {
-//				log.Fatalf("argument to %v missing", cmdName)
-//			}
-//		}
-//	}
 
 	switch os.Args[i] {
 	case "-d":
@@ -536,22 +529,30 @@ func main() {
 	     log.Fatalf("bad command %v", cmdName)
 	}
      }     
+     if debug == 0 {
+	logger, err := syslog.New(syslog.LOG_INFO, "msgampc")
+	defer logger.Close()
+	if err != nil {
+		log.Fatal("error")
+	}
+        log.SetOutput(logger)
+     }
 
-     fmt.Printf("Debug set to: %d\n", debug)
+     log.Printf("Debug set to: %d\n", debug)
      dev = initAmperixDevice()
      dev.readConfig()
      info, err := dev.heartbeat()
      if err := dev.registerSensors(); err != nil {
           log.Println("registerSensors err.")
-          fmt.Printf("%#v%s\n", err, err.Error())
+          log.Printf("%#v%s\n", err, err.Error())
      }
      if err != nil {
 	          log.Println("Heartbeat err.")
-	          fmt.Printf("%#v%s\n", err, err.Error())
+	          log.Printf("%#v%s\n", err, err.Error())
      }
      log.Println(info)
 
-     fmt.Println("Call run..")
+     log.Println("Call run..")
      dev.Run()
 }
 
